@@ -53,7 +53,8 @@ async function telegramWebhook(request: RouterRequest): Promise<Response> {
     try {
         const { token } = request.params as any;
         const body = await request.json() as Telegram.Update;
-        return makeResponse200(await handleUpdate(token, body));
+        const headers = request.headers;
+        return makeResponse200(await handleUpdate(token, body, headers));
     } catch (e) {
         console.error(e);
         return new Response(errorToString(e), { status: 200 });

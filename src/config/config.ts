@@ -151,6 +151,18 @@ export class EnvironmentConfig {
     DEV_MODE = false;
     // 是否发送初始化消息
     SEND_INIT_MESSAGE = true;
+
+    // QSTASH_URL
+    QSTASH_URL = 'https://qstash.upstash.io';
+    // QSTASH_TOKEN
+    QSTASH_TOKEN = '';
+    // QSTASH_PUBLISH_URL
+    QSTASH_PUBLISH_URL = '';
+    // QSTASH_TRIGGER_PREFIX
+    QSTASH_TRIGGER_PREFIX = '';
+    // QSTASH_TIMEOUT
+    // free account max timeout 15m
+    QSTASH_TIMEOUT = '5m';
 }
 
 // -- 通用配置 --

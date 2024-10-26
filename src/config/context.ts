@@ -19,6 +19,7 @@ export class ShareContext {
     telegraphAccessTokenKey?: string;
     readonly scheduleDeteleKey: string = 'schedule_detele_message';
     storeMessageKey?: string;
+    isForwarding: boolean = false;
 
     constructor(token: string, message: Telegram.Message) {
         const botId = Number.parseInt(token.split(':')[0]);

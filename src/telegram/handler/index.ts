@@ -8,6 +8,7 @@ import { ChatHandler } from './chat';
 import { GroupMention } from './group';
 import {
     AnswerInlineQuery,
+    CheckForwarding,
     CheckInlineQueryWhiteList,
     CommandHandler,
     EnvChecker,
@@ -23,10 +24,10 @@ import {
     WhiteListFilter,
 } from './handlers';
 
-function loadMessage(body: Telegram.Update) {
+function loadMessage(body: Telegram.Update, isForwarding: boolean) {
     switch (true) {
         case !!body.message:
-            return (token: string) => handleMessage(token, body.message!);
+            return (token: string) => handleMessage(token, body.message!, isForwarding);
         case !!body.inline_query:
             return (token: string) => handleInlineQuery(token, body.inline_query!);
         case !!body.callback_query:
@@ -43,13 +44,14 @@ function loadMessage(body: Telegram.Update) {
 
 const exitHanders: MessageHandler<any>[] = [new TagNeedDelete(), new StoreWhiteListMessage()];
 
-export async function handleUpdate(token: string, update: Telegram.Update): Promise<Response | null> {
+export async function handleUpdate(token: string, update: Telegram.Update, headers?: Headers): Promise<Response | null> {
     log.debug(`handleUpdate`, update.message?.chat);
-    const messageHandler = loadMessage(update);
+    const isForwarding = headers?.get('User-Agent') === 'Upstash-QStash';
+    const messageHandler = loadMessage(update, isForwarding);
     return messageHandler(token);
 }
 
-async function handleMessage(token: string, message: Telegram.Message) {
+async function handleMessage(token: string, message: Telegram.Message, isForwarding: boolean) {
     // 消息处理中间件
     const SHARE_HANDLER: MessageHandler<any>[] = [
     // 检查环境是否准备好: DATABASE
@@ -68,6 +70,8 @@ async function handleMessage(token: string, message: Telegram.Message) {
         new InitUserConfig(),
         // 处理命令消息
         new CommandHandler(),
+        // 检查是否是转发消息
+        new CheckForwarding(),
         // 与llm聊天
         new ChatHandler(),
         // 缓存历史记录
@@ -75,6 +79,7 @@ async function handleMessage(token: string, message: Telegram.Message) {
     ];
     // 延迟初始化用户配置
     const context = new WorkerContextBase(token, message);
+    context.SHARE_CONTEXT.isForwarding = isForwarding;
     try {
         for (const handler of SHARE_HANDLER) {
             const result = await handler.handle(message, context);
@@ -91,15 +96,16 @@ async function handleMessage(token: string, message: Telegram.Message) {
         }
     } catch (e) {
         return catchError(e as Error);
-    } finally {
-        clearMessageIdsAndLog(message, context as WorkerContext);
     }
+    // finally {
+    //     clearMessageIdsAndLog(message, context as WorkerContext);
+    // }
 
-    function clearMessageIdsAndLog(message: Telegram.Message, context: WorkerContext) {
-        log.info(`[END] Clear Message Set and Log`);
-        sentMessageIds.delete(message);
-        clearLog(context.USER_CONFIG);
-    }
+    // function clearMessageIdsAndLog(message: Telegram.Message, context: WorkerContext) {
+    //     log.info(`[END] Clear Message Set and Log`);
+    //     sentMessageIds.delete(message);
+    //     clearLog(context.USER_CONFIG);
+    // }
 
     return null;
 }

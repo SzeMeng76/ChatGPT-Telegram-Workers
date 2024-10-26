@@ -30,7 +30,7 @@ export class SaveLastMessage implements MessageHandler<WorkerContextBase> {
 
 export class OldMessageFilter implements MessageHandler<WorkerContextBase> {
     handle = async (message: Telegram.Message, context: WorkerContextBase): Promise<Response | null> => {
-        if (!ENV.SAFE_MODE) {
+        if (!ENV.SAFE_MODE || context.SHARE_CONTEXT.isForwarding) {
             return null;
         }
         let idList = [];
@@ -405,5 +405,39 @@ export class AnswerInlineQuery implements ChosenInlineQueryHandler<ChosenInlineW
     handle = async (chosenInline: Telegram.ChosenInlineResult, context: ChosenInlineWorkerContext): Promise<Response | null> => {
         const answer = new AnswerChatInlineQuery();
         return answer.handler(chosenInline, context);
+    };
+}
+
+export class CheckForwarding implements MessageHandler<WorkerContextBase> {
+    handle = async (message: Telegram.Message, context: WorkerContextBase): Promise<Response | null> => {
+        if (ENV.QSTASH_PUBLISH_URL && ENV.QSTASH_TOKEN && ENV.QSTASH_TRIGGER_PREFIX && !context.SHARE_CONTEXT.isForwarding) {
+            let text = (message.text || message.caption || '').trim();
+            if (text.startsWith(ENV.QSTASH_TRIGGER_PREFIX)) {
+                text = text.slice(ENV.QSTASH_TRIGGER_PREFIX.length);
+                if (message.text) {
+                    message.text = text;
+                } else {
+                    message.caption = text;
+                }
+                const QSTASH_REQUEST_URL = `${ENV.QSTASH_URL}/v2/publish/${ENV.QSTASH_PUBLISH_URL}`;
+                log.info(`[FORWARD] Forward message to Qstash`);
+                const sender = MessageSender.from(context.SHARE_CONTEXT.botToken, message);
+                await sender.sendRichText('`Forwarding message to Qstash`', 'MarkdownV2');
+                return await fetch(QSTASH_REQUEST_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${ENV.QSTASH_TOKEN}`,
+                        'Upstash-Timeout': `${ENV.QSTASH_TIMEOUT}`,
+                        // no retry
+                        'Upstash-Retries': '0',
+                    },
+                    body: JSON.stringify({
+                        message,
+                    }),
+                });
+            }
+        }
+        return null;
     };
 }

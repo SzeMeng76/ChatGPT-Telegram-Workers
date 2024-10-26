@@ -4,7 +4,7 @@ import type { CompletionData } from '../../agent/types';
 import type { WorkerContext } from '../../config/context';
 import type { AgentUserConfig } from '../../config/env';
 
-export const logSingleton: WeakMap<AgentUserConfig, Logs> = new WeakMap();
+export const logSingleton = new WeakMap<AgentUserConfig, Logs>();
 export const sentMessageIds = new WeakMap<Message, number[]>();
 
 export function Log(

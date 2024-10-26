@@ -786,6 +786,11 @@ class EnvironmentConfig {
   DEBUG_MODE = false;
   DEV_MODE = false;
   SEND_INIT_MESSAGE = true;
+  QSTASH_URL = "https://qstash.upstash.io";
+  QSTASH_TOKEN = "";
+  QSTASH_PUBLISH_URL = "";
+  QSTASH_TRIGGER_PREFIX = "";
+  QSTASH_TIMEOUT = "5m";
 }
 class AgentShareConfig {
   AI_PROVIDER = "auto";
@@ -911,8 +916,8 @@ const ENV_KEY_MAPPER = {
   WORKERS_AI_MODEL: "WORKERS_CHAT_MODEL"
 };
 class Environment extends EnvironmentConfig {
-  BUILD_TIMESTAMP = 1729440762;
-  BUILD_VERSION = "91714ce";
+  BUILD_TIMESTAMP = 1729955863;
+  BUILD_VERSION = "81cc4ff";
   I18N = loadI18n();
   PLUGINS_ENV = {};
   USER_CONFIG = createAgentUserConfig();
@@ -2239,7 +2244,7 @@ async function requestChatCompletions(url, header, body, onStream, onResult = nu
   const controller = new AbortController();
   const { signal } = controller;
   let timeoutID = null;
-  if (ENV.CHAT_COMPLETE_API_TIMEOUT > 0) {
+  if (ENV.CHAT_COMPLETE_API_TIMEOUT > 0 && !body?.model?.includes("o1")) {
     timeoutID = setTimeout(() => controller.abort(), ENV.CHAT_COMPLETE_API_TIMEOUT * 1e3);
   }
   log.info("start request llm");
@@ -4809,6 +4814,7 @@ class ShareContext {
   telegraphAccessTokenKey;
   scheduleDeteleKey = "schedule_detele_message";
   storeMessageKey;
+  isForwarding = false;
   constructor(token, message) {
     const botId = Number.parseInt(token.split(":")[0]);
     const telegramIndex = ENV.TELEGRAM_AVAILABLE_TOKENS.indexOf(token);
@@ -5082,7 +5088,7 @@ class SaveLastMessage {
 }
 class OldMessageFilter {
   handle = async (message, context) => {
-    if (!ENV.SAFE_MODE) {
+    if (!ENV.SAFE_MODE || context.SHARE_CONTEXT.isForwarding) {
       return null;
     }
     let idList = [];
@@ -5415,10 +5421,42 @@ class AnswerInlineQuery {
     return answer.handler(chosenInline, context);
   };
 }
-function loadMessage(body) {
+class CheckForwarding {
+  handle = async (message, context) => {
+    if (ENV.QSTASH_PUBLISH_URL && ENV.QSTASH_TOKEN && ENV.QSTASH_TRIGGER_PREFIX && !context.SHARE_CONTEXT.isForwarding) {
+      let text = (message.text || message.caption || "").trim();
+      if (text.startsWith(ENV.QSTASH_TRIGGER_PREFIX)) {
+        text = text.slice(ENV.QSTASH_TRIGGER_PREFIX.length);
+        if (message.text) {
+          message.text = text;
+        } else {
+          message.caption = text;
+        }
+        const QSTASH_REQUEST_URL = `${ENV.QSTASH_URL}/v2/publish/${ENV.QSTASH_PUBLISH_URL}`;
+        log.info(`[FORWARD] Forward message to Qstash`);
+        const sender = MessageSender.from(context.SHARE_CONTEXT.botToken, message);
+        await sender.sendRichText("`Forwarding message to Qstash`", "MarkdownV2");
+        return await fetch(QSTASH_REQUEST_URL, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${ENV.QSTASH_TOKEN}`,
+            "Upstash-Timeout": `${ENV.QSTASH_TIMEOUT}`,
+            "Upstash-Retries": "0"
+          },
+          body: JSON.stringify({
+            message
+          })
+        });
+      }
+    }
+    return null;
+  };
+}
+function loadMessage(body, isForwarding) {
   switch (true) {
     case !!body.message:
-      return (token) => handleMessage(token, body.message);
+      return (token) => handleMessage(token, body.message, isForwarding);
     case !!body.inline_query:
       return (token) => handleInlineQuery(token, body.inline_query);
     case !!body.callback_query:
@@ -5433,12 +5471,13 @@ function loadMessage(body) {
   }
 }
 const exitHanders = [new TagNeedDelete(), new StoreWhiteListMessage()];
-async function handleUpdate(token, update) {
+async function handleUpdate(token, update, headers) {
   log.debug(`handleUpdate`, update.message?.chat);
-  const messageHandler = loadMessage(update);
+  const isForwarding = headers?.get("User-Agent") === "Upstash-QStash";
+  const messageHandler = loadMessage(update, isForwarding);
   return messageHandler(token);
 }
-async function handleMessage(token, message) {
+async function handleMessage(token, message, isForwarding) {
   const SHARE_HANDLER = [
     new EnvChecker(),
     new WhiteListFilter(),
@@ -5448,10 +5487,12 @@ async function handleMessage(token, message) {
     new SaveLastMessage(),
     new InitUserConfig(),
     new CommandHandler(),
+    new CheckForwarding(),
     new ChatHandler(),
     new StoreHistory()
   ];
   const context = new WorkerContextBase(token, message);
+  context.SHARE_CONTEXT.isForwarding = isForwarding;
   try {
     for (const handler of SHARE_HANDLER) {
       const result = await handler.handle(message, context);
@@ -5467,13 +5508,6 @@ async function handleMessage(token, message) {
     }
   } catch (e) {
     return catchError(e);
-  } finally {
-    clearMessageIdsAndLog(message, context);
-  }
-  function clearMessageIdsAndLog(message2, context2) {
-    log.info(`[END] Clear Message Set and Log`);
-    sentMessageIds.delete(message2);
-    clearLog(context2.USER_CONFIG);
   }
   return null;
 }
@@ -5748,7 +5782,8 @@ async function telegramWebhook(request) {
   try {
     const { token } = request.params;
     const body = await request.json();
-    return makeResponse200(await handleUpdate(token, body));
+    const headers = request.headers;
+    return makeResponse200(await handleUpdate(token, body, headers));
   } catch (e) {
     console.error(e);
     return new Response(errorToString(e), { status: 200 });

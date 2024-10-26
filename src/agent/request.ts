@@ -72,7 +72,7 @@ export async function requestChatCompletions(url: string, header: Record<string,
     const { signal } = controller;
 
     let timeoutID = null;
-    if (ENV.CHAT_COMPLETE_API_TIMEOUT > 0) {
+    if (ENV.CHAT_COMPLETE_API_TIMEOUT > 0 && !body?.model?.includes('o1')) {
         timeoutID = setTimeout(() => controller.abort(), ENV.CHAT_COMPLETE_API_TIMEOUT * 1e3);
     }
 
