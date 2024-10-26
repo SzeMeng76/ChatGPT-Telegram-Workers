@@ -22,3 +22,10 @@ export interface CommandHandler {
     handle: (message: Telegram.Message, subcommand: string, context: WorkerContext, sender: MessageSender) => Promise<Response | UnionData | null>;
     needAuth?: (chatType: string) => string[] | null;
 }
+
+export interface InlineItem {
+    label: string;
+    data: string;
+    config_key: string;
+    available_values: string[];
+}

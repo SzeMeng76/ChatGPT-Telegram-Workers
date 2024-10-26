@@ -5,7 +5,7 @@ import type { HistoryItem, HistoryModifierResult } from '../../agent/types';
 import type { WorkerContext } from '../../config/context';
 import type { AgentUserConfig } from '../../config/env';
 import type { UnionData } from '../utils/utils';
-import type { CommandHandler, ScopeType } from './types';
+import type { CommandHandler, InlineItem, ScopeType } from './types';
 import { customInfo, loadChatLLM, loadImageGen } from '../../agent';
 import { loadHistory } from '../../agent/chat';
 import { WssRequest } from '../../agent/wsrequest';
@@ -597,13 +597,6 @@ export class PerplexityCommandHandler implements CommandHandler {
         await onStream(result, true);
         return new Response('success');
     };
-}
-
-export interface InlineItem {
-    label: string;
-    data: string;
-    config_key: string;
-    available_values: string[];
 }
 
 export class InlineCommandHandler implements CommandHandler {

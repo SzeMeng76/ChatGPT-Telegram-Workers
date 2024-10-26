@@ -1,7 +1,7 @@
 import type * as Telegram from 'telegram-bot-api-types';
 import type { CallbackQueryContext, ChosenInlineWorkerContext, InlineQueryContext, WorkerContextBase } from '../../config/context';
 import type { TelegramBotAPI } from '../api';
-import type { InlineItem } from '../command/system';
+import type { InlineItem } from '../command/types';
 import type { UnionData } from '../utils/utils';
 import type { CallbackQueryHandler, ChosenInlineQueryHandler, InlineQueryHandler, MessageHandler } from './types';
 import { WorkerContext } from '../../config/context';
