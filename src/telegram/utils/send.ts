@@ -178,8 +178,6 @@ export class MessageSender {
         const params: Telegram.SendPhotoParams = {
             chat_id: this.context.chat_id,
             photo,
-            // fourm模式发送时带message_thread_id会报错
-            // message_thread_id: this.context.message_thread_id || undefined,
             ...(caption ? { caption: this.renderMessage(parse_mode || null, caption) } : {}),
             parse_mode,
         };
@@ -201,7 +199,6 @@ export class MessageSender {
         const params: Telegram.SendMediaGroupParams = {
             chat_id: this.context.chat_id,
             media,
-            message_thread_id: this.context.message_thread_id || undefined,
         };
 
         const resp = this.api.sendMediaGroup(params);
@@ -215,7 +212,6 @@ export class MessageSender {
         const params: Telegram.SendDocumentParams = {
             chat_id: this.context.chat_id,
             document,
-            message_thread_id: this.context.message_thread_id || undefined,
             caption,
             parse_mode,
         };

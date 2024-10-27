@@ -919,8 +919,8 @@ const ENV_KEY_MAPPER = {
   WORKERS_AI_MODEL: "WORKERS_CHAT_MODEL"
 };
 class Environment extends EnvironmentConfig {
-  BUILD_TIMESTAMP = 1730012254;
-  BUILD_VERSION = "6c958f8";
+  BUILD_TIMESTAMP = 1730013049;
+  BUILD_VERSION = "fcb61d0";
   I18N = loadI18n();
   PLUGINS_ENV = {};
   USER_CONFIG = createAgentUserConfig();
@@ -1686,8 +1686,7 @@ class MessageSender {
     }
     const params = {
       chat_id: this.context.chat_id,
-      media,
-      message_thread_id: this.context.message_thread_id || void 0
+      media
     };
     const resp = this.api.sendMediaGroup(params);
     return checkIsNeedTagIds(this.context, resp, "chat");
@@ -1699,7 +1698,6 @@ class MessageSender {
     const params = {
       chat_id: this.context.chat_id,
       document,
-      message_thread_id: this.context.message_thread_id || void 0,
       caption,
       parse_mode
     };
