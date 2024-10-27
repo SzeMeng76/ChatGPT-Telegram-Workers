@@ -203,13 +203,7 @@ export class MessageSender {
             media,
             message_thread_id: this.context.message_thread_id || undefined,
         };
-        if (this.context.reply_to_message_id) {
-            params.reply_parameters = {
-                message_id: this.context.reply_to_message_id,
-                chat_id: this.context.chat_id,
-                allow_sending_without_reply: this.context.allow_sending_without_reply || undefined,
-            };
-        }
+
         const resp = this.api.sendMediaGroup(params);
         return checkIsNeedTagIds(this.context, resp, 'chat');
     }
