@@ -408,8 +408,8 @@ export class AnswerInlineQuery implements ChosenInlineQueryHandler<ChosenInlineW
     };
 }
 
-export class CheckForwarding implements MessageHandler<WorkerContextBase> {
-    handle = async (message: Telegram.Message, context: WorkerContextBase): Promise<Response | null> => {
+export class CheckForwarding implements MessageHandler<WorkerContext> {
+    handle = async (message: Telegram.Message, context: WorkerContext): Promise<Response | null> => {
         if (ENV.QSTASH_PUBLISH_URL && ENV.QSTASH_TOKEN && ENV.QSTASH_TRIGGER_PREFIX && !context.SHARE_CONTEXT.isForwarding) {
             let text = (message.text || message.caption || '').trim();
             if (text.startsWith(ENV.QSTASH_TRIGGER_PREFIX)) {
@@ -419,10 +419,10 @@ export class CheckForwarding implements MessageHandler<WorkerContextBase> {
                 } else {
                     message.caption = text;
                 }
-                const QSTASH_REQUEST_URL = `${ENV.QSTASH_URL}/v2/publish/${ENV.QSTASH_PUBLISH_URL}`;
+                const QSTASH_REQUEST_URL = `${ENV.QSTASH_URL}/v2/publish/${ENV.QSTASH_PUBLISH_URL}/telegram/${context.SHARE_CONTEXT.botToken}/webhook`;
                 log.info(`[FORWARD] Forward message to Qstash`);
                 const sender = MessageSender.from(context.SHARE_CONTEXT.botToken, message);
-                await sender.sendRichText('`Forwarding message to Qstash`', 'MarkdownV2');
+                await sender.sendRichText('`Forwarding message to Qstash`', 'MarkdownV2', 'tip');
                 return await fetch(QSTASH_REQUEST_URL, {
                     method: 'POST',
                     headers: {

@@ -14,6 +14,7 @@ import {
     HelpCommandHandler,
     ImgCommandHandler,
     InlineCommandHandler,
+    KlingAICommandHandler,
     NewCommandHandler,
     PerplexityCommandHandler,
     RedoCommandHandler,
@@ -40,6 +41,7 @@ const SYSTEM_COMMANDS: CommandHandler[] = [
     new SetCommandHandler(),
     new PerplexityCommandHandler(),
     new InlineCommandHandler(),
+    new KlingAICommandHandler(),
 ];
 
 // const commandHanders: any[] = [

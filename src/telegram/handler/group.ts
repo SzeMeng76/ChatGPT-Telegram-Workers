@@ -107,7 +107,7 @@ export class GroupMention implements MessageHandler {
             message.caption = res.content.trim();
         }
         // substituteMention 强制触发
-        if (substituteMention && !isMention) {
+        if ((substituteMention || context.SHARE_CONTEXT.isForwarding) && !isMention) {
             isMention = true;
         }
         if (!isMention) {

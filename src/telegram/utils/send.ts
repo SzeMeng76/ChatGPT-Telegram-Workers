@@ -361,7 +361,7 @@ async function checkIsNeedTagIds(context: MessageContext, resp: Promise<Response
                 sentMessageIds.set(context.message, []);
             }
             message_id.forEach(id => sentMessageIds.get(context.message)?.push(id));
-            log.debug('taged message id', sentMessageIds.get(context.message));
+            log.debug('taged message id', sentMessageIds.get(context.message)?.join(','));
         }
     } while (false);
 

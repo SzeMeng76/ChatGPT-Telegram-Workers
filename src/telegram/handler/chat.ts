@@ -9,7 +9,7 @@ import type { MessageHandler } from './types';
 import { loadAudioLLM, loadChatLLM, loadImageGen } from '../../agent';
 import { loadHistory, requestCompletionsFromLLM } from '../../agent/chat';
 import { ENV } from '../../config/env';
-import { clearLog, getLog, getLogSingleton, sentMessageIds } from '../../extra/log/logDecortor';
+import { clearLog, getLog, getLogSingleton } from '../../extra/log/logDecortor';
 import { log } from '../../extra/log/logger';
 import { FunctionCall, getValidToolStructs } from '../../extra/tools/functioncall';
 import { createTelegramBotAPI } from '../api';

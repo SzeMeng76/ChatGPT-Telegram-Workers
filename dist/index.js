@@ -887,11 +887,14 @@ class ExtraUserConfig {
   CURRENT_MODE = "default";
   INLINE_AGENTS = ["oenai", "claude", "gemini", "cohere", "workersai"];
   INLINE_IMAGE_AGENTS = ["openai", "silicon"];
-  INLINE_CHAT_MODELS = [];
-  INLINE_VISION_MODELS = [];
+  INLINE_CHAT_MODELS = ["gpt-4o-mini", "gpt-4o-2024-05-13"];
+  INLINE_VISION_MODELS = ["gpt-4o-mini", "gpt-4o-2024-05-13"];
   INLINE_IMAGE_MODELS = ["dall-e-2", "dall-e-3"];
   INLINE_FUNCTION_CALL_TOOLS = ["duckduckgo_search", "jina_reader"];
   INLINE_FUNCTION_ASAP = ["true", "false"];
+  KLINGAI_COOKIE = [];
+  KLINGAI_IMAGE_COUNT = 4;
+  KLINGAI_IMAGE_RATIO = "1:1";
 }
 function createAgentUserConfig() {
   return Object.assign(
@@ -916,8 +919,8 @@ const ENV_KEY_MAPPER = {
   WORKERS_AI_MODEL: "WORKERS_CHAT_MODEL"
 };
 class Environment extends EnvironmentConfig {
-  BUILD_TIMESTAMP = 1729957196;
-  BUILD_VERSION = "d4af9ef";
+  BUILD_TIMESTAMP = 1730003412;
+  BUILD_VERSION = "2eaa595";
   I18N = loadI18n();
   PLUGINS_ENV = {};
   USER_CONFIG = createAgentUserConfig();
@@ -1818,7 +1821,7 @@ async function checkIsNeedTagIds(context, resp, msgType) {
         sentMessageIds.set(context.message, []);
       }
       message_id.forEach((id) => sentMessageIds.get(context.message)?.push(id));
-      log.debug("taged message id", sentMessageIds.get(context.message));
+      log.debug("taged message id", sentMessageIds.get(context.message)?.join(","));
     }
   } while (false);
   return original_resp;
@@ -3538,7 +3541,6 @@ class FunctionCall {
           prompt: this.prompt
         };
       }
-      log.info("解析到函数调用参数:", func_params);
       llm_resp.tool_calls = llm_resp.tool_calls.slice(0, ENV.CON_EXEC_FUN_NUM);
       func_params = func_params.slice(0, ENV.CON_EXEC_FUN_NUM);
       const func_result = await Promise.all(func_params.map((i) => this.exec(i, INTERNAL_ENV)));
@@ -4007,7 +4009,7 @@ function extractTypeFromMessage(message, supportType) {
   return null;
 }
 function isNeedGetReplyMessage(message, currentBotId) {
-  return ENV.EXTRA_MESSAGE_CONTEXT && message.reply_to_message && message.reply_to_message.from?.id !== currentBotId;
+  return ENV.EXTRA_MESSAGE_CONTEXT && message.reply_to_message && (message.reply_to_message.from?.id !== currentBotId || message.reply_to_message.photo);
 }
 function UUIDv4() {
   return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
@@ -4644,6 +4646,132 @@ ${currentSettings}
     return chunckArray(inline_keyboard_list, 3);
   };
 }
+class KlingAICommandHandler {
+  command = "/kling";
+  needAuth = COMMAND_AUTH_CHECKER.shareModeGroup;
+  handle = async (message, subcommand, context, sender) => {
+    if (context.USER_CONFIG.KLINGAI_COOKIE.length === 0) {
+      return sender.sendPlainText("KlingAI token is not set");
+    }
+    if (subcommand.trim() === "") {
+      return sender.sendPlainText("Please input your prompt");
+    }
+    return this.generate(message, subcommand, context, sender);
+  };
+  generate = async (message, subcommand, context, sender) => {
+    let prompt = subcommand.trim();
+    let number = context.USER_CONFIG.KLINGAI_IMAGE_COUNT;
+    const match = /^\d+/.exec(prompt);
+    if (match) {
+      number = Number.parseInt(match[0]);
+      prompt = prompt.slice(match[0].length);
+    }
+    const COOKIES = context.USER_CONFIG.KLINGAI_COOKIE;
+    let cookie = "";
+    if (COOKIES.length > 0) {
+      cookie = COOKIES[Math.floor(Math.random() * COOKIES.length)];
+    } else {
+      throw new Error("No KlingAI cookie found");
+    }
+    const headers = {
+      "Content-Type": "application/json",
+      "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36",
+      "Cookie": cookie
+    };
+    const body = {
+      arguments: [
+        { name: "prompt", value: prompt },
+        { name: "style", value: "默认" },
+        { name: "aspect_ratio", value: context.USER_CONFIG.KLINGAI_IMAGE_RATIO },
+        { name: "imageCount", value: number },
+        { name: "biz", value: "klingai" }
+      ],
+      type: "mmu_txt2img_aiweb",
+      inputs: []
+    };
+    if (context.MIDDEL_CONTEXT.originalMessage?.type === "image" && context.MIDDEL_CONTEXT.originalMessage.id?.[0]) {
+      const img_id = context.MIDDEL_CONTEXT.originalMessage.id?.[0];
+      const img_url = await this.getFileUrl(img_id, context, headers);
+      log.info(`Uploaded image url: ${img_url}`);
+      body.inputs.push({ name: "input", url: img_url, inputType: "URL" });
+      body.arguments.push({ name: "fidelity", value: 0.5 });
+    }
+    const resp = await fetch(`https://klingai.com/api/task/submit`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(body)
+    }).then((res) => res.json());
+    const taskId = resp.data?.task?.id;
+    if (!taskId) {
+      console.error(JSON.stringify(resp));
+      throw new Error(resp.message || "Failed to get task id, see logs for more details");
+    }
+    sender.sendRichText("`Please wait a moment...`", "MarkdownV2", "tip");
+    return this.handleTask(taskId, headers, sender);
+  };
+  handleTask = async (taskId, headers, sender) => {
+    const MAX_WAIT_TIME = 6e5;
+    const startTime = Date.now();
+    while (true) {
+      const resp = await fetch(`https://klingai.com/api/task/status?taskId=${taskId}`, {
+        headers
+      }).then((res) => res.json());
+      if (resp.data?.status === 99) {
+        const pics = resp.data.works.map(({ resource }) => ({
+          type: "photo",
+          media: resource.resource
+        })).filter((i) => i.media);
+        if (pics.length > 0) {
+          log.info(`KlingAI image urls: ${pics.map((i) => i.media).join(", ")}`);
+          return sender.sendMediaGroup(pics);
+        }
+        console.error(JSON.stringify(resp.data, null, 2));
+        throw new Error(`KlingAI Task failed, see logs for more details`);
+      }
+      if (Date.now() - startTime > MAX_WAIT_TIME) {
+        throw new Error(`KlingAI Task timeout`);
+      }
+      await new Promise((resolve) => setTimeout(resolve, 1e4));
+    }
+  };
+  getFileUrl = async (file_id, context, headers) => {
+    const api = createTelegramBotAPI(context.SHARE_CONTEXT.botToken);
+    const img_path = (await api.getFileWithReturns({ file_id }).then((res) => res.result)).file_path;
+    const img_blob = await fetch(`https://api.telegram.org/file/bot${context.SHARE_CONTEXT.botToken}/${img_path}`, {}).then((res) => res.blob());
+    const { token, domain } = await this.getUploadFileTokenAndEndpoint(headers);
+    await fetch(`https://${domain}/api/upload/fragment?upload_token=${token}&fragment_id=0`, {
+      method: "POST",
+      headers: {
+        ...headers,
+        "Content-Type": "application/octet-stream"
+      },
+      body: img_blob
+    });
+    await fetch(`https://${domain}/api/upload/complete?fragment_count=1&upload_token=${token}`, {
+      method: "POST",
+      headers
+    });
+    const url_resp = await fetch(`https://klingai.com/api/upload/verify/token?token=${token}`, {
+      headers
+    }).then((res) => res.json());
+    if (!url_resp.data?.url) {
+      throw new Error(url_resp.data.message || "Failed to get file url, see logs for more details");
+    }
+    return url_resp.data.url;
+  };
+  getUploadFileTokenAndEndpoint = async (headers) => {
+    const resp = await fetch(`https://klingai.com/api/upload/issue/token?filename=image.jpg`, {
+      headers
+    }).then((res) => res.json());
+    if (!resp.data.token || !resp.data?.httpEndpoints?.[0]) {
+      throw new Error(`Failed to upload file, see logs for more details`);
+    }
+    return {
+      token: resp.data.token,
+      domain: resp.data.httpEndpoints[0]
+    };
+  };
+}
 const SYSTEM_COMMANDS = [
   new StartCommandHandler(),
   new NewCommandHandler(),
@@ -4658,7 +4786,8 @@ const SYSTEM_COMMANDS = [
   new HelpCommandHandler(),
   new SetCommandHandler(),
   new PerplexityCommandHandler(),
-  new InlineCommandHandler()
+  new InlineCommandHandler(),
+  new KlingAICommandHandler()
 ];
 async function handleSystemCommand(message, raw, command, context) {
   const sender = MessageSender.from(context.SHARE_CONTEXT.botToken, message);
@@ -5032,7 +5161,7 @@ class GroupMention {
       isMention = res.isMention || isMention;
       message.caption = res.content.trim();
     }
-    if (substituteMention && !isMention) {
+    if (substituteMention && !isMention && !context.SHARE_CONTEXT.isForwarding) {
       isMention = true;
     }
     if (!isMention) {
@@ -5435,7 +5564,7 @@ class CheckForwarding {
         const QSTASH_REQUEST_URL = `${ENV.QSTASH_URL}/v2/publish/${ENV.QSTASH_PUBLISH_URL}`;
         log.info(`[FORWARD] Forward message to Qstash`);
         const sender = MessageSender.from(context.SHARE_CONTEXT.botToken, message);
-        await sender.sendRichText("`Forwarding message to Qstash`", "MarkdownV2");
+        await sender.sendRichText("`Forwarding message to Qstash`", "MarkdownV2", "tip");
         return await fetch(QSTASH_REQUEST_URL, {
           method: "POST",
           headers: {

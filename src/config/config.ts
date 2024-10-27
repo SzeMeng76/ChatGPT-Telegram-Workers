@@ -336,13 +336,19 @@ export class ExtraUserConfig {
     // INLINE_IMAGE_AGENTS
     INLINE_IMAGE_AGENTS = ['openai', 'silicon'];
     // INLINE_CHAT_MODELS
-    INLINE_CHAT_MODELS = [];
+    INLINE_CHAT_MODELS: string[] = ['gpt-4o-mini', 'gpt-4o-2024-05-13'];
     // INLINE_VISION_MODELS
-    INLINE_VISION_MODELS = [];
+    INLINE_VISION_MODELS: string[] = ['gpt-4o-mini', 'gpt-4o-2024-05-13'];
     // INLINE_IMAGE_MODELS
-    INLINE_IMAGE_MODELS = ['dall-e-2', 'dall-e-3'];
+    INLINE_IMAGE_MODELS: string[] = ['dall-e-2', 'dall-e-3'];
     // INLINE_FUNCTION_CALL_TOOLS
-    INLINE_FUNCTION_CALL_TOOLS = ['duckduckgo_search', 'jina_reader'];
+    INLINE_FUNCTION_CALL_TOOLS: string[] = ['duckduckgo_search', 'jina_reader'];
     // INLINE_FUNCTION_ASAP
-    INLINE_FUNCTION_ASAP = ['true', 'false'];
+    INLINE_FUNCTION_ASAP: string[] = ['true', 'false'];
+    // KlingAI Cookie
+    KLINGAI_COOKIE: string[] = [];
+    // KlingAI Image Count
+    KLINGAI_IMAGE_COUNT = 4;
+    // KlingAI Image Ratio
+    KLINGAI_IMAGE_RATIO = '1:1';
 }

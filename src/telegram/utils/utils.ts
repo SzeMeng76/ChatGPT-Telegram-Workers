@@ -80,7 +80,7 @@ function extractTypeFromMessage(message: Telegram.Message, supportType: string[]
 }
 
 function isNeedGetReplyMessage(message: Telegram.Message, currentBotId: number) {
-    return ENV.EXTRA_MESSAGE_CONTEXT && message.reply_to_message && message.reply_to_message.from?.id !== currentBotId;
+    return ENV.EXTRA_MESSAGE_CONTEXT && message.reply_to_message && (message.reply_to_message.from?.id !== currentBotId || message.reply_to_message.photo);
 }
 
 export function UUIDv4() {

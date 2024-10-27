@@ -106,8 +106,6 @@ export class FunctionCall {
                 };
             }
 
-            log.info('解析到函数调用参数:', func_params);
-
             // 裁剪响应与函数调用参数
             llm_resp.tool_calls = llm_resp.tool_calls!.slice(0, ENV.CON_EXEC_FUN_NUM);
             func_params = func_params.slice(0, ENV.CON_EXEC_FUN_NUM);

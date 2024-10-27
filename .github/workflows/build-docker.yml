@@ -27,7 +27,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: '20'
 
       - name: Install dependencies
         run: npm install
@@ -42,11 +42,6 @@ jobs:
           password: ${{ secrets.DOCKER_PASSWORD }}
 
       - name: Build and push Docker image
-        uses: docker/build-push-action@v4
-        with:
-          context: ./dist
-          push: true
-          tags: |
-            ${{ secrets.DOCKER_USERNAME }}/chatgpt-telegram-workers:latest
-            ${{ secrets.DOCKER_USERNAME }}/chatgpt-telegram-workers:${{ github.sha }}
-          platforms: linux/amd64,linux/arm64
+        run: |
+          COMMIT_SHA=$(git rev-parse --short HEAD)
+          docker buildx build --platform linux/amd64,linux/arm64 -t ${{ secrets.DOCKER_USERNAME }}/chatgpt-telegram-workers:latest -t ${{ secrets.DOCKER_USERNAME }}/chatgpt-telegram-workers:${COMMIT_SHA} --push ./dist

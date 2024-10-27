@@ -695,3 +695,140 @@ export class InlineCommandHandler implements CommandHandler {
         return chunckArray(inline_keyboard_list, 3);
     };
 }
+
+export class KlingAICommandHandler implements CommandHandler {
+    command = '/kling';
+    needAuth = COMMAND_AUTH_CHECKER.shareModeGroup;
+    handle = async (message: Telegram.Message, subcommand: string, context: WorkerContext, sender: MessageSender): Promise<Response> => {
+        if (context.USER_CONFIG.KLINGAI_COOKIE.length === 0) {
+            return sender.sendPlainText('KlingAI token is not set');
+        }
+        if (subcommand.trim() === '') {
+            return sender.sendPlainText('Please input your prompt');
+        }
+        return this.generate(message, subcommand, context, sender);
+    };
+
+    generate = async (message: Telegram.Message, subcommand: string, context: WorkerContext, sender: MessageSender) => {
+        let prompt = subcommand.trim();
+        let number = context.USER_CONFIG.KLINGAI_IMAGE_COUNT;
+        const match = /^\d+/.exec(prompt);
+        if (match) {
+            number = Number.parseInt(match[0]);
+            prompt = prompt.slice(match[0].length);
+        }
+        const COOKIES = context.USER_CONFIG.KLINGAI_COOKIE;
+        let cookie = '';
+        if (COOKIES.length > 0) {
+            cookie = COOKIES[Math.floor(Math.random() * COOKIES.length)];
+        } else {
+            throw new Error('No KlingAI cookie found');
+        }
+        const headers = {
+            'Content-Type': 'application/json',
+            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36',
+            'Cookie': cookie,
+        };
+
+        const body = {
+            arguments: [
+                { name: 'prompt', value: prompt },
+                { name: 'style', value: '默认' },
+                { name: 'aspect_ratio', value: context.USER_CONFIG.KLINGAI_IMAGE_RATIO },
+                { name: 'imageCount', value: number },
+                { name: 'biz', value: 'klingai' },
+            ],
+            type: 'mmu_txt2img_aiweb',
+            inputs: [] as any[],
+        };
+
+        if (context.MIDDEL_CONTEXT.originalMessage?.type === 'image' && context.MIDDEL_CONTEXT.originalMessage.id?.[0]) {
+            const img_id = context.MIDDEL_CONTEXT.originalMessage.id?.[0];
+            const img_url = await this.getFileUrl(img_id, context, headers);
+            log.info(`Uploaded image url: ${img_url}`);
+            body.inputs.push({ name: 'input', url: img_url, inputType: 'URL' });
+            body.arguments.push({ name: 'fidelity', value: 0.5 });
+        }
+        const resp = await fetch(`https://klingai.com/api/task/submit`, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify(body),
+        }).then(res => res.json());
+        const taskId = resp.data?.task?.id;
+        if (!taskId) {
+            console.error(JSON.stringify(resp));
+            throw new Error(resp.message || 'Failed to get task id, see logs for more details');
+        }
+        sender.sendRichText('`Please wait a moment...`', 'MarkdownV2', 'tip');
+        return this.handleTask(taskId, headers, sender);
+    };
+
+    handleTask = async (taskId: string, headers: Record<string, string>, sender: MessageSender) => {
+        const MAX_WAIT_TIME = 600_000;
+        const startTime = Date.now();
+        while (true) {
+            const resp = await fetch(`https://klingai.com/api/task/status?taskId=${taskId}`, {
+                headers,
+            }).then(res => res.json());
+            if (resp.data?.status === 99) {
+                const pics = resp.data.works.map(({ resource }: { resource: { resource: string } }) => ({
+                    type: 'photo',
+                    media: resource.resource,
+                })).filter((i: { media: string }) => i.media);
+                if (pics.length > 0) {
+                    log.info(`KlingAI image urls: ${pics.map((i: { media: any }) => i.media).join(', ')}`);
+                    return sender.sendMediaGroup(pics);
+                }
+                console.error(JSON.stringify(resp.data, null, 2));
+                throw new Error(`KlingAI Task failed, see logs for more details`);
+            }
+            if (Date.now() - startTime > MAX_WAIT_TIME) {
+                throw new Error(`KlingAI Task timeout`);
+            }
+            await new Promise(resolve => setTimeout(resolve, 10_000));
+        }
+    };
+
+    getFileUrl = async (file_id: string, context: WorkerContext, headers: Record<string, string>) => {
+        const api = createTelegramBotAPI(context.SHARE_CONTEXT.botToken);
+        const img_path = (await api.getFileWithReturns({ file_id }).then(res => res.result)).file_path;
+        const img_blob = await fetch(`https://api.telegram.org/file/bot${context.SHARE_CONTEXT.botToken}/${img_path}`, {
+        }).then(res => res.blob());
+
+        const { token, domain } = await this.getUploadFileTokenAndEndpoint(headers);
+        await fetch(`https://${domain}/api/upload/fragment?upload_token=${token}&fragment_id=0`, {
+            method: 'POST',
+            headers: {
+                ...headers,
+                'Content-Type': 'application/octet-stream',
+            },
+            body: img_blob,
+        });
+
+        await fetch(`https://${domain}/api/upload/complete?fragment_count=1&upload_token=${token}`, {
+            method: 'POST',
+            headers,
+        });
+
+        const url_resp = await fetch(`https://klingai.com/api/upload/verify/token?token=${token}`, {
+            headers,
+        }).then(res => res.json());
+        if (!url_resp.data?.url) {
+            throw new Error(url_resp.data.message || 'Failed to get file url, see logs for more details');
+        }
+        return url_resp.data.url;
+    };
+
+    getUploadFileTokenAndEndpoint = async (headers: Record<string, string>) => {
+        const resp = await fetch(`https://klingai.com/api/upload/issue/token?filename=image.jpg`, {
+            headers,
+        }).then(res => res.json());
+        if (!resp.data.token || !resp.data?.httpEndpoints?.[0]) {
+            throw new Error(`Failed to upload file, see logs for more details`);
+        }
+        return {
+            token: resp.data.token,
+            domain: resp.data.httpEndpoints[0],
+        };
+    };
+}
