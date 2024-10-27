@@ -748,6 +748,7 @@ export class KlingAICommandHandler implements CommandHandler {
             log.info(`Uploaded image url: ${img_url}`);
             body.inputs.push({ name: 'input', url: img_url, inputType: 'URL' });
             body.arguments.push({ name: 'fidelity', value: 0.5 });
+            body.type = 'mmu_img2img_aiweb';
         }
         const resp = await fetch(`https://klingai.com/api/task/submit`, {
             method: 'POST',

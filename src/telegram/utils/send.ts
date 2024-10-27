@@ -343,8 +343,8 @@ async function checkIsNeedTagIds(context: MessageContext, resp: Promise<Response
             message_id = [clone_resp?.result?.message_id];
         }
         if (message_id.filter(Boolean).length === 0) {
-            log.error('Not exist message_id');
-            break;
+            log.error('resp', JSON.stringify(clone_resp));
+            throw new Error('Message send failed, see logs for more details');
         }
         const isGroup = ['group', 'supergroup'].includes(chatType);
         const isNeedTag

@@ -790,7 +790,7 @@ class EnvironmentConfig {
   QSTASH_TOKEN = "";
   QSTASH_PUBLISH_URL = "";
   QSTASH_TRIGGER_PREFIX = "";
-  QSTASH_TIMEOUT = "5m";
+  QSTASH_TIMEOUT = "15m";
 }
 class AgentShareConfig {
   AI_PROVIDER = "auto";
@@ -919,8 +919,8 @@ const ENV_KEY_MAPPER = {
   WORKERS_AI_MODEL: "WORKERS_CHAT_MODEL"
 };
 class Environment extends EnvironmentConfig {
-  BUILD_TIMESTAMP = 1730006744;
-  BUILD_VERSION = "b97cad1";
+  BUILD_TIMESTAMP = 1730012254;
+  BUILD_VERSION = "6c958f8";
   I18N = loadI18n();
   PLUGINS_ENV = {};
   USER_CONFIG = createAgentUserConfig();
@@ -1804,8 +1804,8 @@ async function checkIsNeedTagIds(context, resp, msgType) {
       message_id = [clone_resp?.result?.message_id];
     }
     if (message_id.filter(Boolean).length === 0) {
-      log.error("Not exist message_id");
-      break;
+      log.error("resp", JSON.stringify(clone_resp));
+      throw new Error("Message send failed, see logs for more details");
     }
     const isGroup = ["group", "supergroup"].includes(chatType);
     const isNeedTag = isGroup && ENV.SCHEDULE_GROUP_DELETE_TYPE.includes(msgType) || !isGroup && ENV.SCHEDULE_PRIVATE_DELETE_TYPE.includes(msgType);
@@ -4691,6 +4691,7 @@ class KlingAICommandHandler {
       log.info(`Uploaded image url: ${img_url}`);
       body.inputs.push({ name: "input", url: img_url, inputType: "URL" });
       body.arguments.push({ name: "fidelity", value: 0.5 });
+      body.type = "mmu_img2img_aiweb";
     }
     const resp = await fetch(`https://klingai.com/api/task/submit`, {
       method: "POST",

@@ -161,7 +161,7 @@ export class EnvironmentConfig {
     QSTASH_TRIGGER_PREFIX = '';
     // qstash timeout
     // free account max timeout 15m
-    QSTASH_TIMEOUT = '5m';
+    QSTASH_TIMEOUT = '15m';
 }
 
 // -- 通用配置 --
