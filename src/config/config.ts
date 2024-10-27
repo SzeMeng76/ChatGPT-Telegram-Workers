@@ -152,15 +152,14 @@ export class EnvironmentConfig {
     // 是否发送初始化消息
     SEND_INIT_MESSAGE = true;
 
-    // QSTASH_URL
     QSTASH_URL = 'https://qstash.upstash.io';
-    // QSTASH_TOKEN
+    // qstash token
     QSTASH_TOKEN = '';
-    // QSTASH_PUBLISH_URL
+    // qstash callback url, your telegram bot webhook domain
     QSTASH_PUBLISH_URL = '';
-    // QSTASH_TRIGGER_PREFIX
+    // qstash trigger prefix
     QSTASH_TRIGGER_PREFIX = '';
-    // QSTASH_TIMEOUT
+    // qstash timeout
     // free account max timeout 15m
     QSTASH_TIMEOUT = '5m';
 }

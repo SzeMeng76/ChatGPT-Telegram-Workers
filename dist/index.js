@@ -919,8 +919,8 @@ const ENV_KEY_MAPPER = {
   WORKERS_AI_MODEL: "WORKERS_CHAT_MODEL"
 };
 class Environment extends EnvironmentConfig {
-  BUILD_TIMESTAMP = 1730003412;
-  BUILD_VERSION = "2eaa595";
+  BUILD_TIMESTAMP = 1730005758;
+  BUILD_VERSION = "6105ec1";
   I18N = loadI18n();
   PLUGINS_ENV = {};
   USER_CONFIG = createAgentUserConfig();
@@ -3531,7 +3531,10 @@ class FunctionCall {
       const llm_resp = await this.call(params, onStream);
       let func_params = this.paramsExtract(llm_resp);
       if (func_params.length === 0) {
-        if (ASAP && llm_resp) {
+        if (!llm_resp) {
+          throw new Error("No answer from LLM");
+        }
+        if (ASAP) {
           await this.sendLastResponse(llm_resp, onStream);
           this.history.push(...this.trimMessage(llm_resp));
         }
@@ -5161,7 +5164,7 @@ class GroupMention {
       isMention = res.isMention || isMention;
       message.caption = res.content.trim();
     }
-    if (substituteMention && !isMention && !context.SHARE_CONTEXT.isForwarding) {
+    if ((substituteMention || context.SHARE_CONTEXT.isForwarding) && !isMention) {
       isMention = true;
     }
     if (!isMention) {
@@ -5561,7 +5564,7 @@ class CheckForwarding {
         } else {
           message.caption = text;
         }
-        const QSTASH_REQUEST_URL = `${ENV.QSTASH_URL}/v2/publish/${ENV.QSTASH_PUBLISH_URL}`;
+        const QSTASH_REQUEST_URL = `${ENV.QSTASH_URL}/v2/publish/${ENV.QSTASH_PUBLISH_URL}/telegram/${context.SHARE_CONTEXT.botToken}/webhook`;
         log.info(`[FORWARD] Forward message to Qstash`);
         const sender = MessageSender.from(context.SHARE_CONTEXT.botToken, message);
         await sender.sendRichText("`Forwarding message to Qstash`", "MarkdownV2", "tip");

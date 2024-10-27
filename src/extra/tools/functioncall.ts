@@ -95,7 +95,10 @@ export class FunctionCall {
             let func_params = this.paramsExtract(llm_resp);
 
             if (func_params.length === 0) {
-                if (ASAP && llm_resp) {
+                if (!llm_resp) {
+                    throw new Error('No answer from LLM');
+                }
+                if (ASAP) {
                     await this.sendLastResponse(llm_resp, onStream);
                     this.history.push(...this.trimMessage(llm_resp));
                 }
