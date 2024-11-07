@@ -13,6 +13,7 @@ import {
     MistralConfig,
     OpenAIConfig,
     SiliconConfig,
+    VertexConfig,
     WorkersConfig,
 } from './config';
 import { ConfigMerger } from './merger';
@@ -29,7 +30,8 @@ export type AgentUserConfig = Record<string, any> &
     CohereConfig &
     AnthropicConfig &
     SiliconConfig &
-    ExtraUserConfig;
+    ExtraUserConfig &
+    VertexConfig;
 
 function createAgentUserConfig(): AgentUserConfig {
     return Object.assign(
@@ -46,6 +48,7 @@ function createAgentUserConfig(): AgentUserConfig {
         new AnthropicConfig(),
         new SiliconConfig(),
         new ExtraUserConfig(),
+        new VertexConfig(),
     );
 }
 
@@ -177,6 +180,30 @@ class Environment extends EnvironmentConfig {
         // 选择对应语言的SYSTEM_INIT_MESSAGE
         if (!this.USER_CONFIG.SYSTEM_INIT_MESSAGE) {
             this.USER_CONFIG.SYSTEM_INIT_MESSAGE = this.I18N?.env?.system_init_message || 'You are a helpful assistant';
+        }
+
+        // 兼容旧版 GOOGLE_API_BASE
+        if (source.GOOGLE_API_BASE && !this.USER_CONFIG.GOOGLE_API_BASE) {
+            this.USER_CONFIG.GOOGLE_API_BASE = source.GOOGLE_API_BASE.replace(/\/models\/?$/, '');
+        }
+
+        if (source.GOOGLE_CHAT_MODEL && !this.USER_CONFIG.GOOGLE_CHAT_MODEL) {
+            this.USER_CONFIG.GOOGLE_CHAT_MODEL = source.GOOGLE_CHAT_MODEL;
+        }
+
+        // 兼容旧版 AZURE_COMPLETIONS_API
+        if (source.AZURE_COMPLETIONS_API && !this.USER_CONFIG.AZURE_CHAT_MODEL) {
+            const url = new URL(source.AZURE_COMPLETIONS_API);
+            this.USER_CONFIG.AZURE_RESOURCE_NAME = url.hostname.split('.').at(0) || null;
+            this.USER_CONFIG.AZURE_CHAT_MODEL = url.pathname.split('/').at(3) || null;
+            this.USER_CONFIG.AZURE_API_VERSION = url.searchParams.get('api-version') || '2024-06-01';
+        }
+        // 兼容旧版 AZURE_DALLE_API
+        if (source.AZURE_DALLE_API && !this.USER_CONFIG.AZURE_IMAGE_MODEL) {
+            const url = new URL(source.AZURE_DALLE_API);
+            this.USER_CONFIG.AZURE_RESOURCE_NAME = url.hostname.split('.').at(0) || null;
+            this.USER_CONFIG.AZURE_IMAGE_MODEL = url.pathname.split('/').at(3) || null;
+            this.USER_CONFIG.AZURE_API_VERSION = url.searchParams.get('api-version') || '2024-06-01';
         }
     }
 }

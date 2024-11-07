@@ -1,9 +1,11 @@
 {
     "compilerOptions": {
-        "target": "ES2022",
+        "target": "ESNext",
+        "jsx": "react",
         "lib": [
             "ESNext",
-            "dom"
+            "dom",
+            "dom.iterable"
         ],
         "useDefineForClassFields": true,
         "emitDecoratorMetadata": false,
@@ -11,9 +13,11 @@
         "module": "ESNext",
         "moduleResolution": "bundler",
         "types": [
-            "node"
+            "node",
+            "react",
+            "react-dom"
         ],
-        "allowJs": false,
+        "allowJs": true,
         "strict": true,
         "declaration": true,
         "declarationMap": true,

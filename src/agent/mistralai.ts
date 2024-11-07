@@ -1,7 +1,9 @@
 import type { AgentUserConfig } from '../config/env';
-import type { ChatAgent, ChatStreamTextHandler, CompletionData, HistoryItem, LLMChatParams } from './types';
+import type { ChatAgent, ChatStreamTextHandler, LLMChatParams, ResponseMessage } from './types';
+import { createMistral } from '@ai-sdk/mistral';
+import { warpLLMParams } from '.';
 import { Log } from '../extra/log/logDecortor';
-import { requestChatCompletions } from './request';
+import { requestChatCompletionsV2 } from './request';
 
 export class Mistral implements ChatAgent {
     readonly name = 'mistral';
@@ -15,33 +17,15 @@ export class Mistral implements ChatAgent {
         return ctx.MISTRAL_CHAT_MODEL;
     };
 
-    private render = (item: HistoryItem): any => {
-        return {
-            role: item.role,
-            content: item.content,
-        };
-    };
-
-    @Log
-    readonly request = async (params: LLMChatParams, context: AgentUserConfig, onStream: ChatStreamTextHandler | null): Promise<CompletionData> => {
-        const { prompt, history } = params;
-        const url = `${context.MISTRAL_API_BASE}/chat/completions`;
-        const header = {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${context.MISTRAL_API_KEY}`,
-        };
-
-        const messages = [...(history || [])];
-        if (prompt) {
-            messages.unshift({ role: context.SYSTEM_INIT_MESSAGE_ROLE, content: prompt });
-        }
-
-        const body = {
-            model: context.MISTRAL_CHAT_MODEL,
-            messages: messages.map(this.render),
-            stream: onStream != null,
-        };
-
-        return requestChatCompletions(url, header, body, onStream);
+    readonly request = async (params: LLMChatParams, context: AgentUserConfig, onStream: ChatStreamTextHandler | null): Promise<ResponseMessage[]> => {
+        const provider = createMistral({
+            baseURL: context.MISTRAL_API_BASE,
+            apiKey: context.MISTRAL_API_KEY || undefined,
+        });
+        const languageModelV1 = provider.languageModel(this.model(context), undefined);
+        return requestChatCompletionsV2(await warpLLMParams({
+            model: languageModelV1,
+            messages: params.messages,
+        }, context), onStream);
     };
 }

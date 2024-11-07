@@ -1,14 +1,7 @@
+import type { CoreAssistantMessage, CoreMessage, CoreToolMessage, CoreUserMessage } from 'ai';
 import type { AgentUserConfig } from '../config/env';
 import type { UnionData } from '../telegram/utils/utils';
 
-export interface HistoryItem {
-    role: string;
-    content: string;
-    images?: string[] | null;
-    tool_calls?: OpenAIFuncCallData[];
-    name?: string;
-    tool_call_id?: string;
-}
 export interface OpenAIFuncCallData {
     // index: number;
     id: string;
@@ -18,10 +11,11 @@ export interface OpenAIFuncCallData {
         arguments: string;
     };
 };
+export type HistoryItem = CoreMessage;
 
 export interface HistoryModifierResult {
     history: HistoryItem[];
-    message: string | null;
+    message: CoreUserMessage;
 }
 
 export interface CompletionData {
@@ -48,44 +42,31 @@ export type MessageTool = MessageBase & {
     tool_call_id: string;
 };
 
-export type HistoryModifier = (history: HistoryItem[], message: string | null) => HistoryModifierResult;
-
 export interface ChatStreamTextHandler {
     (text: string, isEnd?: boolean): Promise<any>;
     nextEnableTime?: () => number | null;
     end?: (text: string) => Promise<any>;
 }
 
-interface LLMChatParamsBase {
-    message?: string;
-    images?: string[];
-    audio?: Blob[];
-    prompt?: string | null;
-    extra_params?: Record<string, any>;
-}
-
-export interface LLMChatParams extends LLMChatParamsBase {
-    model?: string;
-    history?: HistoryItem[];
-}
-
-export type ChatAgentRequest = (params: LLMChatParams, context: AgentUserConfig, onStream: ChatStreamTextHandler | null) => Promise<CompletionData>;
-
-export interface ChatAgent {
-    name: string;
-    modelKey: string;
-    enable: (context: AgentUserConfig) => boolean;
-    request: ChatAgentRequest;
-    model: (ctx: AgentUserConfig) => string;
-}
-
 export type ImageAgentRequest = (prompt: string, context: AgentUserConfig) => Promise<ImageResult>;
+export type HistoryModifier = (history: HistoryItem[], message: CoreUserMessage | null) => HistoryModifierResult;
 
-export interface ImageAgent {
-    name: string;
+export type LLMChatRequestParams = CoreUserMessage;
+
+export interface LLMChatParams {
+    prompt?: string;
+    messages: CoreMessage[];
+}
+
+export type ResponseMessage = CoreAssistantMessage | CoreToolMessage;
+
+export type ChatAgentRequest = (params: LLMChatParams, context: AgentUserConfig, onStream: ChatStreamTextHandler | null) => Promise<ResponseMessage[]>;
+
+export interface Agent<AgentRequest> {
+    name: string | string[];
     modelKey: string;
     enable: (context: AgentUserConfig) => boolean;
-    request: ImageAgentRequest;
+    request: AgentRequest;
     model: (ctx: AgentUserConfig) => string;
     render?: (response: Response) => Promise<ImageResult>;
 }
@@ -96,10 +77,10 @@ export interface ImageResult extends UnionData {
     caption?: string;
 }
 
-export type AudioAgentRequest = (audio: Blob, context: AgentUserConfig, file_name: string) => Promise<UnionData>;
+export type AudioAgentRequest = (audio: Blob, context: AgentUserConfig) => Promise<UnionData>;
 
 export interface AudioAgent {
-    name: string;
+    name: string | string[];
     modelKey: string;
     enable: (context: AgentUserConfig) => boolean;
     request: AudioAgentRequest;
@@ -115,3 +96,7 @@ export interface Image2ImageAgent {
     request: Image2ImageAgentRequest;
     model: (ctx: AgentUserConfig) => string;
 }
+
+export type ChatAgent = Agent<ChatAgentRequest>;
+
+export type ImageAgent = Agent<ImageAgentRequest>;

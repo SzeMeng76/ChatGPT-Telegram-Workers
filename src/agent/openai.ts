@@ -1,46 +1,14 @@
+import type { CoreUserMessage } from 'ai';
 import type { AgentUserConfig } from '../config/env';
 import type { UnionData } from '../telegram/utils/utils';
-import type { AudioAgent, ChatAgent, ChatStreamTextHandler, CompletionData, HistoryItem, ImageAgent, ImageResult, LLMChatParams } from './types';
-import { ENV } from '../config/env';
+import type { AudioAgent, ChatAgent, ChatStreamTextHandler, ImageAgent, ImageResult, LLMChatParams, LLMChatRequestParams, ResponseMessage } from './types';
+import { createOpenAI } from '@ai-sdk/openai';
+import { warpLLMParams } from '.';
 import { Log } from '../extra/log/logDecortor';
 import { log } from '../extra/log/logger';
-import { imageToBase64String, renderBase64DataURI } from '../utils/image';
+import { vaildTools } from '../extra/tools';
 import { requestText2Image } from './chat';
-import { requestChatCompletions } from './request';
-
-export async function renderOpenAIMessage(item: HistoryItem): Promise<any> {
-    // 由于增加函数调用数据，故直接使用item 再移除images
-    const res: any = {
-        ...item,
-    };
-    delete res?.images;
-    if (item.images && item.images.length > 0) {
-        res.content = [];
-        if (item.content) {
-            res.content.push({ type: 'text', text: item.content });
-        } else {
-            // 兼容claude模型必须附带文字进行图像识别
-            res.content.push({ type: 'text', text: '请帮我解读这张图片' });
-        }
-        for (const image of item.images) {
-            switch (ENV.TELEGRAM_IMAGE_TRANSFER_MODE) {
-                case 'base64':
-                    res.content.push({
-                        type: 'image_url',
-                        image_url: {
-                            url: renderBase64DataURI(await imageToBase64String(image)),
-                        },
-                    });
-                    break;
-                case 'url':
-                default:
-                    res.content.push({ type: 'image_url', image_url: { url: image } });
-                    break;
-            }
-        }
-    }
-    return res;
-}
+import { requestChatCompletionsV2 } from './request';
 
 class OpenAIBase {
     readonly name = 'openai';
@@ -61,17 +29,9 @@ export class OpenAI extends OpenAIBase implements ChatAgent {
         return context.OPENAI_API_KEY.length > 0;
     };
 
-    readonly model = (ctx: AgentUserConfig, params?: LLMChatParams): string => {
-        if (this.type === 'tool' && ctx.FUNCTION_CALL_MODEL) {
-            return ctx.FUNCTION_CALL_MODEL;
-        }
-        return params?.model || params?.images ? ctx.OPENAI_VISION_MODEL : ctx.OPENAI_CHAT_MODEL;
+    readonly model = (ctx: AgentUserConfig, params?: LLMChatRequestParams): string => {
+        return Array.isArray(params?.content) ? ctx.OPENAI_VISION_MODEL : ctx.OPENAI_CHAT_MODEL;
     };
-
-    constructor(type: string = 'chat') {
-        super();
-        this.type = type;
-    }
 
     // 仅文本对话使用该地址
     readonly base_url = (context: AgentUserConfig): string => {
@@ -81,97 +41,20 @@ export class OpenAI extends OpenAIBase implements ChatAgent {
         return context.OPENAI_API_BASE;
     };
 
-    private render = async (item: HistoryItem): Promise<any> => {
-        return renderOpenAIMessage(item);
-    };
+    readonly request = async (params: LLMChatParams, context: AgentUserConfig, onStream: ChatStreamTextHandler | null): Promise<ResponseMessage[]> => {
+        const provider = createOpenAI({
+            baseURL: context.OPENAI_API_BASE,
+            apiKey: this.apikey(context),
+        });
 
-    @Log
-    readonly request = async (params: LLMChatParams, context: AgentUserConfig, onStream: ChatStreamTextHandler | null): Promise<CompletionData> => {
-        const { prompt, history, extra_params } = params;
-        const url = `${this.base_url(context)}/chat/completions`;
-        const header = {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${this.apikey(context)}`,
-        };
+        const userMessage = params.messages.at(-1) as CoreUserMessage;
+        const languageModelV1 = provider.languageModel(this.model(context, userMessage), undefined);
 
-        const messages = [...(history || [])];
-
-        if (prompt) {
-            // 第一条消息不能是tool
-            for (const message of messages) {
-                if (message?.role === 'tool') {
-                    messages.shift();
-                } else {
-                    break;
-                }
-            }
-            messages.unshift({ role: context.SYSTEM_INIT_MESSAGE_ROLE, content: prompt });
-        }
-
-        const body: Record<string, any> = {
-            model: this.model(context, params),
-            ...context.OPENAI_API_EXTRA_PARAMS,
-            messages: await Promise.all(messages.map(this.render)),
-            stream: !!onStream,
-            ...extra_params,
-            ...(context.ENABLE_SHOWTOKEN && !!onStream && { stream_options: { include_usage: true } }),
-        };
-        delete body.agent;
-        delete body.type;
-
-        // 过滤掉不支持的参数
-        const { body: newBody, onStream: newOnStream } = this.extraHandle(body, context, onStream);
-        return requestChatCompletions(url, header, newBody, newOnStream);
-    };
-
-    readonly extraHandle = (body: Record<string, any>, context: AgentUserConfig, onStream: ChatStreamTextHandler | null): any => {
-        // drop params
-        if (Object.keys(ENV.DROPS_OPENAI_PARAMS).length > 0) {
-            for (const [models, params] of Object.entries(ENV.DROPS_OPENAI_PARAMS)) {
-                if (models.split(',').includes(body.model)) {
-                    params.split(',').forEach(p => delete body[p]);
-                    break;
-                }
-            }
-            if (!body.stream && onStream) {
-                body.stream = false;
-                onStream = null;
-            }
-        }
-        // cover message role
-        if (ENV.COVER_MESSAGE_ROLE) {
-            for (const [models, roles] of Object.entries(ENV.COVER_MESSAGE_ROLE)) {
-                const [oldRole, newRole] = roles.split(':');
-                if (models.split(',').includes(body.model)) {
-                    body.messages = body.messages.map((m: any) => {
-                        m.role = m.role === oldRole ? newRole : m.role;
-                        return m;
-                    });
-                }
-            }
-        }
-        // compatible function call
-        if (!body.model.includes('gpt') && !ENV.MODEL_COMPATIBLE_OPENAI) {
-            // claude 和 gemini 不支持content为空
-            body.messages = body.messages.filter((m: any) => !!m.content).map(
-                (m: any) => {
-                    if (m.role === 'tool') {
-                        return {
-                            role: 'user',
-                            content: `${m.name} result:${m.content}`,
-                        };
-                    }
-                    return m;
-                },
-            );
-            delete body.tool_choice;
-            delete body.tool_calls;
-        }
-        // delete stream_options
-        if (!onStream && body.stream_options) {
-            delete body.stream_options;
-        }
-        return { body, onStream };
+        return requestChatCompletionsV2(await warpLLMParams({
+            model: languageModelV1,
+            // prompt: params.prompt,
+            messages: params.messages,
+        }, context), onStream);
     };
 }
 
@@ -231,14 +114,14 @@ export class Transcription extends OpenAIBase implements AudioAgent {
     };
 
     @Log
-    request = async (audio: Blob, context: AgentUserConfig, file_name: string): Promise<UnionData> => {
+    request = async (audio: Blob, context: AgentUserConfig): Promise<UnionData> => {
         const url = `${context.OPENAI_API_BASE}/audio/transcriptions`;
         const header = {
             Authorization: `Bearer ${this.apikey(context)}`,
             Accept: 'application/json',
         };
         const formData = new FormData();
-        formData.append('file', audio, file_name);
+        formData.append('file', audio, 'audio.ogg');
         formData.append('model', this.model(context));
         if (context.OPENAI_STT_EXTRA_PARAMS) {
             Object.entries(context.OPENAI_STT_EXTRA_PARAMS as string).forEach(([k, v]) => {

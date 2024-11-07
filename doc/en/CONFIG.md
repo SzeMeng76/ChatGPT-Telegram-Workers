@@ -51,7 +51,7 @@ The default value of `LOCK_USER_CONFIG_KEYS` is the BASE URL of all APIs. In ord
 `LOCK_USER_CONFIG_KEYS` is a string array with a default value is 
 
 ```
-OPENAI_API_BASE,GOOGLE_COMPLETIONS_API,MISTRAL_API_BASE,COHERE_API_BASE,ANTHROPIC_API_BASE,AZURE_COMPLETIONS_API,AZURE_DALLE_API
+OPENAI_API_BASE,GOOGLE_API_BASE,MISTRAL_API_BASE,COHERE_API_BASE,ANTHROPIC_API_BASE,AZURE_COMPLETIONS_API,AZURE_DALLE_API
 ```
 
 ### History configuration
@@ -126,8 +126,8 @@ Each user's custom configuration can only be modified by sending a message throu
 | KEY                      | Name                  | Default                                                    | 
 |--------------------------|-----------------------|------------------------------------------------------------|
 | GOOGLE_API_KEY           | Google Gemini API Key | `null`                                                     |
-| GOOGLE_COMPLETIONS_API   | Google Gemini API     | `https://generativelanguage.googleapis.com/v1beta/models/` |
-| GOOGLE_COMPLETIONS_MODEL | Google Gemini Model   | `gemini-pro`                                               |
+| GOOGLE_API_BASE   | Google Gemini API     | `https://generativelanguage.googleapis.com/v1beta/models/` |
+| GOOGLE_CHAT_MODEL | Google Gemini Model   | `gemini-pro`                                               |
 
 > Cloudflare Workers currently do not support accessing Gemini.
 

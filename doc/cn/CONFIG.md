@@ -51,7 +51,7 @@
 `LOCK_USER_CONFIG_KEYS`是一个字符串数组，默认值为：
 
 ```
-OPENAI_API_BASE,GOOGLE_COMPLETIONS_API,MISTRAL_API_BASE,COHERE_API_BASE,ANTHROPIC_API_BASE,AZURE_COMPLETIONS_API,AZURE_DALLE_API
+OPENAI_API_BASE,GOOGLE_API_BASE,MISTRAL_API_BASE,COHERE_API_BASE,ANTHROPIC_API_BASE,AZURE_COMPLETIONS_API,AZURE_DALLE_API
 ```
 
 ### 历史记录配置
@@ -82,7 +82,7 @@ OPENAI_API_BASE,GOOGLE_COMPLETIONS_API,MISTRAL_API_BASE,COHERE_API_BASE,ANTHROPI
 
 | KEY                      | 名称          | 默认值         | 描述                                                                     |
 |--------------------------|-------------|-------------|------------------------------------------------------------------------|
-| AI_PROVIDER              | AI提供商       | `auto`      | 可选值 `auto, openai, azure, workers, gemini, mistral, cohere, anthropic` |
+| AI_PROVIDER              | AI提供商       | `auto`      | 可选值 `auto, openai, azure, workers, google, google_studio, vertex, mistral, cohere, anthropic` |
 | AI_IMAGE_PROVIDER        | AI图片提供商     | `auto`      | 可选值 `auto, openai, azure, workers`                                     |
 | SYSTEM_INIT_MESSAGE      | 全局默认初始化消息   | `你是一个得力的助手` | 根据绑定的语言自动选择默认值                                                         |
 | SYSTEM_INIT_MESSAGE_ROLE | 全局默认初始化消息角色 | `system`    |                                                                        |
@@ -129,8 +129,8 @@ cloudflare workers 暂时不支持访问
 | KEY                      | 名称                      | 默认值                                                        |
 |--------------------------|-------------------------|------------------------------------------------------------|
 | GOOGLE_API_KEY           | Google Gemini API Key   | `null`                                                     |
-| GOOGLE_COMPLETIONS_API   | Google Gemini API       | `https://generativelanguage.googleapis.com/v1beta/models/` |
-| GOOGLE_COMPLETIONS_MODEL | Google Gemini Model     | `gemini-pro`                                               |
+| GOOGLE_API_BASE   | Google Gemini API       | `https://generativelanguage.googleapis.com/v1beta/models/` |
+| GOOGLE_CHAT_MODEL | Google Gemini Model     | `gemini-pro`                                               |
 
 ### Mistral
 

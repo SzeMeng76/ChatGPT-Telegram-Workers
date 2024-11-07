@@ -1,6 +1,6 @@
 import type { AgentUserConfig } from '../config/env';
 import type { SseChatCompatibleOptions } from './request';
-import type { ChatAgent, ChatStreamTextHandler, CompletionData, HistoryItem, ImageAgent, ImageResult, LLMChatParams } from './types';
+import type { ChatAgent, ChatStreamTextHandler, HistoryItem, ImageAgent, ImageResult, LLMChatParams, ResponseMessage } from './types';
 import { Log } from '../extra/log/logDecortor';
 import { isJsonResponse, requestChatCompletions } from './request';
 
@@ -29,16 +29,8 @@ export class WorkersChat extends WorkerBase implements ChatAgent {
         return ctx.WORKERS_CHAT_MODEL;
     };
 
-    private render = (item: HistoryItem): any => {
-        return {
-            role: item.role,
-            content: item.content,
-        };
-    };
-
-    @Log
-    readonly request = async (params: LLMChatParams, context: AgentUserConfig, onStream: ChatStreamTextHandler | null): Promise<CompletionData> => {
-        const { prompt, history } = params;
+    readonly request = async (params: LLMChatParams, context: AgentUserConfig, onStream: ChatStreamTextHandler | null): Promise<ResponseMessage[]> => {
+        const { messages, prompt } = params;
         const id = context.CLOUDFLARE_ACCOUNT_ID;
         const token = context.CLOUDFLARE_TOKEN;
         const model = context.WORKERS_CHAT_MODEL;
@@ -47,13 +39,18 @@ export class WorkersChat extends WorkerBase implements ChatAgent {
             Authorization: `Bearer ${token}`,
         };
 
-        const messages = [...(history || [])];
+        const reqMessages = messages.map((raw) => {
+            return {
+                role: raw.role,
+                content: raw.content,
+            };
+        });
         if (prompt) {
-            messages.unshift({ role: context.SYSTEM_INIT_MESSAGE_ROLE, content: prompt });
+            reqMessages.unshift({ role: 'system', content: prompt });
         }
 
         const body = {
-            messages: messages.map(this.render),
+            messages: reqMessages,
             stream: onStream !== null,
         };
 
@@ -67,7 +64,13 @@ export class WorkersChat extends WorkerBase implements ChatAgent {
         options.errorExtractor = function (data: any) {
             return data?.errors?.[0]?.message;
         };
-        return requestChatCompletions(url, header, body, onStream, null, options);
+        const text = await requestChatCompletions(url, header, body, onStream, null, options);
+        return [
+            {
+                role: 'assistant',
+                content: text,
+            },
+        ];
     };
 }
 

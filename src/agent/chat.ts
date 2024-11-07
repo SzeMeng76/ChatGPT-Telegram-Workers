@@ -1,5 +1,5 @@
 import type { WorkerContext } from '../config/context';
-import type { ChatAgent, ChatStreamTextHandler, CompletionData, HistoryItem, HistoryModifier, ImageResult, LLMChatParams } from './types';
+import type { ChatAgent, ChatStreamTextHandler, CompletionData, HistoryItem, HistoryModifier, ImageResult, LLMChatParams, LLMChatRequestParams, ResponseMessage } from './types';
 import { ENV } from '../config/env';
 
 /**
@@ -37,7 +37,15 @@ export async function loadHistory(key: string): Promise<HistoryItem[]> {
                 const historyItem = list[i];
                 let length = 0;
                 if (historyItem.content) {
-                    length = counter(historyItem.content);
+                    if (typeof historyItem.content === 'string') {
+                        length = counter(historyItem.content);
+                    } else if (Array.isArray(historyItem.content)) {
+                        for (const content of historyItem.content) {
+                            if (Object.prototype.hasOwnProperty.call(content, 'text')) {
+                                length += counter((content as any).text as string);
+                            }
+                        }
+                    }
                 } else {
                     historyItem.content = '';
                 }
@@ -62,33 +70,34 @@ export async function loadHistory(key: string): Promise<HistoryItem[]> {
 
 export type StreamResultHandler = (text: string) => Promise<any>;
 
-export async function requestCompletionsFromLLM(params: LLMChatParams, context: WorkerContext, agent: ChatAgent, modifier: HistoryModifier | null, onStream: ChatStreamTextHandler | null): Promise<CompletionData> {
+export async function requestCompletionsFromLLM(params: LLMChatRequestParams | null, context: WorkerContext, agent: ChatAgent, modifier: HistoryModifier | null, onStream: StreamResultHandler | null): Promise<ResponseMessage[]> {
     let history = context.MIDDEL_CONTEXT.history;
+    const historyDisable = ENV.AUTO_TRIM_HISTORY && ENV.MAX_HISTORY_LENGTH <= 0;
+    // const historyKey = context.SHARE_CONTEXT.chatHistoryKey;
     if (modifier) {
-        const modifierData = modifier(history, params.message || null);
+        const modifierData = modifier(history, params);
         history = modifierData.history;
-        params.message = modifierData.message || '';
+        params = modifierData.message;
     }
-
-    let { message, images, audio, prompt, model, extra_params } = params;
-
-    if (prompt) {
-        prompt = context.USER_CONFIG.PROMPT[prompt] || prompt;
-    } else {
-        prompt = context.USER_CONFIG.SYSTEM_INIT_MESSAGE;
+    if (params === null) {
+        throw new Error('Message is null');
     }
-
-    const llmParams = {
-        message,
-        images,
-        audio,
-        prompt,
-        model,
-        history,
-        extra_params,
+    const messages = [...history, params];
+    if (context.USER_CONFIG.SYSTEM_INIT_MESSAGE) {
+        messages.unshift({
+            role: 'system',
+            content: context.USER_CONFIG.SYSTEM_INIT_MESSAGE,
+        });
+    }
+    const llmParams: LLMChatParams = {
+        messages,
     };
     const answer = await agent.request(llmParams, context.USER_CONFIG, onStream);
-    context.MIDDEL_CONTEXT.history.push({ role: 'assistant', ...answer });
+    if (!historyDisable) {
+        history.push(params);
+        history.push(...answer);
+        // await ENV.DATABASE.put(historyKey, JSON.stringify(history)).catch(console.error);
+    }
     return answer;
 }
 

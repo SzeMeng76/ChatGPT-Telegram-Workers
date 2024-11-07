@@ -1,0 +1,30 @@
+{
+    "schema": {
+        "name": "jina_reader",
+        "description":
+    "Grab text content from provided URL links. Can be used to retrieve text information for web pages, articles, or other online resources",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "url": {
+                    "type": "string",
+                    "description":
+          "The full URL address of the content to be crawled. If the user explicitly requests to read/analyze the content of the link, then call the function. If the data provided by the user is web content with links, but the content is sufficient to answer the question, then there is no need to call the function."
+                }
+            },
+            "required": ["url"],
+            "additionalProperties": false
+        }
+    },
+    "payload": {
+        "url": "https://r.jina.ai/{{url}}",
+        "headers": {
+            "Authorization": "Bearer {{JINA_API_KEY}}",
+            "Content-Type": "application/json",
+            "X-Return-Format": "text",
+            "X-Timeout": "10"
+        }
+    },
+    "handler": "content => content",
+    "required": ["JINA_API_KEY"]
+}

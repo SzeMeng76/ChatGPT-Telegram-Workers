@@ -134,10 +134,16 @@ export class StoreHistory implements MessageHandler<WorkerContext> {
         if (!historyDisable) {
             const historyKey = context.SHARE_CONTEXT.chatHistoryKey;
             const history = context.MIDDEL_CONTEXT.history;
+            const assistantMessage = history.findLast(h => h.role === 'assistant');
+            if (Array.isArray(assistantMessage?.content) && assistantMessage?.content.length > 0) {
+                if (!assistantMessage.content.findLast(i => i.type === 'text')?.text) {
+                    return null;
+                }
+            }
+
             const userMessage = history.findLast(h => h.role === 'user');
-            if (ENV.HISTORY_IMAGE_PLACEHOLDER && userMessage?.images && userMessage.images.length > 0) {
-                delete userMessage.images;
-                userMessage.content = `${ENV.HISTORY_IMAGE_PLACEHOLDER}\n${userMessage.content}`;
+            if (ENV.HISTORY_IMAGE_PLACEHOLDER && Array.isArray(userMessage?.content) && userMessage.content.length > 0) {
+                userMessage.content = userMessage.content.map(c => c.type === 'text' ? c.text : `[${c.type}]`).join('\n');
             }
             await ENV.DATABASE.put(historyKey, JSON.stringify(history)).catch(console.error);
         }
@@ -211,7 +217,7 @@ export class HandlerCallbackQuery implements CallbackQueryHandler<CallbackQueryC
         const queryHandler = new InlineCommandHandler();
         const defaultInlineKeys = queryHandler.defaultInlineKeys(context.USER_CONFIG);
 
-        const [inlineKey, option] = context.data!.split('.');
+        const [inlineKey, option] = context.data.split('.');
         await this.checkInlineKey(api, context, inlineKey, option, defaultInlineKeys);
 
         let inlineKeyboard: Telegram.InlineKeyboardButton[][] = [];

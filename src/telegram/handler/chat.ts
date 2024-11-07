@@ -1,6 +1,6 @@
-/* eslint-disable antfu/if-newline */
+import type { FilePart } from 'ai';
 import type * as Telegram from 'telegram-bot-api-types';
-import type { ChatStreamTextHandler, HistoryItem, HistoryModifier, ImageResult, LLMChatParams } from '../../agent/types';
+import type { ChatStreamTextHandler, HistoryItem, HistoryModifier, ImageResult, LLMChatRequestParams } from '../../agent/types';
 import type { WorkerContext } from '../../config/context';
 import type { AgentUserConfig } from '../../config/env';
 import type { ChosenInlineSender } from '../utils/send';
@@ -9,9 +9,8 @@ import type { MessageHandler } from './types';
 import { loadAudioLLM, loadChatLLM, loadImageGen } from '../../agent';
 import { loadHistory, requestCompletionsFromLLM } from '../../agent/chat';
 import { ENV } from '../../config/env';
-import { clearLog, getLog, getLogSingleton } from '../../extra/log/logDecortor';
+import { clearLog, getLog } from '../../extra/log/logDecortor';
 import { log } from '../../extra/log/logger';
-import { FunctionCall, getValidToolStructs } from '../../extra/tools/functioncall';
 import { createTelegramBotAPI } from '../api';
 import { MessageSender, sendAction, TelegraphSender } from '../utils/send';
 
@@ -37,7 +36,7 @@ async function messageInitialize(sender: MessageSender): Promise<void> {
 
 export async function chatWithLLM(
     message: Telegram.Message,
-    params: LLMChatParams,
+    params: LLMChatRequestParams | null,
     context: WorkerContext,
     modifier: HistoryModifier | null,
 ): Promise<UnionData | Response> {
@@ -49,10 +48,6 @@ export async function chatWithLLM(
         onStream = OnStreamHander(sender, context);
     }
 
-    if (params?.extra_params?.agent) {
-        context.USER_CONFIG.AI_PROVIDER = params.extra_params.agent;
-    }
-
     const agent = loadChatLLM(context.USER_CONFIG);
     if (!agent) {
         return sender.sendPlainText('LLM is not enabled');
@@ -62,23 +57,34 @@ export async function chatWithLLM(
         log.info(`start chat with LLM`);
         const answer = await requestCompletionsFromLLM(params, context, agent, modifier, onStream);
         log.info(`chat with LLM done`);
-        if (onStream) {
-            const nextTime = onStream.nextEnableTime?.() ?? 0;
-            if (nextTime > Date.now()) {
-                await new Promise(resolve => setTimeout(resolve, nextTime - Date.now()));
-            }
-            log.info(`send chat end message via stream`);
-            await onStream(answer.content, true);
-        } else {
-            log.info(`send chat end message via rich text`);
+        if (answer.length === 0) {
+            return sender.sendPlainText('No response');
+        }
+        const lastAnswer = answer[answer.length - 1];
+        if (onStream && typeof lastAnswer.content === 'string') {
+            await onStream(lastAnswer.content, true);
+        } else if (typeof lastAnswer.content === 'string') {
             await sender.sendRichText(
-                `${getLog(context.USER_CONFIG)}\n${answer.content}`,
+                `${getLog(context.USER_CONFIG)}\n${lastAnswer.content}`,
                 ENV.DEFAULT_PARSE_MODE as Telegram.ParseMode,
                 'chat',
             );
+        } else if (Array.isArray(lastAnswer.content)) {
+            for (const part of lastAnswer.content) {
+                if (Object.hasOwn(part, 'text')) {
+                    await sender.sendRichText(
+                        `${getLog(context.USER_CONFIG)}\n${(part as any).text}`,
+                        ENV.DEFAULT_PARSE_MODE as Telegram.ParseMode,
+                        'chat',
+                    );
+                }
+            }
+            log.info(`send chat end message via rich text`);
+        } else {
+            await sender.sendPlainText('unknown answer');
         }
 
-        return { type: 'text', text: answer.content } as UnionData;
+        return { type: 'text', text: lastAnswer.content } as UnionData;
     } catch (e) {
         let errMsg = `Error: `;
         if ((e as Error).name === 'AbortError') {
@@ -110,36 +116,6 @@ export class ChatHandler implements MessageHandler<WorkerContext> {
 
             // 处理原始消息
             const params = await this.processOriginalMessage(message, context);
-
-            // 如果原始消息类型为文本，且没有禁用工具，则使用functioncall
-            if (originalType === 'text' && !flowDetail?.disableTool) {
-                context.MIDDEL_CONTEXT.sender = MessageSender.from(context.SHARE_CONTEXT.botToken, message);
-                try {
-                    const toolResult = await useTools(context, context.MIDDEL_CONTEXT.history, context.MIDDEL_CONTEXT.sender);
-                    // 已经给出了回复，且开启了 ASAP，则不再继续处理
-                    if (toolResult instanceof Response || (toolResult?.isFinished && context.USER_CONFIG.FUNCTION_REPLY_ASAP)) {
-                        return null;
-                    }
-                    if (toolResult?.prompt) {
-                        params.prompt = toolResult.prompt;
-                    }
-                    if (toolResult?.extra_params) {
-                        params.extra_params = {
-                            ...toolResult.extra_params,
-                        };
-                    }
-                } catch (error) {
-                    console.error('Error:', error);
-                    let errMsg = '⚠️';
-                    if ((error as Error).name === 'AbortError') {
-                        errMsg += 'Function call timeout';
-                    } else {
-                        errMsg += (error as Error).message.slice(0, 30);
-                    }
-                    getLogSingleton(context.USER_CONFIG).error = errMsg;
-                }
-            }
-
             // 执行工作流
             await workflow(context, flowDetail?.workflow || [{}], message, params);
             return null;
@@ -162,12 +138,12 @@ export class ChatHandler implements MessageHandler<WorkerContext> {
     private async processOriginalMessage(
         message: Telegram.Message,
         context: WorkerContext,
-    ): Promise<LLMChatParams> {
+    ): Promise<LLMChatRequestParams> {
         const { type, id, text } = context.MIDDEL_CONTEXT.originalMessage;
 
-        const params: LLMChatParams = {
-            message: text || '',
-            extra_params: {},
+        const params: LLMChatRequestParams = {
+            role: 'user',
+            content: text || '',
         };
 
         if ((type === 'image' || type === 'audio') && id) {
@@ -176,22 +152,29 @@ export class ChatHandler implements MessageHandler<WorkerContext> {
             const paths = files.map(f => f.result.file_path).filter(Boolean) as string[];
             const urls = paths.map(p => `https://api.telegram.org/file/bot${context.SHARE_CONTEXT.botToken}/${p}`);
             log.info(`File URLs:\n${urls.join('\n')}`);
-
-            if (type === 'audio') {
-                params.audio = [await fetch(urls[0]).then(r => r.blob())];
-                params.message = urls[0].split('/').pop() || 'audio.oga';
-            } else if (urls.length > 0) {
-                params.images = urls;
+            if (urls.length > 0) {
+                params.content = [];
+                if (text) {
+                    params.content.push({
+                        type: 'text',
+                        text,
+                    });
+                }
+                if (type === 'image') {
+                    for (const url of urls) {
+                        params.content.push({
+                            type: 'image',
+                            image: url,
+                        });
+                    }
+                } else if (type === 'audio') {
+                    params.content.push({
+                        type: 'file',
+                        data: urls[0],
+                        mimeType: 'audio/ogg',
+                    });
+                }
             }
-        }
-
-        // 如果消息类型为文本或图像，则添加到历史记录中
-        if (['text', 'image'].includes(type)) {
-            context.MIDDEL_CONTEXT.history.push({
-                role: 'user',
-                content: params.message || '',
-                ...(params.images && { images: params.images }),
-            });
         }
 
         return params;
@@ -282,23 +265,10 @@ function clearMessageContext(context: WorkerContext) {
     context.MIDDEL_CONTEXT.sender = null;
 }
 
-async function useTools(context: WorkerContext, history: HistoryItem[], sender: MessageSender): Promise<any> {
-    const validTools = getValidToolStructs(context.USER_CONFIG.USE_TOOLS);
-    if (Object.keys(validTools).length === 0) {
-        return null;
-    }
-
-    const ASAP = context.USER_CONFIG.FUNCTION_REPLY_ASAP;
-    if (ASAP) {
-        await messageInitialize(sender);
-    }
-    return await new FunctionCall(context, validTools, history, ASAP ? sender : null).run();
-}
-
 type WorkflowHandler = (
     eMsg: any,
     message: Telegram.Message,
-    params: LLMChatParams,
+    params: LLMChatRequestParams,
     context: WorkerContext
 ) => Promise<UnionData | Response | void>;
 
@@ -312,27 +282,14 @@ const workflowHandlers: Record<string, WorkflowHandler> = {
 
 async function workflow(
     context: WorkerContext,
-    flows: (Record<string, any> & LLMChatParams)[],
+    flows: Record<string, any>[],
     message: Telegram.Message,
-    params: LLMChatParams,
+    params: LLMChatRequestParams,
 ): Promise<Response | void> {
     const MiddleResult = context.MIDDEL_CONTEXT.middleResult;
 
     for (let i = 0; i < flows.length; i++) {
         const eMsg = i === 0 ? context.MIDDEL_CONTEXT.originalMessage : MiddleResult[i - 1];
-
-        if (i > 0) {
-            params = {
-                extra_params: {},
-            };
-        }
-
-        for (const key in flows[i]) {
-            if (['type', 'agent'].includes(key)) {
-                continue;
-            }
-            params[key as keyof LLMChatParams] = flows[i][key];
-        }
 
         const handlerKey = `${eMsg?.type || 'text'}:${flows[i]?.type || 'text'}`;
         const handler = workflowHandlers[handlerKey];
@@ -359,7 +316,7 @@ async function workflow(
 async function handleTextToText(
     eMsg: any,
     message: Telegram.Message,
-    params: LLMChatParams,
+    params: LLMChatRequestParams,
     context: WorkerContext,
 ): Promise<UnionData | Response> {
     return chatWithLLM(message, params, context, null);
@@ -368,7 +325,7 @@ async function handleTextToText(
 async function handleTextToImage(
     eMsg: any,
     message: Telegram.Message,
-    params: LLMChatParams,
+    params: LLMChatRequestParams,
     context: WorkerContext,
 ): Promise<UnionData | Response> {
     const agent = loadImageGen(context.USER_CONFIG);
@@ -385,10 +342,11 @@ async function handleTextToImage(
     await api.deleteMessage({ chat_id: sender.context.chat_id, message_id: msg.result.message_id });
     return result as UnionData;
 }
+
 async function handleAudioToText(
     eMsg: any,
     message: Telegram.Message,
-    params: LLMChatParams,
+    params: LLMChatRequestParams,
     context: WorkerContext,
 ): Promise<UnionData | Response> {
     const agent = loadAudioLLM(context.USER_CONFIG);
@@ -396,7 +354,9 @@ async function handleAudioToText(
     if (!agent) {
         return sender.sendPlainText('ERROR: Audio agent not found');
     }
-    const result = await agent.request(params.audio![0], context.USER_CONFIG, params.message!);
+    const url = (params.content as FilePart[])[0].data as string;
+    const audio = await fetch(url).then(b => b.blob());
+    const result = await agent.request(audio, context.USER_CONFIG);
     context.MIDDEL_CONTEXT.history.push({ role: 'user', content: result.text || '' });
     await sender.sendRichText(`${getLog(context.USER_CONFIG)}\n> \`${result.text}\``, 'MarkdownV2', 'chat');
     return result;
@@ -419,6 +379,7 @@ export async function sendImages(img: ImageResult, SEND_IMAGE_FILE: boolean, sen
 }
 
 function injectHistory(context: WorkerContext, result: UnionData, nextType: string = 'text') {
-    if (context.MIDDEL_CONTEXT.history.at(-1)?.role === 'user' || nextType !== 'text') return;
+    if (context.MIDDEL_CONTEXT.history.at(-1)?.role === 'user' || nextType !== 'text')
+        return;
     context.MIDDEL_CONTEXT.history.push({ role: 'user', content: result.text || '', ...(result.url && result.url.length > 0 && { images: result.url }) });
 }

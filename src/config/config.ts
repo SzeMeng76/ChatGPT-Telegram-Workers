@@ -1,7 +1,5 @@
-import type { FuncTool } from '../extra/tools/types';
 import type { FlowStruct, LogLevelType } from './types';
 import prompts_default from '../extra/prompt';
-import tools_default from '../extra/tools';
 // -- 只能通过环境变量覆盖的配置 --
 export class EnvironmentConfig {
     // 多语言支持
@@ -37,12 +35,13 @@ export class EnvironmentConfig {
     LOCK_USER_CONFIG_KEYS = [
         // 默认为API BASE 防止被替换导致token 泄露
         'OPENAI_API_BASE',
-        'GOOGLE_COMPLETIONS_API',
+        'GOOGLE_API_BASE',
         'MISTRAL_API_BASE',
         'COHERE_API_BASE',
         'ANTHROPIC_API_BASE',
         'AZURE_COMPLETIONS_API',
         'AZURE_DALLE_API',
+        'GOOGLEAI_STUDIO_API_BASE',
     ];
 
     // -- 群组相关 --
@@ -88,7 +87,6 @@ export class EnvironmentConfig {
     HIDE_MIDDLE_MESSAGE = false;
     // Replace words, and will force trigger bot { ':n': '/new', ':g3': '/gpt3', ':g4': '/gpt4'}
     CHAT_MESSAGE_TRIGGER = {};
-    TOOLS: Record<string, FuncTool> = tools_default;
     // Ask AI to call function times
     FUNC_LOOP_TIMES = 1;
     // Show call info
@@ -166,7 +164,7 @@ export class EnvironmentConfig {
 
 // -- 通用配置 --
 export class AgentShareConfig {
-    // AI提供商: auto, openai, azure, workers, gemini, mistral
+    // AI提供商: auto, openai, azure, workers, google, google_studio, vertex, mistral
     AI_PROVIDER = 'auto';
     // AI图片提供商: auto, openai, azure, workers
     AI_IMAGE_PROVIDER = 'auto';
@@ -235,9 +233,9 @@ export class GeminiConfig {
     // Google Gemini API Key
     GOOGLE_API_KEY: string | null = null;
     // Google Gemini API: Cloudflare AI gateway: https://gateway.ai.cloudflare.com/v1/{account_id}/{gateway_name}/google-ai-studio/v1/models
-    GOOGLE_COMPLETIONS_API = 'https://generativelanguage.googleapis.com/v1beta/models/';
+    GOOGLE_API_BASE = 'https://generativelanguage.googleapis.com/v1beta';
     // Google Gemini Model
-    GOOGLE_COMPLETIONS_MODEL = 'gemini-pro';
+    GOOGLE_CHAT_MODEL = 'gemini-1.5-flash-latest';
 }
 
 // -- Mistral 配置 --
@@ -285,12 +283,25 @@ export class SiliconConfig {
     SILICON_EXTRA_PARAMS: Record<string, any> = {};
 }
 
+export class VertexConfig {
+    // Google Project id
+    VERTEX_PROJECT_ID: string | null = null;
+    VERTEX_LOCATION = 'us-central1';
+    // Vertex Credentials: need obtain client_email & private_key from google cloud console
+    VERTEX_CREDENTIALS: Record<string, any> = {};
+
+    // Vertex Model
+    VERTEX_CHAT_MODEL = 'gemini-1.5-flash-latest';
+    // when use search grounding, do not use other tools at the same time, otherwise errors occur.
+    VERTEX_SEARCH_GROUNDING = false;
+}
+
 export class DefineKeys {
     DEFINE_KEYS: string[] = [];
 }
 
 export class ExtraUserConfig {
-    MAPPING_KEY = '-p:SYSTEM_INIT_MESSAGE|-n:MAX_HISTORY_LENGTH|-a:AI_PROVIDER|-ai:AI_IMAGE_PROVIDER|-m:CHAT_MODEL|-md:CURRENT_MODE|-v:OPENAI_VISION_MODEL|-t:OPENAI_TTS_MODEL|-ex:OPENAI_API_EXTRA_PARAMS|-mk:MAPPING_KEY|-mv:MAPPING_VALUE|-asap:FUNCTION_REPLY_ASAP|-fm:FUNCTION_CALL_MODEL|-tool:USE_TOOLS|-oli:IMAGE_MODEL';
+    MAPPING_KEY = '-p:SYSTEM_INIT_MESSAGE|-n:MAX_HISTORY_LENGTH|-a:AI_PROVIDER|-ai:AI_IMAGE_PROVIDER|-m:CHAT_MODEL|-md:CURRENT_MODE|-v:OPENAI_VISION_MODEL|-t:OPENAI_TTS_MODEL|-ex:OPENAI_API_EXTRA_PARAMS|-mk:MAPPING_KEY|-mv:MAPPING_VALUE|-asap:FUNCTION_REPLY_ASAP|-tm:TOOL_MODEL|-tool:USE_TOOLS|-oli:IMAGE_MODEL|-vs:VERTEX_SEARCH_GROUNDING';
     // /set command mapping value, separated by |, : separates multiple relationships
     MAPPING_VALUE = '';
     // MAPPING_VALUE = "cson:claude-3-5-sonnet-20240620|haiku:claude-3-haiku-20240307|g4m:gpt-4o-mini|g4:gpt-4o|rp+:command-r-plus";
@@ -298,12 +309,12 @@ export class ExtraUserConfig {
     ENABLE_SHOWINFO = false;
     // Whether to show token information in the message (if any)
     ENABLE_SHOWTOKEN = false;
-    // Function to use, currently has duckduckgo_search and jina_reader
-    // '["duckduckgo_search", "jina_reader"]'
-    USE_TOOLS: string[] = [];
+    // Function to use, currently has duckduckgo and jina_reader
+    // '["duckduckgo", "jina_reader"]'
+    USE_TOOLS: string[] = ['duckduckgo', 'jina_reader'];
     JINA_API_KEY = [];
     // openai format function call parameters
-    FUNCTION_CALL_MODEL = 'gpt-4o-mini';
+    TOOL_MODEL = 'gpt-4o-mini';
     FUNCTION_CALL_API_KEY = '';
     FUNCTION_CALL_BASE = '';
     // When the function call is not hit, enable this option to directly receive the reply from the FUNCTION_CALL model.
@@ -331,7 +342,7 @@ export class ExtraUserConfig {
     CURRENT_MODE = 'default';
 
     // INLINE_AGENTS
-    INLINE_AGENTS = ['oenai', 'claude', 'gemini', 'cohere', 'workersai'];
+    INLINE_AGENTS = ['openai', 'claude', 'google', 'google_studio', 'vertex', 'cohere', 'workersai'];
     // INLINE_IMAGE_AGENTS
     INLINE_IMAGE_AGENTS = ['openai', 'silicon'];
     // INLINE_CHAT_MODELS
@@ -341,7 +352,7 @@ export class ExtraUserConfig {
     // INLINE_IMAGE_MODELS
     INLINE_IMAGE_MODELS: string[] = ['dall-e-2', 'dall-e-3'];
     // INLINE_FUNCTION_CALL_TOOLS
-    INLINE_FUNCTION_CALL_TOOLS: string[] = ['duckduckgo_search', 'jina_reader'];
+    INLINE_FUNCTION_CALL_TOOLS: string[] = ['duckduckgo', 'jina_reader'];
     // INLINE_FUNCTION_ASAP
     INLINE_FUNCTION_ASAP: string[] = ['true', 'false'];
     // KlingAI Cookie

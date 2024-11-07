@@ -1,11 +1,10 @@
-/* eslint-disable no-useless-catch */
 import type { Message } from 'telegram-bot-api-types';
 import type { CompletionData } from '../../agent/types';
 import type { WorkerContext } from '../../config/context';
 import type { AgentUserConfig } from '../../config/env';
 
 export const logSingleton = new WeakMap<AgentUserConfig, Logs>();
-export const sentMessageIds = new WeakMap<Message, number[]>();
+export const sentMessageIds = new WeakMap<Message, string[]>();
 
 export function Log(
     value: any,
@@ -37,7 +36,7 @@ export function Log(
 
                         const result: CompletionData = await initialValue.apply(this, args);
                         const endTime = Date.now();
-                        const elapsed = `${((endTime - startTime) / 1e3).toFixed(1)}s`;
+                        const elapsed = ((endTime - startTime) / 1e3).toFixed(1);
                         // 移除ongoing
                         logs.ongoingFunctions = logs.ongoingFunctions.filter(
                             func => func.startTime !== startTime,
@@ -73,25 +72,11 @@ export function Log(
             const logs = getLogSingleton(config);
             const startTime = Date.now();
 
-            // logs.ongoingFunctions.push({
-            //     name: value.name || 'anonymous',
-            //     startTime,
-            // });
-
-            try {
-                const result = await value.apply(this, args);
-                const endTime = Date.now();
-                const elapsed = `${((endTime - startTime) / 1e3).toFixed(1)}s`;
-
-                logs.functionTime.push(elapsed);
-
-                return result;
-            } catch (error) {
-                // logs.ongoingFunctions = logs.ongoingFunctions.filter(
-                //     func => func.startTime !== startTime,
-                // );
-                throw error;
-            }
+            const result = await value.apply(this, args);
+            const endTime = Date.now();
+            const elapsed = ((endTime - startTime) / 1e3).toFixed(1);
+            logs.functionTime.push(elapsed);
+            return result;
         };
     }
 
@@ -139,10 +124,10 @@ export function getLog(context: AgentUserConfig, returnModel: boolean = false): 
     if (logObj.tool.model) {
         let toolsLog = `${logObj.tool.model}`;
         if (logObj.tool.time.length > 0) {
-            toolsLog += ` c_t: ${logObj.tool.time.join(' ')}`;
+            toolsLog += ` c_t: ${logObj.tool.time.join('s ')}s`;
         }
         if (logObj.functionTime.length > 0) {
-            toolsLog += ` f_t: ${logObj.functionTime.join(' ')}`;
+            toolsLog += ` f_t: ${logObj.functionTime.join('s ')}s`;
         }
         logList.push(toolsLog);
     }
@@ -166,7 +151,7 @@ export function getLog(context: AgentUserConfig, returnModel: boolean = false): 
         const chatLogs = logObj.chat.model
             .map((m, i) => {
                 const time = logObj.chat.time[i] || '';
-                return `${m} ${time}`;
+                return `${m} ${time}s`;
             })
             .join('|');
         logList.push(chatLogs);
@@ -174,8 +159,8 @@ export function getLog(context: AgentUserConfig, returnModel: boolean = false): 
 
     // ongoing
     logObj.ongoingFunctions.forEach((func) => {
-        const elapsed = `${((Date.now() - func.startTime) / 1e3).toFixed(1)}s`;
-        logList.push(`[ongoing: ${func.name} ${elapsed}]`);
+        const elapsed = ((Date.now() - func.startTime) / 1e3).toFixed(1);
+        logList.push(`[ongoing: ${func.name} ${elapsed}s]`);
     });
 
     // token

@@ -19,9 +19,9 @@ type ToolType = 'search' | 'web_crawler' | 'command' | 'llm' | 'workflow';
 
 export interface FuncTool {
     schema: SchemaData;
-    func: (params: Record<string, any>, signal?: AbortSignal) => Promise<string>;
+    func: (params: Record<string, any>, options?: Record<string, any> & { signal?: AbortSignal }) => Promise<string>;
     type: ToolType;
-    ENV_KEY?: string;
+    required?: string[];
     prompt?: string;
     extra_params?: Record<string, any>;
 }

@@ -1,76 +1,51 @@
 import type { AgentUserConfig } from '../config/env';
-import type { ChatAgent, ChatStreamTextHandler, CompletionData, ImageAgent, ImageResult, LLMChatParams } from './types';
-import { Log } from '../extra/log/logDecortor';
+import type { ChatAgent, ChatStreamTextHandler, ImageAgent, ImageResult, LLMChatParams, ResponseMessage } from './types';
+import { createAzure } from '@ai-sdk/azure';
+import { warpLLMParams } from '.';
 import { requestText2Image } from './chat';
-import { renderOpenAIMessage } from './openai';
-import { requestChatCompletions } from './request';
+import { requestChatCompletionsV2 } from './request';
 
-class AzureBase {
+export class AzureChatAI implements ChatAgent {
     readonly name = 'azure';
-    readonly modelFromURI = (uri: string | null): string => {
-        if (!uri) {
-            return '';
-        }
-        try {
-            const url = new URL(uri);
-            return url.pathname.split('/')[3];
-        } catch {
-            return uri;
-        }
-    };
-}
 
-export class AzureChatAI extends AzureBase implements ChatAgent {
-    readonly modelKey = 'AZURE_COMPLETIONS_API';
+    readonly modelKey = 'AZURE_CHAT_MODEL';
 
     readonly enable = (context: AgentUserConfig): boolean => {
-        return !!(context.AZURE_API_KEY && context.AZURE_COMPLETIONS_API);
+        return !!(context.AZURE_API_KEY && context.AZURE_RESOURCE_NAME && context.AZURE_CHAT_MODEL);
     };
 
     readonly model = (ctx: AgentUserConfig) => {
-        return this.modelFromURI(ctx.AZURE_COMPLETIONS_API);
+        return ctx.AZURE_CHAT_MODEL || '';
     };
 
-    @Log
-    readonly request = async (params: LLMChatParams, context: AgentUserConfig, onStream: ChatStreamTextHandler | null): Promise<CompletionData> => {
-        const { prompt, history } = params;
-        const url = context.AZURE_COMPLETIONS_API;
-        if (!url || !context.AZURE_API_KEY) {
-            throw new Error('Azure Completions API is not set');
-        }
-        const header = {
-            'Content-Type': 'application/json',
-            'api-key': context.AZURE_API_KEY,
-        };
-
-        const messages = [...(history || [])];
-        if (prompt) {
-            messages.unshift({ role: context.SYSTEM_INIT_MESSAGE_ROLE, content: prompt });
-        }
-
-        const body = {
-            ...context.OPENAI_API_EXTRA_PARAMS,
-            messages: await Promise.all(messages.map(renderOpenAIMessage)),
-            stream: onStream != null,
-        };
-
-        return requestChatCompletions(url, header, body, onStream);
+    readonly request = async (params: LLMChatParams, context: AgentUserConfig, onStream: ChatStreamTextHandler | null): Promise<ResponseMessage[]> => {
+        const provider = createAzure({
+            resourceName: context.AZURE_RESOURCE_NAME || undefined,
+            apiKey: context.AZURE_API_KEY || undefined,
+        });
+        const languageModelV1 = provider.languageModel(context.AZURE_CHAT_MODEL || '', undefined);
+        return requestChatCompletionsV2(await warpLLMParams({
+            model: languageModelV1,
+            messages: params.messages,
+        }, context), onStream);
     };
 }
 
-export class AzureImageAI extends AzureBase implements ImageAgent {
-    readonly modelKey = 'AZURE_DALLE_API';
+export class AzureImageAI implements ImageAgent {
+    readonly name = 'azure';
+
+    readonly modelKey = 'AZURE_IMAGE_MODEL';
 
     readonly enable = (context: AgentUserConfig): boolean => {
-        return !!(context.AZURE_API_KEY && context.AZURE_DALLE_API);
+        return !!(context.AZURE_API_KEY && context.AZURE_RESOURCE_NAME && context.AZURE_IMAGE_MODEL);
     };
 
     readonly model = (ctx: AgentUserConfig) => {
-        return this.modelFromURI(ctx.AZURE_DALLE_API);
+        return ctx.AZURE_IMAGE_MODEL || '';
     };
 
     readonly request = async (prompt: string, context: AgentUserConfig): Promise<ImageResult> => {
-        const url = context.AZURE_DALLE_API;
+        const url = `https://${context.AZURE_RESOURCE_NAME}.openai.azure.com/openai/deployments/${context.AZURE_IMAGE_MODEL}/chat/completions?${context.AZURE_API_VERSION}`;
         if (!url || !context.AZURE_API_KEY) {
             throw new Error('Azure DALL-E API is not set');
         }

@@ -1,26 +1,26 @@
 import type { AgentUserConfig } from '../config/env';
 import type { ChatAgent, ChatStreamTextHandler, LLMChatParams, ResponseMessage } from './types';
-import { createAnthropic } from '@ai-sdk/anthropic';
+import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { warpLLMParams } from '.';
 import { Log } from '../extra/log/logDecortor';
 import { requestChatCompletionsV2 } from './request';
 
-export class Anthropic implements ChatAgent {
-    readonly name = 'anthropic';
-    readonly modelKey = 'ANTHROPIC_CHAT_MODEL';
+export class Google implements ChatAgent {
+    readonly name: string = 'google';
+    readonly modelKey = 'GOOGLE_CHAT_MODEL';
 
     readonly enable = (context: AgentUserConfig): boolean => {
-        return !!(context.ANTHROPIC_API_KEY);
+        return !!(context.GOOGLE_API_KEY);
     };
 
     readonly model = (ctx: AgentUserConfig): string => {
-        return ctx.ANTHROPIC_CHAT_MODEL;
+        return ctx.GOOGLE_CHAT_MODEL;
     };
 
     readonly request = async (params: LLMChatParams, context: AgentUserConfig, onStream: ChatStreamTextHandler | null): Promise<ResponseMessage[]> => {
-        const provider = createAnthropic({
-            baseURL: context.ANTHROPIC_API_BASE,
-            apiKey: context.ANTHROPIC_API_KEY || undefined,
+        const provider = createGoogleGenerativeAI({
+            baseURL: context.GOOGLE_API_BASE,
+            apiKey: context.GOOGLE_API_KEY || undefined,
         });
         const languageModelV1 = provider.languageModel(this.model(context), undefined);
         return requestChatCompletionsV2(await warpLLMParams({

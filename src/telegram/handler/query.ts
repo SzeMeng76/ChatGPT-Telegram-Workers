@@ -1,3 +1,4 @@
+import type { CoreMessage } from 'ai';
 import type { ChosenInlineResult, Message } from 'telegram-bot-api-types';
 import type { ChosenInlineWorkerContext, WorkerContext } from '../../config/context';
 import type { MessageSender } from '../utils/send';
@@ -24,11 +25,28 @@ export class AnswerChatInlineQuery implements answerInlineQuery {
         const agent = new OpenAI();
         const isStream = chosenInline.result_id === ':c stream';
         const OnStream = OnStreamHander(sender as unknown as MessageSender, context as unknown as WorkerContext);
+        const messages = [{ role: 'user', content: question }];
+        if (context.USER_CONFIG.SYSTEM_INIT_MESSAGE) {
+            messages.unshift({ role: 'system', content: context.USER_CONFIG.SYSTEM_INIT_MESSAGE });
+        }
         const resp = await agent.request({
-            history: [{ role: 'user', content: question }],
-            prompt: context.USER_CONFIG.SYSTEM_INIT_MESSAGE,
+            messages: messages as CoreMessage[],
         }, context.USER_CONFIG, isStream ? OnStream : null);
-        return OnStream.end?.(resp.content);
+        const lastAnswer = resp[resp.length - 1];
+        if (lastAnswer.content.length === 0) {
+            return sender.sendPlainText('No response');
+        }
+        if (typeof lastAnswer.content === 'string') {
+            return sender.sendPlainText(lastAnswer.content);
+        } else if (Array.isArray(lastAnswer.content) && lastAnswer.content.length > 0) {
+            for (const part of lastAnswer.content) {
+                if (Object.hasOwn(part, 'text')) {
+                    await OnStream.end?.((part as any).text);
+                }
+            }
+            return new Response('ok');
+        }
+        return sender.sendPlainText('Unknown response');
     };
 
     handlerQuestion = async (chosenInline: ChosenInlineResult, context: ChosenInlineWorkerContext, sender: MessageSender): Promise<string> => {

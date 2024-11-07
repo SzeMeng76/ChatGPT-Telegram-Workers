@@ -1,5 +1,6 @@
 /* eslint-disable unused-imports/no-unused-vars */
 /* eslint-disable no-cond-assign */
+import type { CoreUserMessage } from 'ai';
 import type * as Telegram from 'telegram-bot-api-types';
 import type { HistoryItem, HistoryModifierResult } from '../../agent/types';
 import type { WorkerContext } from '../../config/context';
@@ -13,6 +14,7 @@ import { ENV, ENV_KEY_MAPPER } from '../../config/env';
 import { ConfigMerger } from '../../config/merger';
 import { getLogSingleton } from '../../extra/log/logDecortor';
 import { log } from '../../extra/log/logger';
+import { toolsName } from '../../extra/tools';
 import { createTelegramBotAPI } from '../api';
 import { chatWithLLM, OnStreamHander, sendImages } from '../handler/chat';
 import { escape } from '../utils/md2tgmd';
@@ -317,9 +319,9 @@ export class SystemCommandHandler implements CommandHandler {
 export class RedoCommandHandler implements CommandHandler {
     command = '/redo';
     scopes: ScopeType[] = ['all_private_chats', 'all_group_chats', 'all_chat_administrators'];
-    handle = async (message: Telegram.Message, subcommand: string, context: WorkerContext): Promise<Response | UnionData> => {
-        const mf = (history: HistoryItem[], text: string | null): HistoryModifierResult => {
-            let nextText = text;
+    handle = async (message: Telegram.Message, subcommand: string, context: WorkerContext): Promise<UnionData | Response> => {
+        const mf = (history: HistoryItem[], message: CoreUserMessage | null): any => {
+            let nextMessage = message;
             if (!(history && Array.isArray(history) && history.length > 0)) {
                 throw new Error('History not found');
             }
@@ -329,23 +331,22 @@ export class RedoCommandHandler implements CommandHandler {
                 if (data === undefined || data === null) {
                     break;
                 } else if (data.role === 'user') {
-                    if (text === '' || text === undefined || text === null) {
-                        nextText = data.content || null;
-                    }
+                    nextMessage = data;
                     break;
                 }
             }
             if (subcommand) {
-                nextText = subcommand;
+                nextMessage = {
+                    role: 'user',
+                    content: subcommand,
+                };
             }
-            return { history: historyCopy, message: nextText };
+            if (nextMessage === null) {
+                throw new Error('Redo message not found');
+            }
+            return { history: historyCopy, message: nextMessage };
         };
-
-        if (context.MIDDEL_CONTEXT.history.length === 0) {
-            context.MIDDEL_CONTEXT.history = await loadHistory(context.SHARE_CONTEXT.chatHistoryKey);
-        }
-
-        return chatWithLLM(message, { message: '' }, context, mf);
+        return chatWithLLM(message, null, context, mf);
     };
 }
 
@@ -507,7 +508,7 @@ export class SetCommandHandler implements CommandHandler {
                 break;
             case 'USE_TOOLS':
                 if (value === 'on') {
-                    mappedValue = Object.keys(ENV.TOOLS);
+                    mappedValue = toolsName;
                 } else if (value === 'off') {
                     mappedValue = [];
                 }
@@ -589,7 +590,7 @@ export class PerplexityCommandHandler implements CommandHandler {
         logs.chat.model.push(`Perplexity ${mode}`);
         const startTime = Date.now();
         const result = await WssRequest(perplexityWsUrl, null, perplexityWsOptions, perplexityMessage, { onStream }).catch(console.error);
-        logs.chat.time.push(`${((Date.now() - startTime) / 1000).toFixed(1)}s`);
+        logs.chat.time.push(((Date.now() - startTime) / 1e3).toFixed(1));
         const nextTime = onStream.nextEnableTime?.() ?? 0;
         if (nextTime > Date.now()) {
             await new Promise(resolve => setTimeout(resolve, nextTime - Date.now()));
@@ -650,11 +651,11 @@ export class InlineCommandHandler implements CommandHandler {
                 config_key: loadImageGen(context)?.modelKey || '',
                 available_values: context.INLINE_IMAGE_MODELS,
             },
-            INLINE_FUNCTION_CALL_MODELS: {
+            INLINE_TOOL_MODELS: {
                 label: 'Function Model',
-                data: 'INLINE_FUNCTION_CALL_MODELS',
-                config_key: 'FUNCTION_CALL_MODEL',
-                available_values: context.INLINE_FUNCTION_CALL_MODELS,
+                data: 'INLINE_TOOL_MODELS',
+                config_key: 'TOOL_MODEL',
+                available_values: context.INLINE_TOOL_MODELS,
             },
             INLINE_FUNCTION_CALL_TOOLS: {
                 label: 'Tools',

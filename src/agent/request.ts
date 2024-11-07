@@ -1,7 +1,11 @@
-import type { ChatStreamTextHandler, CompletionData, OpenAIFuncCallData } from './types';
-/* eslint-disable antfu/if-newline */
+import type { CoreMessage, LanguageModelV1 } from 'ai';
+import type { AgentUserConfig } from '../config/env';
+import type { ChatStreamTextHandler, CompletionData, OpenAIFuncCallData, ResponseMessage } from './types';
+import { generateText, streamText, tool, experimental_wrapLanguageModel as wrapLanguageModel } from 'ai';
 import { ENV } from '../config/env';
+import { getLogSingleton } from '../extra/log/logDecortor';
 import { log } from '../extra/log/logger';
+import { AIMiddleware } from './model_middleware';
 import { Stream } from './stream';
 
 export interface SseChatCompatibleOptions {
@@ -67,7 +71,7 @@ export function isEventStreamResponse(resp: Response): boolean {
     return false;
 }
 
-export async function requestChatCompletions(url: string, header: Record<string, string>, body: any, onStream: ChatStreamTextHandler | null, onResult: ChatStreamTextHandler | null = null, options: SseChatCompatibleOptions | null = null): Promise<CompletionData> {
+export async function requestChatCompletions(url: string, header: Record<string, string>, body: any, onStream: ChatStreamTextHandler | null, onResult: ChatStreamTextHandler | null = null, options: SseChatCompatibleOptions | null = null): Promise<string> {
     const controller = new AbortController();
     const { signal } = controller;
 
@@ -95,7 +99,7 @@ export async function requestChatCompletions(url: string, header: Record<string,
         if (!stream) {
             throw new Error('Stream builder error');
         }
-        return await iterStream(body, stream, options, onStream);
+        return streamHandler(stream, options.contentExtractor!, onStream);
     }
 
     if (!isJsonResponse(resp)) {
@@ -113,13 +117,8 @@ export async function requestChatCompletions(url: string, header: Record<string,
     }
 
     try {
-        const usage = result?.usage;
         await onResult?.(result);
-        return {
-            tool_calls: options.fullFunctionCallExtractor?.(result) || undefined,
-            content: options.fullContentExtractor?.(result) || '',
-            ...(usage && { usage }),
-        };
+        return options.fullContentExtractor?.(result) || '';
     } catch (e) {
         console.error(e);
         throw new Error(JSON.stringify(result));
@@ -131,42 +130,31 @@ function clearTimeoutID(timeoutID: any) {
         clearTimeout(timeoutID);
 }
 
-export async function iterStream(body: any, stream: AsyncIterable<any>, options: SseChatCompatibleOptions, onStream: ChatStreamTextHandler): Promise<CompletionData> {
+export async function streamHandler(stream: AsyncIterable<any>, contentExtractor: (data: any) => string | null, onStream: ChatStreamTextHandler): Promise<string> {
     log.info(`start handle stream`);
 
     let contentFull = '';
     let lengthDelta = 0;
-    let updateStep = 0;
-    let needSendCallMsg = true;
-    const tool_calls: string | any[] = [];
+    let updateStep = 5;
     let msgPromise = null;
     let lastChunk = '';
-    let usage = null;
 
     const immediatePromise = Promise.resolve('[PROMISE DONE]');
 
     try {
-        for await (const data of stream) {
-            const c = options.contentExtractor?.(data) || '';
-            // log.debug('--- chunck data:', data);
-            usage = data?.usage;
-            if (body?.tools?.length > 0)
-                options.functionCallExtractor?.(data, tool_calls);
-            if (c === '' && tool_calls.length === 0) continue;
-
-            if (tool_calls.length > 0) {
-                if (needSendCallMsg) {
-                    msgPromise = onStream(`\`Start call...\``);
-                    needSendCallMsg = false;
-                }
+        for await (const part of stream) {
+            const textPart = contentExtractor(part);
+            if (textPart === null) {
                 continue;
             }
+            if (textPart === '')
+                continue;
             // 已有delta + 上次chunk的长度
             lengthDelta += lastChunk.length;
             // 当前内容为上次迭代后的数据 （减少一次迭代）
             contentFull += lastChunk;
             // 更新chunk
-            lastChunk = c;
+            lastChunk = textPart;
 
             if (lastChunk && lengthDelta > updateStep) {
                 // 已发送过消息且消息未发送完成
@@ -177,19 +165,66 @@ export async function iterStream(body: any, stream: AsyncIterable<any>, options:
                 lengthDelta = 0;
                 updateStep += 20;
                 msgPromise = onStream(`${contentFull}●`);
-                // console.log(`____chunck send: ${contentFull}●`);
             }
         }
         contentFull += lastChunk;
-        log.info('--- contentFull:', contentFull);
     } catch (e) {
+        if (contentFull === '') {
+            throw e;
+        }
+        console.error((e as Error).message);
         contentFull += `\nERROR: ${(e as Error).message}`;
     }
 
     await msgPromise;
-    return {
-        ...(tool_calls?.length > 0 && { tool_calls }),
-        content: contentFull,
-        ...(usage && { usage }),
-    };
+    return contentFull;
+}
+export async function requestChatCompletionsV2(params: { model: LanguageModelV1; toolModel?: LanguageModelV1; prompt?: string; messages: CoreMessage[]; tools?: any; activeTools?: string[]; context: AgentUserConfig }, onStream: ChatStreamTextHandler | null, onResult: ChatStreamTextHandler | null = null): Promise<ResponseMessage[]> {
+    let sendToolCall = false;
+    try {
+        const middleware = AIMiddleware({
+            config: params.context,
+            _models: {},
+            activeTools: params.activeTools || [],
+        });
+        if (onStream !== null) {
+            const stream = await streamText({
+                model: wrapLanguageModel({
+                    model: params.activeTools ? params?.toolModel || params.model : params.model,
+                    middleware,
+                }),
+                prompt: params.prompt,
+                messages: params.messages,
+                tools: params.tools,
+                experimental_activeTools: params.activeTools,
+                maxSteps: 3,
+                maxRetries: 0,
+                temperature: 0.5,
+                onChunk(data) {
+                    sendToolCall = middleware.onChunk(data, sendToolCall, onStream, log);
+                },
+                onStepFinish(data) {
+                    middleware.onStepFinish(data, onStream, params.context);
+                },
+            });
+            const contentFull = await streamHandler(stream.textStream, t => t, onStream);
+            onResult?.(contentFull);
+            return (await stream.response).messages;
+        } else {
+            const result = await generateText({
+                model: wrapLanguageModel({
+                    model: params.model,
+                    middleware,
+                }),
+                prompt: params.prompt,
+                messages: params.messages,
+                ...(params.tools && { tools: params.tools }),
+            });
+            onResult?.(result.text);
+            return result.response.messages;
+        }
+    } catch (error) {
+        console.error((error as Error).message, (error as Error).stack);
+        throw error;
+    }
 }

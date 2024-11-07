@@ -1,7 +1,7 @@
 import type { CompletionData } from './types';
 import { log } from '../extra/log/logger';
 import { AsyncIter } from './readable';
-import { iterStream } from './request';
+import { streamHandler } from './request';
 
 const perplexityExtractor = {
     contentExtractor: (data: any): string => {
@@ -56,14 +56,14 @@ export async function WssRequest(url: string, protocols: string | string[] | nul
     return new Promise((resolve) => {
         const ws = protocols ? new WebSocket(url, protocols, options) : new WebSocket(url, options);
         let result: any = {};
-        let streamSender: Promise<CompletionData>;
+        let streamSender: Promise<string>;
 
         extractor = extractor || perplexityExtractor;
         formatter = formatter || perplexityFormatter;
         let streamIter: AsyncIter<any> | null = null;
         if (onStream) {
             streamIter = new AsyncIter();
-            streamSender = iterStream(null, streamIter as unknown as AsyncIterable<any>, extractor, onStream);
+            streamSender = streamHandler(streamIter as unknown as AsyncIterable<any>, extractor, onStream);
         }
 
         ws.on('open', () => {
@@ -117,10 +117,10 @@ export async function WssRequest(url: string, protocols: string | string[] | nul
     });
 }
 
-async function closeWss(resolve: any, result: any, streamIter: AsyncIter<any> | null, streamSender: Promise<CompletionData> | null, extractor: any) {
+async function closeWss(resolve: any, result: any, streamIter: AsyncIter<any> | null, streamSender: Promise<string> | null, extractor: any) {
     let data = '';
     if (streamIter) {
-        data = (await streamSender)?.content || '';
+        data = (await streamSender) || '';
         data += `\n\n${extractor.finalAdd(result)}`;
         data += result.message ? `\n${result.message}` : '';
     } else {
