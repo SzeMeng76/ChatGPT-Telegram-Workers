@@ -1,4 +1,4 @@
-import { jsonSchema, tool } from 'ai';
+import { jsonSchema } from 'ai';
 import jina_reader from './jina.json';
 
 const tools: Record<string, any> = { jina_reader };

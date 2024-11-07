@@ -1,6 +1,6 @@
 import type { FilePart } from 'ai';
 import type * as Telegram from 'telegram-bot-api-types';
-import type { ChatStreamTextHandler, HistoryItem, HistoryModifier, ImageResult, LLMChatRequestParams } from '../../agent/types';
+import type { ChatStreamTextHandler, HistoryModifier, ImageResult, LLMChatRequestParams } from '../../agent/types';
 import type { WorkerContext } from '../../config/context';
 import type { AgentUserConfig } from '../../config/env';
 import type { ChosenInlineSender } from '../utils/send';

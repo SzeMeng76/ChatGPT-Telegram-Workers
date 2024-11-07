@@ -2,13 +2,12 @@
 /* eslint-disable no-cond-assign */
 import type { CoreUserMessage } from 'ai';
 import type * as Telegram from 'telegram-bot-api-types';
-import type { HistoryItem, HistoryModifierResult } from '../../agent/types';
+import type { HistoryItem } from '../../agent/types';
 import type { WorkerContext } from '../../config/context';
 import type { AgentUserConfig } from '../../config/env';
 import type { UnionData } from '../utils/utils';
 import type { CommandHandler, InlineItem, ScopeType } from './types';
 import { customInfo, loadChatLLM, loadImageGen } from '../../agent';
-import { loadHistory } from '../../agent/chat';
 import { WssRequest } from '../../agent/wsrequest';
 import { ENV, ENV_KEY_MAPPER } from '../../config/env';
 import { ConfigMerger } from '../../config/merger';

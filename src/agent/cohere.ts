@@ -1,12 +1,8 @@
 import type { AgentUserConfig } from '../config/env';
-import type { SseChatCompatibleOptions } from './request';
-import type { SSEMessage, SSEParserResult } from './stream';
-import type { ChatAgent, ChatStreamTextHandler, CompletionData, HistoryItem, LLMChatParams, ResponseMessage } from './types';
+import type { ChatAgent, ChatStreamTextHandler, LLMChatParams, ResponseMessage } from './types';
 import { createCohere } from '@ai-sdk/cohere';
 import { warpLLMParams } from '.';
-import { Log } from '../extra/log/logDecortor';
-import { requestChatCompletions, requestChatCompletionsV2 } from './request';
-import { Stream } from './stream';
+import { requestChatCompletionsV2 } from './request';
 
 export class Cohere implements ChatAgent {
     readonly name = 'cohere';

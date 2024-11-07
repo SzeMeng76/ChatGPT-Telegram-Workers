@@ -1,4 +1,3 @@
-import type { CompletionData } from './types';
 import { log } from '../extra/log/logger';
 import { AsyncIter } from './readable';
 import { streamHandler } from './request';

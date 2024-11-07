@@ -1,8 +1,6 @@
 import type { AgentUserConfig } from '../config/env';
 import type { ChatAgent, ChatStreamTextHandler, LLMChatParams, ResponseMessage } from './types';
-import { createVertex } from '@ai-sdk/google-vertex';
 import { createLlmModel, warpLLMParams } from '.';
-import { Log } from '../extra/log/logDecortor';
 import { requestChatCompletionsV2 } from './request';
 
 export class Vertex implements ChatAgent {

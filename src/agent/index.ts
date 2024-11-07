@@ -1,12 +1,10 @@
 /* eslint-disable no-case-declarations */
-import type { CoreMessage, CoreUserMessage, LanguageModelV1, Provider } from 'ai';
-import type { AudioAgent, ChatAgent, ImageAgent, LLMChatParams } from './types';
-import { anthropic, createAnthropic } from '@ai-sdk/anthropic';
-import { createAzure } from '@ai-sdk/azure';
+import type { CoreMessage, LanguageModelV1 } from 'ai';
+import type { AudioAgent, ChatAgent, ImageAgent } from './types';
+import { createAnthropic } from '@ai-sdk/anthropic';
 import { createCohere } from '@ai-sdk/cohere';
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
-import { createOpenAI, openai } from '@ai-sdk/openai';
-import { experimental_createProviderRegistry as createProviderRegistry, experimental_customProvider as customProvider } from 'ai';
+import { createOpenAI } from '@ai-sdk/openai';
 import { type AgentUserConfig, ENV } from '../config/env';
 import { vaildTools } from '../extra/tools';
 import { isCfWorker } from '../telegram/utils/utils';

@@ -2,7 +2,6 @@ import type { AgentUserConfig } from '../config/env';
 import type { ChatAgent, ChatStreamTextHandler, LLMChatParams, ResponseMessage } from './types';
 import { createMistral } from '@ai-sdk/mistral';
 import { warpLLMParams } from '.';
-import { Log } from '../extra/log/logDecortor';
 import { requestChatCompletionsV2 } from './request';
 
 export class Mistral implements ChatAgent {

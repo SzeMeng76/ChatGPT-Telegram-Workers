@@ -1,5 +1,5 @@
 import type { WorkerContext } from '../config/context';
-import type { ChatAgent, ChatStreamTextHandler, CompletionData, HistoryItem, HistoryModifier, ImageResult, LLMChatParams, LLMChatRequestParams, ResponseMessage } from './types';
+import type { ChatAgent, HistoryItem, HistoryModifier, ImageResult, LLMChatParams, LLMChatRequestParams, ResponseMessage } from './types';
 import { ENV } from '../config/env';
 
 /**

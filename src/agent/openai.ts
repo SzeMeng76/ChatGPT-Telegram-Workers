@@ -6,7 +6,6 @@ import { createOpenAI } from '@ai-sdk/openai';
 import { warpLLMParams } from '.';
 import { Log } from '../extra/log/logDecortor';
 import { log } from '../extra/log/logger';
-import { vaildTools } from '../extra/tools';
 import { requestText2Image } from './chat';
 import { requestChatCompletionsV2 } from './request';
 

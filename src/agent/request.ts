@@ -1,9 +1,8 @@
 import type { CoreMessage, LanguageModelV1 } from 'ai';
 import type { AgentUserConfig } from '../config/env';
-import type { ChatStreamTextHandler, CompletionData, OpenAIFuncCallData, ResponseMessage } from './types';
-import { generateText, streamText, tool, experimental_wrapLanguageModel as wrapLanguageModel } from 'ai';
+import type { ChatStreamTextHandler, OpenAIFuncCallData, ResponseMessage } from './types';
+import { generateText, streamText, experimental_wrapLanguageModel as wrapLanguageModel } from 'ai';
 import { ENV } from '../config/env';
-import { getLogSingleton } from '../extra/log/logDecortor';
 import { log } from '../extra/log/logger';
 import { AIMiddleware } from './model_middleware';
 import { Stream } from './stream';

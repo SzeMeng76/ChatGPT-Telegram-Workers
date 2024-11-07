@@ -293,7 +293,7 @@ class ExtraUserConfig {
     }
   };
   CURRENT_MODE = "default";
-  INLINE_AGENTS = ["openai", "claude", "google", "google_studio", "vertex", "cohere", "workersai"];
+  INLINE_AGENTS = ["openai", "claude", "google", "vertex", "cohere", "workersai"];
   INLINE_IMAGE_AGENTS = ["openai", "silicon"];
   INLINE_CHAT_MODELS = ["gpt-4o-mini", "gpt-4o-2024-05-13"];
   INLINE_VISION_MODELS = ["gpt-4o-mini", "gpt-4o-2024-05-13"];

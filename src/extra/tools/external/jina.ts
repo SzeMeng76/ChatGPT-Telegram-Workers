@@ -1,5 +1,3 @@
-import type { FuncTool } from '../types';
-
 export const jina_reader = {
     schema: {
         name: 'jina_reader',

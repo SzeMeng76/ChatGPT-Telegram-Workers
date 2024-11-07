@@ -164,7 +164,7 @@ export class EnvironmentConfig {
 
 // -- 通用配置 --
 export class AgentShareConfig {
-    // AI提供商: auto, openai, azure, workers, google, google_studio, vertex, mistral
+    // AI提供商: auto, openai, azure, workers, google, vertex, mistral
     AI_PROVIDER = 'auto';
     // AI图片提供商: auto, openai, azure, workers
     AI_IMAGE_PROVIDER = 'auto';
@@ -342,7 +342,7 @@ export class ExtraUserConfig {
     CURRENT_MODE = 'default';
 
     // INLINE_AGENTS
-    INLINE_AGENTS = ['openai', 'claude', 'google', 'google_studio', 'vertex', 'cohere', 'workersai'];
+    INLINE_AGENTS = ['openai', 'claude', 'google', 'vertex', 'cohere', 'workersai'];
     // INLINE_IMAGE_AGENTS
     INLINE_IMAGE_AGENTS = ['openai', 'silicon'];
     // INLINE_CHAT_MODELS
