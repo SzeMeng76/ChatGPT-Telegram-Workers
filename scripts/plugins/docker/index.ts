@@ -25,9 +25,18 @@ const packageJson = `
     "start": "node index.js"
   },
   "dependencies": {
-    "cloudflare-worker-adapter": "^1.2.3",
-    "node-cron": "^3.0.2",
-    "ws": "^8.13.0"
+    "@ai-sdk/anthropic": "^0.0.56",
+    "@ai-sdk/azure": "^0.0.52",
+    "@ai-sdk/cohere": "^0.0.28",
+    "@ai-sdk/google": "^0.0.55",
+    "@ai-sdk/google-vertex": "^0.0.43",
+    "@ai-sdk/mistral": "^0.0.46",
+    "@ai-sdk/openai": "^0.0.72",
+    "ai": "^3.4.33",
+    "cloudflare-worker-adapter": "^1.3.3",
+    "@google-cloud/vertexai": "^1.9.0",
+    "node-cron": "^3.0.3",
+    "ws": "^8.18.0"
   },
   "devDependencies": {}
 }

@@ -35,7 +35,7 @@ function executeTool(payload: Record<string, any>, required?: string[], envs?: R
             const f = eval(hander);
             result = f(result);
         }
-        return { result, time: `${((Date.now() - startTime) / 1000).toFixed(1)}s` };
+        return { result, time: ((Date.now() - startTime) / 1e3).toFixed(1) };
     };
 }
 
