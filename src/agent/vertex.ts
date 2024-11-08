@@ -16,22 +16,6 @@ export class Vertex implements ChatAgent {
     };
 
     readonly request = async (params: LLMChatParams, context: AgentUserConfig, onStream: ChatStreamTextHandler | null): Promise<ResponseMessage[]> => {
-        // const provider = createVertex({
-        //     project: context.VERTEX_PROJECT_ID!,
-        //     location: context.VERTEX_LOCATION,
-        //     googleAuthOptions: {
-        //         credentials: context.VERTEX_CREDENTIALS,
-        //     },
-        // });
-        // const languageModelV1 = provider.languageModel(
-        //     this.model(context),
-        //     {
-        //         safetySettings: [
-        //             { category: 'HARM_CATEGORY_UNSPECIFIED', threshold: 'BLOCK_NONE' },
-        //         ],
-        //         // useSearchGrounding: true,
-        //     },
-        // );
         const languageModelV1 = await createLlmModel(this.model(context), context);
         return requestChatCompletionsV2(await warpLLMParams({
             model: languageModelV1,

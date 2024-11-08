@@ -134,6 +134,8 @@ export async function warpLLMParams(params: { messages: CoreMessage[]; model: La
     if (params.model.provider === 'google-vertex' && context.VERTEX_SEARCH_GROUNDING) {
         activeTools = undefined;
         tool = undefined;
+        // only use first system message and last user message
+        params.messages = [params.messages.find(p => p.role === 'system')!, params.messages.findLast(p => p.role === 'user')!];
     }
     if (params.messages[0].role === 'system' && activeTools) {
         params.messages[0].content += (tool?.tools_prompt || '');

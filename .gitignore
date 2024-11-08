@@ -153,3 +153,4 @@ out
 /dist/index.cjs
 /dist/index.d.ts
 .cursorignore
+*.db

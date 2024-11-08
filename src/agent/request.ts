@@ -198,7 +198,7 @@ export async function requestChatCompletionsV2(params: { model: LanguageModelV1;
                 experimental_activeTools: params.activeTools,
                 maxSteps: 3,
                 maxRetries: 0,
-                temperature: 0.5,
+                temperature: 0.1,
                 onChunk(data) {
                     sendToolCall = middleware.onChunk(data, sendToolCall, onStream, log);
                 },

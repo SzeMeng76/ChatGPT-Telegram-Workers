@@ -400,8 +400,8 @@ const ENV_KEY_MAPPER = {
   WORKERS_AI_MODEL: "WORKERS_CHAT_MODEL"
 };
 class Environment extends EnvironmentConfig {
-  BUILD_TIMESTAMP = 1731063572;
-  BUILD_VERSION = "792181a";
+  BUILD_TIMESTAMP = 1731083991;
+  BUILD_VERSION = "662b62f";
   I18N = loadI18n();
   PLUGINS_ENV = {};
   USER_CONFIG = createAgentUserConfig();
@@ -15824,6 +15824,19 @@ async function loadHistory(key) {
   };
   if (ENV.AUTO_TRIM_HISTORY && ENV.MAX_HISTORY_LENGTH > 0) {
     history = trimHistory(history, 0, ENV.MAX_HISTORY_LENGTH, ENV.MAX_TOKEN_LENGTH);
+    let validStart = 0;
+    for (const h of history) {
+      if (h.role === "assistant" && Array.isArray(h.content) && h.content.length > 0) {
+        if (h.content[0].type === "tool-call") {
+          validStart++;
+          continue;
+        } else {
+          break;
+        }
+      }
+      break;
+    }
+    history = history.slice(validStart);
   }
   return history;
 }
@@ -16774,7 +16787,7 @@ async function requestChatCompletionsV2(params, onStream, onResult = null) {
         experimental_activeTools: params.activeTools,
         maxSteps: 3,
         maxRetries: 0,
-        temperature: 0.5,
+        temperature: 0.1,
         onChunk(data) {
           sendToolCall = middleware.onChunk(data, sendToolCall, onStream, log);
         },
@@ -19270,6 +19283,7 @@ async function warpLLMParams(params, context) {
   if (params.model.provider === "google-vertex" && context.VERTEX_SEARCH_GROUNDING) {
     activeTools = void 0;
     tool2 = void 0;
+    params.messages = [params.messages.find((p) => p.role === "system"), params.messages.findLast((p) => p.role === "user")];
   }
   if (params.messages[0].role === "system" && activeTools) {
     params.messages[0].content += tool2?.tools_prompt || "";
