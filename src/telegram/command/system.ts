@@ -520,6 +520,10 @@ export class SetCommandHandler implements CommandHandler {
             return sender.sendPlainText(`Key ${key} not found`);
         }
 
+        if (typeof context.USER_CONFIG[key] === 'boolean') {
+            mappedValue = typeof mappedValue === 'boolean' ? mappedValue : mappedValue === 'true';
+        }
+
         context.USER_CONFIG[key] = mappedValue;
         if (!context.USER_CONFIG.DEFINE_KEYS.includes(key)) {
             context.USER_CONFIG.DEFINE_KEYS.push(key);

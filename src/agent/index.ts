@@ -15,7 +15,7 @@ import { Google } from './google';
 import { Mistral } from './mistralai';
 
 import { Dalle, OpenAI, Transcription } from './openai';
-import { OpenAILike, SiliconImage } from './openailike';
+import { OpenAILike, OpenAILikeImage } from './openailike';
 import { Vertex } from './vertex';
 import { WorkersChat, WorkersImage } from './workersai';
 
@@ -52,7 +52,7 @@ const IMAGE_AGENTS: ImageAgent[] = [
     new AzureImageAI(),
     new Dalle(),
     new WorkersImage(),
-    new SiliconImage(),
+    new OpenAILikeImage(),
 ];
 
 export function loadImageGen(context: AgentUserConfig): ImageAgent | null {
@@ -103,7 +103,7 @@ export function customInfo(config: AgentUserConfig): string {
         MAPPING_VALUE: config.MAPPING_VALUE,
         USE_TOOLS: config.USE_TOOLS,
         TOOL_MODEL: config.TOOL_MODEL,
-        FUNCTION_REPLY_ASAP: config.FUNCTION_REPLY_ASAP,
+        // FUNCTION_REPLY_ASAP: config.FUNCTION_REPLY_ASAP,
         VERTEX_SEARCH_GROUNDING: config.VERTEX_SEARCH_GROUNDING,
         FUNC_LOOP_TIMES: ENV.FUNC_LOOP_TIMES,
         FUNC_CALL_TIMES: ENV.CON_EXEC_FUN_NUM,
@@ -129,13 +129,14 @@ export async function warpLLMParams(params: { messages: CoreMessage[]; model: La
         tool = undefined;
     }
 
-    if (params.messages[0].role === 'system') {
-        params.messages[0].content += (tool?.tools_prompt || '');
-    }
     let activeTools = tool?.activeTools;
     // if vertex use search grounding, do not use other tools
-    if (params.model.provider === 'vertex' && context.VERTEX_SEARCH_GROUNDING) {
+    if (params.model.provider === 'google-vertex' && context.VERTEX_SEARCH_GROUNDING) {
         activeTools = undefined;
+        tool = undefined;
+    }
+    if (params.messages[0].role === 'system' && activeTools) {
+        params.messages[0].content += (tool?.tools_prompt || '');
     }
 
     return {
@@ -150,21 +151,28 @@ export async function warpLLMParams(params: { messages: CoreMessage[]; model: La
 
 export async function createLlmModel(model: string, context: AgentUserConfig) {
     let [agent, model_id] = model.includes(':') ? model.trim().split(':') : [context.AI_PROVIDER, model];
+    if (agent === 'auto') {
+        throw new Error('Auto mode is not supported, please specify the agent');
+    }
     if (!model_id) {
         model_id = context[`${agent.toUpperCase()}_CHAT_MODEL`];
     }
     switch (agent) {
         case 'openai':
+        case 'gpt':
             return createOpenAI({
                 baseURL: context.OPENAI_API_BASE,
                 apiKey: context.OPENAI_API_KEY[Math.floor(Math.random() * context.OPENAI_API_KEY.length)],
+                compatibility: 'strict',
             }).languageModel(model_id, undefined);
         case 'claude':
+        case 'anthropic':
             return createAnthropic({
                 baseURL: context.ANTHROPIC_API_BASE,
                 apiKey: context.ANTHROPIC_API_KEY || undefined,
             }).languageModel(model_id, undefined);
         case 'google':
+        case 'gemini':
             return createGoogleGenerativeAI({
                 baseURL: context.GOOGLE_API_BASE,
                 apiKey: context.GOOGLE_API_KEY || undefined,
@@ -198,7 +206,11 @@ export async function createLlmModel(model: string, context: AgentUserConfig) {
                 useSearchGrounding: context.VERTEX_SEARCH_GROUNDING,
             });
         default:
-            throw new Error(`Unsupported agent: ${agent}`);
+            return createOpenAI({
+                name: 'olike',
+                baseURL: context.OPENAILIKE_API_BASE || undefined,
+                apiKey: context.OPENAILIKE_API_KEY || undefined,
+            }).languageModel(model_id, undefined);
     }
     // if (model.includes(':')) {
     //     if (model.startsWith('google:') || model.startsWith('vertex:')) {

@@ -92,11 +92,13 @@ export async function requestCompletionsFromLLM(params: LLMChatRequestParams | n
     const llmParams: LLMChatParams = {
         messages,
     };
-    const answer = await agent.request(llmParams, context.USER_CONFIG, onStream);
+    const answer = await agent.request(llmParams, context.USER_CONFIG, onStream) as ResponseMessage[];
     if (!historyDisable) {
-        history.push(params);
-        history.push(...answer);
-        // await ENV.DATABASE.put(historyKey, JSON.stringify(history)).catch(console.error);
+        // only push valid chat history
+        if (answer.at(-1)?.role === 'assistant') {
+            history.push(params);
+            history.push(...answer);
+        }
     }
     return answer;
 }
@@ -114,10 +116,3 @@ export async function requestText2Image(url: string, headers: Record<string, any
     }
     return result;
 }
-
-// function renderPic2PicResult(context: { USER_CONFIG: { AI_IMAGE_PROVIDER: any } }, resp: { images: any[]; message: any }) {
-//     switch (context.USER_CONFIG.AI_IMAGE_PROVIDER) {
-//         case 'silicon':
-//             return { type: 'image', url: resp?.images?.map((i: { url: any }) => i?.url), message: resp.message };
-//     }
-// }

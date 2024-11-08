@@ -82,11 +82,18 @@ export class EnvironmentConfig {
     // In group chats, the reply object is the trigger object by default, and when enabled, it is prioritized as the object to be replied to
     ENABLE_REPLY_TO_MENTION = false;
     // Ignore messages starting with specified text
-    IGNORE_TEXT = '';
+    IGNORE_TEXT_PERFIX = '';
     // When multiple processes, whether to hide intermediate step information
     HIDE_MIDDLE_MESSAGE = false;
-    // Replace words, and will force trigger bot { ':n': '/new', ':g3': '/gpt3', ':g4': '/gpt4'}
+    /**
+     * Replace words, and will force trigger bot { ':n': '/new', ':g3': '/gpt3', ':g4': '/gpt4'}
+     * @deprecated, use CHAT_TRIGGER_SUFFIX and COMMAND_TRIGGERS instead
+     */
     CHAT_MESSAGE_TRIGGER = {};
+    // Chat trigger prefix, it will trigger group message and be deleted
+    CHAT_TRIGGER_PERFIX = '';
+    // message replacer, you can use it to replace message text in the middle of the message, multiple words can be replaced at the same time
+    MESSAGE_REPLACER: Record<string, string> = {};
     // Ask AI to call function times
     FUNC_LOOP_TIMES = 1;
     // Show call info
@@ -164,10 +171,10 @@ export class EnvironmentConfig {
 
 // -- 通用配置 --
 export class AgentShareConfig {
-    // AI提供商: auto, openai, azure, workers, google, vertex, mistral
-    AI_PROVIDER = 'auto';
-    // AI图片提供商: auto, openai, azure, workers
-    AI_IMAGE_PROVIDER = 'auto';
+    // AI提供商: openai, anthropic, azure, workers, google, vertex, mistral
+    AI_PROVIDER = 'openai';
+    // AI图片提供商: openai, azure, workers
+    AI_IMAGE_PROVIDER = 'openai';
     // 全局默认初始化消息
     SYSTEM_INIT_MESSAGE: string | null = null;
     // 全局默认初始化消息角色
@@ -268,19 +275,19 @@ export class AnthropicConfig {
     ANTHROPIC_CHAT_MODEL = 'claude-3-haiku-20240307';
 }
 
-export class SiliconConfig {
-    // Silicon api key
-    SILICON_API_KEY: string | null = null;
-    // Silicon api base
-    SILICON_API_BASE = 'https://api.siliconflow.cn/v1';
-    // Silicon api model
-    SILICON_CHAT_MODEL = 'deepseek-ai/DeepSeek-V2.5';
-    // Silicon image model
-    SILICON_IMAGE_MODEL = 'black-forest-labs/FLUX.1-schnell';
-    // Silicon image size
-    SILICON_IMAGE_SIZE = '1024x1024';
-    // Silicon extra params
-    SILICON_EXTRA_PARAMS: Record<string, any> = {};
+export class OpenAILikeConfig {
+    // OpenAILike api key
+    OPENAILIKE_API_KEY: string | null = null;
+    // OpenAILike api base
+    OPENAILIKE_API_BASE: string | null = null;
+    // OpenAILike api model
+    OPENAILIKE_CHAT_MODEL = '';
+    // OpenAILike image model
+    OPENAILIKE_IMAGE_MODEL = '';
+    // OpenAILike image size
+    OPENAILIKE_IMAGE_SIZE = '';
+    // OpenAILike extra params
+    OPENAILIKE_EXTRA_PARAMS: Record<string, any> = {};
 }
 
 export class VertexConfig {
@@ -291,7 +298,7 @@ export class VertexConfig {
     VERTEX_CREDENTIALS: Record<string, any> = {};
 
     // Vertex Model
-    VERTEX_CHAT_MODEL = 'gemini-1.5-flash-latest';
+    VERTEX_CHAT_MODEL = 'gemini-1.5-flash-002';
     // when use search grounding, do not use other tools at the same time, otherwise errors occur.
     VERTEX_SEARCH_GROUNDING = false;
 }
@@ -313,11 +320,14 @@ export class ExtraUserConfig {
     // '["duckduckgo", "jina_reader"]'
     USE_TOOLS: string[] = ['duckduckgo', 'jina_reader'];
     JINA_API_KEY = [];
-    // openai format function call parameters
-    TOOL_MODEL = 'gpt-4o-mini';
-    FUNCTION_CALL_API_KEY = '';
-    FUNCTION_CALL_BASE = '';
-    // When the function call is not hit, enable this option to directly receive the reply from the FUNCTION_CALL model.
+    // if starts with '{agent}:' perfix, the specified agent corresponds to the chat model,
+    // otherwise use the current agent and the specified model.
+    // Keep empty to use the current agent chat model as function call model.
+    TOOL_MODEL = '';
+
+    /**
+     * @deprecated in this version, it is no longer supported
+     */
     FUNCTION_REPLY_ASAP = true;
     PROMPT: Record<string, string> = prompts_default;
     MODES: Record<string, FlowStruct> = {

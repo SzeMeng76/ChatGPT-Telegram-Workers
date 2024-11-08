@@ -4,6 +4,7 @@ import type { TelegramBotAPI } from '../api';
 import type { InlineItem } from '../command/types';
 import type { UnionData } from '../utils/utils';
 import type { CallbackQueryHandler, ChosenInlineQueryHandler, InlineQueryHandler, MessageHandler } from './types';
+import { AssistantMessage, CoreAssistantMessage } from 'ai';
 import { WorkerContext } from '../../config/context';
 import { ENV } from '../../config/env';
 import { sentMessageIds } from '../../extra/log/logDecortor';
@@ -102,6 +103,11 @@ export class WhiteListFilter implements MessageHandler<WorkerContextBase> {
 
 export class MessageFilter implements MessageHandler<WorkerContextBase> {
     handle = async (message: Telegram.Message, context: WorkerContextBase): Promise<Response | null> => {
+        if (ENV.IGNORE_TEXT_PERFIX && (message.text || message.caption || '').startsWith(ENV.IGNORE_TEXT_PERFIX)) {
+            log.info(`[IGNORE MESSAGE] Ignore message`);
+            return new Response('success', { status: 200 });
+        }
+
         const extractMessageData = extractMessage(message, context.SHARE_CONTEXT.botId);
         if (extractMessageData === null) {
             throw new Error('Not supported message type');
@@ -134,13 +140,6 @@ export class StoreHistory implements MessageHandler<WorkerContext> {
         if (!historyDisable) {
             const historyKey = context.SHARE_CONTEXT.chatHistoryKey;
             const history = context.MIDDEL_CONTEXT.history;
-            const assistantMessage = history.findLast(h => h.role === 'assistant');
-            if (Array.isArray(assistantMessage?.content) && assistantMessage?.content.length > 0) {
-                if (!assistantMessage.content.findLast(i => i.type === 'text')?.text) {
-                    return null;
-                }
-            }
-
             const userMessage = history.findLast(h => h.role === 'user');
             if (ENV.HISTORY_IMAGE_PLACEHOLDER && Array.isArray(userMessage?.content) && userMessage.content.length > 0) {
                 userMessage.content = userMessage.content.map(c => c.type === 'text' ? c.text : `[${c.type}]`).join('\n');

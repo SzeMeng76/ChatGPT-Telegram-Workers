@@ -57,7 +57,7 @@ async function handleMessage(token: string, message: Telegram.Message, isForward
         new EnvChecker(),
         // 过滤非白名单用户, 提前过滤减少KV消耗
         new WhiteListFilter(),
-        // 过滤不支持的消息(抛出异常结束消息处理)
+        // 过滤不支持的消息(抛出异常结束消息处理) 忽略的消息
         new MessageFilter(),
         // 处理群消息，判断是否需要响应此条消息
         new GroupMention(),

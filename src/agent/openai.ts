@@ -44,6 +44,7 @@ export class OpenAI extends OpenAIBase implements ChatAgent {
         const provider = createOpenAI({
             baseURL: context.OPENAI_API_BASE,
             apiKey: this.apikey(context),
+            compatibility: 'strict',
         });
 
         const userMessage = params.messages.at(-1) as CoreUserMessage;

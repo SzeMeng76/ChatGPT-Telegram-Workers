@@ -114,39 +114,3 @@ export function AIMiddleware({ config, _models, activeTools }: { config: AgentUs
         },
     };
 }
-
-// export function onChunk(data: any, sendToolCall: boolean, onStream: (text: string) => Promise<any>, log: any) {
-//     const { chunk } = data;
-//     if (chunk.type === 'tool-call' && !sendToolCall) {
-//         sendToolCall = true;
-//         log.info(`start tool call: ${chunk.toolName}`);
-//         onStream(`start tool call: ${chunk.toolName}...`);
-//     }
-//     return sendToolCall;
-// }
-// export function onStepFinish(data: StepResult<any>, onStream: (text: string) => Promise<any>, context: AgentUserConfig) {
-//     const { text, toolResults, finishReason, usage } = data;
-//     if (toolResults.length > 0) {
-//         log.info(toolResults);
-//         if (toolResults.find(i => i.result === '')) {
-//             throw new Error('Function result is empty');
-//         }
-//         onStream(`finish ${[...new Set(toolResults.map(i => i.toolName))]}`);
-//     // One step for one llm conversation + function call, if there is empty tool result and llm text is null
-//     } else if (text === '') {
-//         throw new Error('None text');
-//     }
-
-//     getLogSingleton(context).chat.time.push(`${((Date.now() - startTime) / 1000).toFixed(1)}s`);
-
-//     log.info('step text:', text);
-
-//     finishReason && log.info(finishReason);
-//     if (usage && !Number.isNaN(usage.promptTokens) && !Number.isNaN(usage.completionTokens)) {
-//         getLogSingleton(context).tokens.push(`${usage.promptTokens},${usage.completionTokens}`);
-//         log.info(`tokens: ${usage.promptTokens},${usage.completionTokens}`);
-//     } else {
-//         log.warn('usage is none or not a number');
-//     }
-//     // request && log.info(request);
-// }

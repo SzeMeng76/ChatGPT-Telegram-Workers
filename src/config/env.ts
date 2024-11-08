@@ -12,7 +12,7 @@ import {
     GeminiConfig,
     MistralConfig,
     OpenAIConfig,
-    SiliconConfig,
+    OpenAILikeConfig,
     VertexConfig,
     WorkersConfig,
 } from './config';
@@ -29,7 +29,7 @@ export type AgentUserConfig = Record<string, any> &
     MistralConfig &
     CohereConfig &
     AnthropicConfig &
-    SiliconConfig &
+    OpenAILikeConfig &
     ExtraUserConfig &
     VertexConfig;
 
@@ -46,7 +46,7 @@ function createAgentUserConfig(): AgentUserConfig {
         new MistralConfig(),
         new CohereConfig(),
         new AnthropicConfig(),
-        new SiliconConfig(),
+        new OpenAILikeConfig(),
         new ExtraUserConfig(),
         new VertexConfig(),
     );

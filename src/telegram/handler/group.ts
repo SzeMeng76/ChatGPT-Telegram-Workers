@@ -49,21 +49,42 @@ function checkMention(content: string, entities: Telegram.MessageEntity[], botNa
  * @returns {boolean} 如果找到触发词，返回 true；否则 false
  */
 export function SubstituteWords(message: Telegram.Message): boolean {
-    if (Object.keys(ENV.CHAT_MESSAGE_TRIGGER).length === 0) {
-        return false;
-    }
-    // 检查替换词
-    const triggerKeyValue = Object.entries(ENV.CHAT_MESSAGE_TRIGGER).find(([key]) =>
-        (message?.text || message?.caption || '').startsWith(key),
-    ) as [string, string] | undefined;
-    if (triggerKeyValue) {
-        if (message.text) {
-            message.text = message.text.replace(...triggerKeyValue);
-        } else if (message.caption) {
-            message.caption = message.caption.replace(...triggerKeyValue);
+    // 旧的触发逻辑
+    const oldTrigger = ENV.CHAT_MESSAGE_TRIGGER;
+    if (Object.keys(oldTrigger).length > 0) {
+        const triggered = Object.entries(oldTrigger).find(([key, _value]) => message.text?.startsWith(key));
+        if (triggered) {
+            message.text && (message.text = triggered[1] + message.text.substring(triggered[0].length));
+            message.caption && (message.caption = triggered[1] + message.caption.substring(triggered[0].length));
+            return true;
+        } else {
+            return false;
         }
     }
-    return !!triggerKeyValue;
+    // 新的触发逻辑
+    const isGroup = isTelegramChatTypeGroup(message.chat.type);
+    if (!ENV.CHAT_TRIGGER_PERFIX || !(message.text || message.caption)?.startsWith(ENV.CHAT_TRIGGER_PERFIX)) {
+        if (isGroup) {
+            return false;
+        }
+    }
+    const replacer = ENV.MESSAGE_REPLACER as Record<string, string>;
+    let replacedString = '';
+    let text = (message.text || message.caption || '').substring(isGroup ? ENV.CHAT_TRIGGER_PERFIX.length : 0).trim();
+
+    do {
+        const triggerKey = Object.keys(replacer).find(key =>
+            text.startsWith(`${key} `),
+        );
+        if (triggerKey) {
+            replacedString += `${replacer[triggerKey]} `;
+            text = text.substring(triggerKey.length).trim();
+        } else {
+            break;
+        }
+    } while (true);
+    replacedString && (message.text ? (message.text = replacedString + text) : (message.caption = replacedString + text));
+    return true;
 }
 
 export class GroupMention implements MessageHandler {

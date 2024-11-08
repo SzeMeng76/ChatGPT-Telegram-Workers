@@ -150,8 +150,8 @@ export function getLog(context: AgentUserConfig, returnModel: boolean = false): 
     if (logObj.chat.model.length > 0) {
         const chatLogs = logObj.chat.model
             .map((m, i) => {
-                const time = logObj.chat.time[i] || '';
-                return `${m} ${time}s`;
+                const time = logObj.chat.time[i];
+                return `${m}${time ? ` ${time}s` : ''}`;
             })
             .join('|');
         logList.push(chatLogs);
