@@ -43,7 +43,7 @@ type Logger = Record<LogLevelType, (...args: any[]) => void>;
 export const log: Logger = new Proxy({}, {
     get(target, prop: string) {
         const level = prop as LogLevelType;
-        const currentLogLevel: LogLevelType = (ENV.LOG_LEVEL as LogLevelType) || 'info';
+        const currentLogLevel: LogLevelType = ENV.LOG_LEVEL || 'info';
         if (LOG_LEVEL_PRIORITY[level] >= LOG_LEVEL_PRIORITY[currentLogLevel]) {
             return (...args: any[]) => LogLevel(level, ...args);
         }

@@ -400,8 +400,8 @@ const ENV_KEY_MAPPER = {
   WORKERS_AI_MODEL: "WORKERS_CHAT_MODEL"
 };
 class Environment extends EnvironmentConfig {
-  BUILD_TIMESTAMP = 1731085485;
-  BUILD_VERSION = "3ce0167";
+  BUILD_TIMESTAMP = 1731089913;
+  BUILD_VERSION = "a04ea7b";
   I18N = loadI18n();
   PLUGINS_ENV = {};
   USER_CONFIG = createAgentUserConfig();
@@ -10891,6 +10891,50 @@ function toReadableStream(res) {
     }
   });
 }
+const LOG_LEVEL_PRIORITY = {
+  debug: 1,
+  info: 2,
+  warn: 3,
+  error: 4
+};
+function LogLevel(level, ...args2) {
+  const timestamp = (/* @__PURE__ */ new Date()).toISOString();
+  const logParts = args2.map((e) => {
+    if (typeof e === "object") {
+      return JSON.stringify(e, null, 2);
+    }
+    return e;
+  });
+  const logStr = logParts.join("\n");
+  const formattedMessage = `[${timestamp}] [${level.toUpperCase()}] ${logStr}`;
+  switch (level) {
+    case "error":
+      console.error(formattedMessage);
+      break;
+    case "warn":
+      console.warn(formattedMessage);
+      break;
+    case "info":
+      console.info(formattedMessage);
+      break;
+    case "debug":
+      console.debug(formattedMessage);
+      break;
+    default:
+      console.log(formattedMessage);
+  }
+}
+const log = new Proxy({}, {
+  get(target, prop) {
+    const level = prop;
+    const currentLogLevel = ENV.LOG_LEVEL || "info";
+    if (LOG_LEVEL_PRIORITY[level] >= LOG_LEVEL_PRIORITY[currentLogLevel]) {
+      return (...args2) => LogLevel(level, ...args2);
+    }
+    return () => {
+    };
+  }
+});
 const schema = {
   name: "jina_reader",
   description: "Grab text content from provided URL links. Can be used to retrieve text information for web pages, articles, or other online resources",
@@ -11007,8 +11051,10 @@ const duckduckgo = {
   func: async (args2, options2) => {
     const { keywords } = args2;
     const startTime2 = Date.now();
+    log.info(`tool duckduckgo request start`);
     try {
       const result2 = await search(keywords.join(" "), 8, options2?.signal);
+      log.info(`tool duckduckgo request end`);
       return { ...result2, time: ((Date.now() - startTime2) / 1e3).toFixed(1) };
     } catch (e) {
       console.error(e);
@@ -11116,50 +11162,6 @@ function createTelegramBotAPI(token) {
     }
   });
 }
-const LOG_LEVEL_PRIORITY = {
-  debug: 1,
-  info: 2,
-  warn: 3,
-  error: 4
-};
-function LogLevel(level, ...args2) {
-  const timestamp = (/* @__PURE__ */ new Date()).toISOString();
-  const logParts = args2.map((e) => {
-    if (typeof e === "object") {
-      return JSON.stringify(e, null, 2);
-    }
-    return e;
-  });
-  const logStr = logParts.join("\n");
-  const formattedMessage = `[${timestamp}] [${level.toUpperCase()}] ${logStr}`;
-  switch (level) {
-    case "error":
-      console.error(formattedMessage);
-      break;
-    case "warn":
-      console.warn(formattedMessage);
-      break;
-    case "info":
-      console.info(formattedMessage);
-      break;
-    case "debug":
-      console.debug(formattedMessage);
-      break;
-    default:
-      console.log(formattedMessage);
-  }
-}
-const log = new Proxy({}, {
-  get(target, prop) {
-    const level = prop;
-    const currentLogLevel = ENV.LOG_LEVEL || "info";
-    if (LOG_LEVEL_PRIORITY[level] >= LOG_LEVEL_PRIORITY[currentLogLevel]) {
-      return (...args2) => LogLevel(level, ...args2);
-    }
-    return () => {
-    };
-  }
-});
 const scheduleResp = (ok, reason = "") => {
   const result2 = {
     ok,
@@ -11258,12 +11260,14 @@ function executeTool(payload, required, envs, hander) {
     }
     const parsedPayload = JSON.parse(filledPayload);
     const startTime = Date.now();
+    log.info(`tool request start, url: ${parsedPayload.url}`);
     let result = await fetch(parsedPayload.url, {
       method: parsedPayload.method,
       headers: parsedPayload.headers,
       body: JSON.stringify(parsedPayload.body),
       signal
     });
+    log.info(`tool request end`);
     if (!result.ok) {
       throw new Error(`Tool call error: ${result.statusText}`);
     }
@@ -16344,8 +16348,9 @@ function chunckArray(arr, size) {
   }
   return result2;
 }
-function AIMiddleware({ config, _models, activeTools }) {
+function AIMiddleware({ config, _models, activeTools, onStream }) {
   let startTime2;
+  let sendToolCall = false;
   return {
     wrapGenerate: async ({ doGenerate, params, model }) => {
       log.info("doGenerate called");
@@ -16359,7 +16364,6 @@ function AIMiddleware({ config, _models, activeTools }) {
     },
     wrapStream: async ({ doStream, params, model }) => {
       log.info("doStream called");
-      log.debug(`params: ${JSON.stringify(params, null, 2)}`);
       log.info(`provider: ${model.provider}, modelId: ${model.modelId} `);
       const logs = getLogSingleton(config);
       if (activeTools.length > 0) {
@@ -16382,22 +16386,24 @@ function AIMiddleware({ config, _models, activeTools }) {
           });
         }
       }
+      onStream && onStream(`start ${type} chat`);
       return params;
     },
-    onChunk: (data, sendToolCall, onStream, log2) => {
+    onChunk: (data) => {
       const { chunk } = data;
       if (chunk.type === "tool-call" && !sendToolCall) {
         sendToolCall = true;
-        log2.info(`start tool call: ${chunk.toolName}`);
-        onStream(`start tool: ${chunk.toolName}`);
+        log.info(`tool call: ${chunk.toolName}`);
+        onStream && onStream(`will start tool: ${chunk.toolName}`);
       }
       return sendToolCall;
     },
-    onStepFinish: (data, onStream, context) => {
+    onStepFinish: (data) => {
       const { text, toolResults, finishReason, usage } = data;
-      const logs = getLogSingleton(context);
+      const logs = getLogSingleton(config);
+      log.info("llm request end");
       const time = ((Date.now() - startTime2) / 1e3).toFixed(1);
-      log.info(toolResults);
+      log.debug(toolResults);
       if (toolResults.length > 0) {
         if (toolResults.find((i) => i.result === "")) {
           throw new Error("Function result is empty");
@@ -16413,22 +16419,23 @@ function AIMiddleware({ config, _models, activeTools }) {
         });
         log.info(func_logs);
         logs.functions.push(...func_logs);
-        logs.tool.time.push(((+time - maxFuncTime) / 1e3).toFixed(1));
-        onStream(`finish ${[...new Set(toolResults.map((i) => i.toolName))]}`);
+        logs.tool.time.push((+time - maxFuncTime).toFixed(1));
+        onStream && onStream(`finish ${[...new Set(toolResults.map((i) => i.toolName))]}`);
       } else if (text === "") {
         throw new Error("None text");
       } else {
         activeTools.length > 0 ? logs.tool.time.push(time) : logs.chat.time.push(time);
       }
-      log.info("step text:", text);
+      log.debug("step text:", text);
       finishReason && log.info(finishReason);
       if (usage && !Number.isNaN(usage.promptTokens) && !Number.isNaN(usage.completionTokens)) {
         logs.tokens.push(`${usage.promptTokens},${usage.completionTokens}`);
-        log.info(`tokens: ${usage}`);
+        log.info(`tokens: ${JSON.stringify(usage)}`);
       } else {
         log.warn("usage is none or not a number");
       }
       logs.ongoingFunctions = logs.ongoingFunctions.filter((i) => i.startTime !== startTime2);
+      sendToolCall = false;
     }
   };
 }
@@ -16764,12 +16771,12 @@ ERROR: ${e.message}`;
   return contentFull;
 }
 async function requestChatCompletionsV2(params, onStream, onResult = null) {
-  let sendToolCall = false;
   try {
     const middleware = AIMiddleware({
       config: params.context,
       _models: {},
-      activeTools: params.activeTools || []
+      activeTools: params.activeTools || [],
+      onStream
     });
     if (onStream !== null) {
       const stream = await streamText({
@@ -16784,12 +16791,8 @@ async function requestChatCompletionsV2(params, onStream, onResult = null) {
         maxSteps: 3,
         maxRetries: 0,
         temperature: 0.1,
-        onChunk(data) {
-          sendToolCall = middleware.onChunk(data, sendToolCall, onStream, log);
-        },
-        onStepFinish(data) {
-          middleware.onStepFinish(data, onStream, params.context);
-        }
+        onChunk: middleware.onChunk,
+        onStepFinish: middleware.onStepFinish
       });
       const contentFull = await streamHandler(stream.textStream, (t) => t, onStream);
       onResult?.(contentFull);
@@ -16802,7 +16805,8 @@ async function requestChatCompletionsV2(params, onStream, onResult = null) {
         }),
         prompt: params.prompt,
         messages: params.messages,
-        ...params.tools && { tools: params.tools }
+        tools: params.tools,
+        onStepFinish: middleware.onStepFinish
       });
       onResult?.(result2.text);
       return result2.response.messages;

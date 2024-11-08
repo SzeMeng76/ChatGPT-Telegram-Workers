@@ -1,6 +1,7 @@
 /* eslint-disable no-eval */
 import { jsonSchema, tool } from 'ai';
 
+import { log } from '../log/logger';
 import externalTools from './external';
 import { duckduckgo } from './internal/duckduckgo';
 
@@ -21,12 +22,14 @@ function executeTool(payload: Record<string, any>, required?: string[], envs?: R
 
         const parsedPayload = JSON.parse(filledPayload);
         const startTime = Date.now();
+        log.info(`tool request start, url: ${parsedPayload.url}`);
         let result: any = await fetch(parsedPayload.url, {
             method: parsedPayload.method,
             headers: parsedPayload.headers,
             body: JSON.stringify(parsedPayload.body),
             signal,
         });
+        log.info(`tool request end`);
         if (!result.ok) {
             throw new Error(`Tool call error: ${result.statusText}`);
         }

@@ -1,4 +1,4 @@
-import type { CoreMessage, LanguageModelV1 } from 'ai';
+import type { CoreMessage, LanguageModelV1, StepResult } from 'ai';
 import type { AgentUserConfig } from '../config/env';
 import type { ChatStreamTextHandler, OpenAIFuncCallData, ResponseMessage } from './types';
 import { generateText, streamText, experimental_wrapLanguageModel as wrapLanguageModel } from 'ai';
@@ -179,12 +179,12 @@ export async function streamHandler(stream: AsyncIterable<any>, contentExtractor
     return contentFull;
 }
 export async function requestChatCompletionsV2(params: { model: LanguageModelV1; toolModel?: LanguageModelV1; prompt?: string; messages: CoreMessage[]; tools?: any; activeTools?: string[]; context: AgentUserConfig }, onStream: ChatStreamTextHandler | null, onResult: ChatStreamTextHandler | null = null): Promise<ResponseMessage[]> {
-    let sendToolCall = false;
     try {
         const middleware = AIMiddleware({
             config: params.context,
             _models: {},
             activeTools: params.activeTools || [],
+            onStream,
         });
         if (onStream !== null) {
             const stream = await streamText({
@@ -199,12 +199,8 @@ export async function requestChatCompletionsV2(params: { model: LanguageModelV1;
                 maxSteps: 3,
                 maxRetries: 0,
                 temperature: 0.1,
-                onChunk(data) {
-                    sendToolCall = middleware.onChunk(data, sendToolCall, onStream, log);
-                },
-                onStepFinish(data) {
-                    middleware.onStepFinish(data, onStream, params.context);
-                },
+                onChunk: middleware.onChunk as (data: any) => void,
+                onStepFinish: middleware.onStepFinish as (data: StepResult<any>) => void,
             });
             const contentFull = await streamHandler(stream.textStream, t => t, onStream);
             onResult?.(contentFull);
@@ -217,7 +213,8 @@ export async function requestChatCompletionsV2(params: { model: LanguageModelV1;
                 }),
                 prompt: params.prompt,
                 messages: params.messages,
-                ...(params.tools && { tools: params.tools }),
+                tools: params.tools,
+                onStepFinish: middleware.onStepFinish as (data: StepResult<any>) => void,
             });
             onResult?.(result.text);
             return result.response.messages;

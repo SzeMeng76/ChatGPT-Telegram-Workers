@@ -1,4 +1,7 @@
 /* eslint-disable unused-imports/no-unused-vars */
+
+import { log } from '../../log/logger';
+
 // original repo: https://github.com/navetacandra/ddg
 async function getJS(query: string, signal?: AbortSignal | undefined) {
     const html = await fetch(
@@ -77,8 +80,10 @@ export const duckduckgo = {
     func: async (args: any, options?: { signal?: AbortSignal }) => {
         const { keywords } = args;
         const startTime = Date.now();
+        log.info(`tool duckduckgo request start`);
         try {
             const result = await search(keywords.join(' '), 8, options?.signal);
+            log.info(`tool duckduckgo request end`);
             return { ...result, time: ((Date.now() - startTime) / 1e3).toFixed(1) };
         } catch (e) {
             console.error(e);
