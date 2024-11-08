@@ -400,8 +400,8 @@ const ENV_KEY_MAPPER = {
   WORKERS_AI_MODEL: "WORKERS_CHAT_MODEL"
 };
 class Environment extends EnvironmentConfig {
-  BUILD_TIMESTAMP = 1731061215;
-  BUILD_VERSION = "c5670aa";
+  BUILD_TIMESTAMP = 1731062041;
+  BUILD_VERSION = "db02af6";
   I18N = loadI18n();
   PLUGINS_ENV = {};
   USER_CONFIG = createAgentUserConfig();
@@ -1656,7 +1656,7 @@ var createJsonResponseHandler = (responseSchema2) => async ({ response, url, req
     value: parsedResult.value
   };
 };
-var { btoa, atob: atob$1 } = globalThis;
+var { btoa: btoa$1, atob: atob$1 } = globalThis;
 function convertBase64ToUint8Array(base64String) {
   const base64Url = base64String.replace(/-/g, "+").replace(/_/g, "/");
   const latin1string = atob$1(base64Url);
@@ -1667,7 +1667,7 @@ function convertUint8ArrayToBase64(array) {
   for (let i = 0; i < array.length; i++) {
     latin1string += String.fromCodePoint(array[i]);
   }
-  return btoa(latin1string);
+  return btoa$1(latin1string);
 }
 function withoutTrailingSlash(url) {
   return url == null ? void 0 : url.replace(/\/$/, "");
@@ -15870,6 +15870,89 @@ async function requestText2Image(url, headers, body, render) {
   }
   return result2;
 }
+class Cache {
+  maxItems;
+  maxAge;
+  cache;
+  constructor() {
+    this.maxItems = 10;
+    this.maxAge = 1e3 * 60 * 60;
+    this.cache = {};
+    this.set = this.set.bind(this);
+    this.get = this.get.bind(this);
+  }
+  set(key, value) {
+    this.trim();
+    this.cache[key] = {
+      value,
+      time: Date.now()
+    };
+  }
+  get(key) {
+    this.trim();
+    return this.cache[key]?.value;
+  }
+  trim() {
+    let keys = Object.keys(this.cache);
+    for (const key of keys) {
+      if (Date.now() - this.cache[key].time > this.maxAge) {
+        delete this.cache[key];
+      }
+    }
+    keys = Object.keys(this.cache);
+    if (keys.length > this.maxItems) {
+      keys.sort((a, b) => this.cache[a].time - this.cache[b].time);
+      for (let i = 0; i < keys.length - this.maxItems; i++) {
+        delete this.cache[keys[i]];
+      }
+    }
+  }
+}
+const IMAGE_CACHE = new Cache();
+async function fetchImage(url) {
+  const cache = IMAGE_CACHE.get(url);
+  if (cache) {
+    return cache;
+  }
+  return fetch(url).then((resp) => resp.blob()).then((blob) => {
+    IMAGE_CACHE.set(url, blob);
+    return blob;
+  });
+}
+async function urlToBase64String(url) {
+  try {
+    const { Buffer: Buffer2 } = await Promise.resolve().then(() => __viteBrowserExternal);
+    return fetchImage(url).then((blob) => blob.arrayBuffer()).then((buffer) => Buffer2.from(buffer).toString("base64"));
+  } catch {
+    return fetchImage(url).then((blob) => blob.arrayBuffer()).then((buffer) => btoa(String.fromCharCode.apply(null, new Uint8Array(buffer))));
+  }
+}
+function getImageFormatFromBase64(base64String) {
+  const firstChar = base64String.charAt(0);
+  switch (firstChar) {
+    case "/":
+      return "jpeg";
+    case "i":
+      return "png";
+    case "R":
+      return "gif";
+    case "U":
+      return "webp";
+    default:
+      throw new Error("Unsupported image format");
+  }
+}
+async function imageToBase64String(url) {
+  const base64String = await urlToBase64String(url);
+  const format = getImageFormatFromBase64(base64String);
+  return {
+    data: base64String,
+    format: `image/${format}`
+  };
+}
+function renderBase64DataURI(params) {
+  return `data:${params.format};base64,${params.data}`;
+}
 async function messageInitialize(sender) {
   if (!sender.context.message_id) {
     try {
@@ -16000,7 +16083,7 @@ ${urls.join("\n")}`);
           for (const url of urls) {
             params.content.push({
               type: "image",
-              image: url
+              image: ENV.TELEGRAM_IMAGE_TRANSFER_MODE === "url" ? url : renderBase64DataURI(await imageToBase64String(url))
             });
           }
         } else if (type === "audio") {

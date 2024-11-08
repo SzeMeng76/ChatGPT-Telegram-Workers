@@ -11,6 +11,7 @@ import { loadHistory, requestCompletionsFromLLM } from '../../agent/chat';
 import { ENV } from '../../config/env';
 import { clearLog, getLog } from '../../extra/log/logDecortor';
 import { log } from '../../extra/log/logger';
+import { imageToBase64String, renderBase64DataURI } from '../../utils/image';
 import { createTelegramBotAPI } from '../api';
 import { MessageSender, sendAction, TelegraphSender } from '../utils/send';
 
@@ -164,7 +165,7 @@ export class ChatHandler implements MessageHandler<WorkerContext> {
                     for (const url of urls) {
                         params.content.push({
                             type: 'image',
-                            image: url,
+                            image: ENV.TELEGRAM_IMAGE_TRANSFER_MODE === 'url' ? url : renderBase64DataURI(await imageToBase64String(url)),
                         });
                     }
                 } else if (type === 'audio') {
