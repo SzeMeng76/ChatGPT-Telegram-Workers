@@ -4,7 +4,6 @@ import type { TelegramBotAPI } from '../api';
 import type { InlineItem } from '../command/types';
 import type { UnionData } from '../utils/utils';
 import type { CallbackQueryHandler, ChosenInlineQueryHandler, InlineQueryHandler, MessageHandler } from './types';
-import { AssistantMessage, CoreAssistantMessage } from 'ai';
 import { WorkerContext } from '../../config/context';
 import { ENV } from '../../config/env';
 import { sentMessageIds } from '../../extra/log/logDecortor';

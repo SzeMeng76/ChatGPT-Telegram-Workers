@@ -1,7 +1,6 @@
 import type { AgentUserConfig } from '../config/env';
 import type { ChatAgent, ChatStreamTextHandler, ImageAgent, ImageResult, LLMChatParams, ResponseMessage } from './types';
 import { createOpenAI } from '@ai-sdk/openai';
-import { Log } from '../extra/log/logDecortor';
 import { requestText2Image } from './chat';
 import { requestChatCompletionsV2 } from './request';
 

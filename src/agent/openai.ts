@@ -49,7 +49,7 @@ export class OpenAI extends OpenAIBase implements ChatAgent {
 
         const userMessage = params.messages.at(-1) as CoreUserMessage;
         const languageModelV1 = provider.languageModel(this.model(context, userMessage), undefined);
-        const { messages, newOnStream } = this.extraHandle(languageModelV1, params.messages, context, onStream);
+        const { messages, onStream: newOnStream } = this.extraHandle(languageModelV1, params.messages, context, onStream);
 
         return requestChatCompletionsV2(await warpLLMParams({
             model: languageModelV1,
