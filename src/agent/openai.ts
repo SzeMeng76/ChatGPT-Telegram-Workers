@@ -1,9 +1,9 @@
-import type { CoreUserMessage } from 'ai';
-import type { AgentUserConfig } from '../config/env';
+import type { CoreMessage, CoreUserMessage, LanguageModelV1 } from 'ai';
 import type { UnionData } from '../telegram/utils/utils';
 import type { AudioAgent, ChatAgent, ChatStreamTextHandler, ImageAgent, ImageResult, LLMChatParams, LLMChatRequestParams, ResponseMessage } from './types';
 import { createOpenAI } from '@ai-sdk/openai';
 import { warpLLMParams } from '.';
+import { type AgentUserConfig, ENV } from '../config/env';
 import { Log } from '../extra/log/logDecortor';
 import { log } from '../extra/log/logger';
 import { requestText2Image } from './chat';
@@ -49,12 +49,37 @@ export class OpenAI extends OpenAIBase implements ChatAgent {
 
         const userMessage = params.messages.at(-1) as CoreUserMessage;
         const languageModelV1 = provider.languageModel(this.model(context, userMessage), undefined);
+        const { messages, newOnStream } = this.extraHandle(languageModelV1, params.messages, context, onStream);
 
         return requestChatCompletionsV2(await warpLLMParams({
             model: languageModelV1,
-            // prompt: params.prompt,
-            messages: params.messages,
-        }, context), onStream);
+            messages,
+        }, context), newOnStream);
+    };
+
+    readonly extraHandle = (model: LanguageModelV1, messages: CoreMessage[], context: AgentUserConfig, onStream: ChatStreamTextHandler | null): any => {
+        if (Object.keys(ENV.DROPS_OPENAI_PARAMS).length > 0) {
+            for (const [models, params] of Object.entries(ENV.DROPS_OPENAI_PARAMS)) {
+                if (models.split(',').includes(model.modelId)) {
+                    params.includes('stream') && (onStream = null);
+                    break;
+                }
+            }
+        }
+        // cover message role
+        if (ENV.COVER_MESSAGE_ROLE) {
+            for (const [models, roles] of Object.entries(ENV.COVER_MESSAGE_ROLE)) {
+                const [oldRole, newRole] = roles.split(':');
+                if (models.split(',').includes(model.modelId)) {
+                    messages = messages.map((m: any) => {
+                        m.role = m.role === oldRole ? newRole : m.role;
+                        return m;
+                    });
+                }
+            }
+        }
+
+        return { messages, onStream };
     };
 }
 

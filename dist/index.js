@@ -20,13 +20,11 @@ var __decorateElement = (array, flags, name14, decorators, target, extra) => {
   var fn, it, done, ctx, access, k = flags & 7, s = !!(flags & 8), p = !!(flags & 16);
   var j = k > 3 ? array.length + 1 : k ? s ? 1 : 2 : 0, key = __decoratorStrings[k + 5];
   var initializers = k > 3 && (array[j - 1] = []), extraInitializers = array[j] || (array[j] = []);
-  var desc = k && (!p && !s && (target = target.prototype), k < 5 && (k > 3 || !p) && __getOwnPropDesc(k < 4 ? target : {
-    get [name14]() {
-      return __privateGet(this, extra);
-    }, set [name14](x) {
-      return __privateSet(this, extra, x);
-    }
-  }, name14));
+  var desc = k && (!p && !s && (target = target.prototype), k < 5 && (k > 3 || !p) && __getOwnPropDesc(k < 4 ? target : { get [name14]() {
+    return __privateGet(this, extra);
+  }, set [name14](x) {
+    return __privateSet(this, extra, x);
+  } }, name14));
   k ? p && k < 4 && __name(extra, (k > 2 ? "set " : k > 1 ? "get " : "") + name14) : __name(target, name14);
   for (var i = decorators.length - 1; i >= 0; i--) {
     ctx = __decoratorContext(k, name14, done = {}, array[3], extraInitializers);
@@ -49,10 +47,7 @@ var __privateGet = (obj, member, getter) => (__accessCheck(obj, member, "read fr
 var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "write to private field"), setter ? setter.call(obj, value) : member.set(obj, value), value);
 var __privateMethod = (obj, member, method) => (__accessCheck(obj, member, "access private method"), method);
 var _request_dec, _a10, _init, _request_dec2, _b, _init2, _request_dec3, _c, _init3;
-const en = {
-  "env": { "system_init_message": "You are a helpful assistant" }, "command": {
-    "help": { "summary": "The following commands are currently supported:\n", "help": "Get command help", "new": "Start a new conversation", "start": "Get your ID and start a new conversation", "img": "Generate an image, the complete command format is `/img image description`, for example `/img beach at moonlight`", "version": "Get the current version number to determine whether to update", "setenv": "Set user configuration, the complete command format is /setenv KEY=VALUE", "setenvs": 'Batch set user configurations, the full format of the command is /setenvs {"KEY1": "VALUE1", "KEY2": "VALUE2"}', "delenv": "Delete user configuration, the complete command format is /delenv KEY", "clearenv": "Clear all user configuration", "system": "View some system information", "redo": "Redo the last conversation, /redo with modified content or directly /redo", "echo": "Echo the message", "set": "/set command format is /set option value [option value...] " }, "new": { "new_chat_start": "A new conversation has started" }, "detail": {
-      "set": `/set command format is /set option value [option value...] or /set "option" value ["option" value...]
+const en = { "env": { "system_init_message": "You are a helpful assistant" }, "command": { "help": { "summary": "The following commands are currently supported:\n", "help": "Get command help", "new": "Start a new conversation", "start": "Get your ID and start a new conversation", "img": "Generate an image, the complete command format is `/img image description`, for example `/img beach at moonlight`", "version": "Get the current version number to determine whether to update", "setenv": "Set user configuration, the complete command format is /setenv KEY=VALUE", "setenvs": 'Batch set user configurations, the full format of the command is /setenvs {"KEY1": "VALUE1", "KEY2": "VALUE2"}', "delenv": "Delete user configuration, the complete command format is /delenv KEY", "clearenv": "Clear all user configuration", "system": "View some system information", "redo": "Redo the last conversation, /redo with modified content or directly /redo", "echo": "Echo the message", "set": "/set command format is /set option value [option value...] " }, "new": { "new_chat_start": "A new conversation has started" }, "detail": { "set": `/set command format is /set option value [option value...] or /set "option" value ["option" value...]
  The preset options are as follows:
  -p adjust SYSTEM_INIT_MESSAGE
  -o adjust CHAT_MODEL
@@ -68,14 +63,9 @@ const en = {
  Quickly adjust parameters when using /set: /set -m r+ -v gpt-4o 
  
 The /set command can append messages without storing modified parameters at this time. When adjusting SYSTEM_INIT_MESSAGE, if PROMPT is set directly using it as a role name will automatically fill in role prompt. For example:
-/set -p doctor` }
-  }
-};
+/set -p doctor` } } };
 const pt = { "env": { "system_init_message": "Você é um assistente útil" }, "command": { "help": { "summary": "Os seguintes comandos são suportados atualmente:\n", "help": "Obter ajuda sobre comandos", "new": "Iniciar uma nova conversa", "start": "Obter seu ID e iniciar uma nova conversa", "img": "Gerar uma imagem, o formato completo do comando é `/img descrição da imagem`, por exemplo `/img praia ao luar`", "version": "Obter o número da versão atual para determinar se é necessário atualizar", "setenv": "Definir configuração do usuário, o formato completo do comando é /setenv CHAVE=VALOR", "setenvs": 'Definir configurações do usuário em lote, o formato completo do comando é /setenvs {"CHAVE1": "VALOR1", "CHAVE2": "VALOR2"}', "delenv": "Excluir configuração do usuário, o formato completo do comando é /delenv CHAVE", "clearenv": "Limpar todas as configurações do usuário", "system": "Ver algumas informações do sistema", "redo": "Refazer a última conversa, /redo com conteúdo modificado ou diretamente /redo", "echo": "Repetir a mensagem", "set": "O formato do comando /set é /set opção valor [opção valor...] " }, "new": { "new_chat_start": "Uma nova conversa foi iniciada" } } };
-const zhHans = {
-  "env": { "system_init_message": "你是一个得力的助手" }, "command": {
-    "help": { "summary": "当前支持以下命令:\n", "help": "获取命令帮助", "new": "发起新的对话", "start": "获取你的ID, 并发起新的对话", "img": "生成一张图片, 命令完整格式为 `/img 图片描述`, 例如`/img 月光下的沙滩`", "version": "获取当前版本号, 判断是否需要更新", "setenv": "设置用户配置，命令完整格式为 /setenv KEY=VALUE", "setenvs": '批量设置用户配置, 命令完整格式为 /setenvs {"KEY1": "VALUE1", "KEY2": "VALUE2"}', "delenv": "删除用户配置，命令完整格式为 /delenv KEY", "clearenv": "清除所有用户配置", "system": "查看当前一些系统信息", "redo": "重做上一次的对话, /redo 加修改过的内容 或者 直接 /redo", "echo": "回显消息", "set": "命令格式为 /set 选项 值 [选项 值…] ", "settings": "设置环境变量" }, "new": { "new_chat_start": "新的对话已经开始" }, "detail": {
-      "set": `/set 命令格式为 /set 选项 值 [选项 值…] 或 /set "选项" 值 ["选项" 值…] 
+const zhHans = { "env": { "system_init_message": "你是一个得力的助手" }, "command": { "help": { "summary": "当前支持以下命令:\n", "help": "获取命令帮助", "new": "发起新的对话", "start": "获取你的ID, 并发起新的对话", "img": "生成一张图片, 命令完整格式为 `/img 图片描述`, 例如`/img 月光下的沙滩`", "version": "获取当前版本号, 判断是否需要更新", "setenv": "设置用户配置，命令完整格式为 /setenv KEY=VALUE", "setenvs": '批量设置用户配置, 命令完整格式为 /setenvs {"KEY1": "VALUE1", "KEY2": "VALUE2"}', "delenv": "删除用户配置，命令完整格式为 /delenv KEY", "clearenv": "清除所有用户配置", "system": "查看当前一些系统信息", "redo": "重做上一次的对话, /redo 加修改过的内容 或者 直接 /redo", "echo": "回显消息", "set": "命令格式为 /set 选项 值 [选项 值…] ", "settings": "设置环境变量" }, "new": { "new_chat_start": "新的对话已经开始" }, "detail": { "set": `/set 命令格式为 /set 选项 值 [选项 值…] 或 /set "选项" 值 ["选项" 值…] 
   选项预置如下： 
   -p 调整 SYSTEM_INIT_MESSAGE
   -o 调整 CHAT_MODEL
@@ -92,13 +82,8 @@ const zhHans = {
 
   /set命令可追加消息 此时不会将修改的参数存储
   调整SYSTEM_INIT_MESSAGE时，若设置了PROMPT可直接使用设置为角色名，自动填充角色prompt，例如：
-  /set -p doctor` }
-  }
-};
-const zhHant = {
-  "env": { "system_init_message": "你是一個得力的助手" }, "command": {
-    "help": { "summary": "當前支持的命令如下：\n", "help": "獲取命令幫助", "new": "開始一個新對話", "start": "獲取您的ID並開始一個新對話", "img": "生成圖片，完整命令格式為`/img 圖片描述`，例如`/img 海灘月光`", "version": "獲取當前版本號確認是否需要更新", "setenv": "設置用戶配置，完整命令格式為/setenv KEY=VALUE", "setenvs": '批量設置用户配置, 命令完整格式為 /setenvs {"KEY1": "VALUE1", "KEY2": "VALUE2"}', "delenv": "刪除用戶配置，完整命令格式為/delenv KEY", "clearenv": "清除所有用戶配置", "system": "查看一些系統信息", "redo": "重做上一次的對話 /redo 加修改過的內容 或者 直接 /redo", "echo": "回显消息", "set": "/set 命令格式為 /set 選項 值 [選項 值…] " }, "new": { "new_chat_start": "開始一個新對話" }, "detail": {
-      "set": `/set 命令格式为 /set 选项 值 [选项 值…] 或 /set "选项" 值 ["选项" 值…] 
+  /set -p doctor` } } };
+const zhHant = { "env": { "system_init_message": "你是一個得力的助手" }, "command": { "help": { "summary": "當前支持的命令如下：\n", "help": "獲取命令幫助", "new": "開始一個新對話", "start": "獲取您的ID並開始一個新對話", "img": "生成圖片，完整命令格式為`/img 圖片描述`，例如`/img 海灘月光`", "version": "獲取當前版本號確認是否需要更新", "setenv": "設置用戶配置，完整命令格式為/setenv KEY=VALUE", "setenvs": '批量設置用户配置, 命令完整格式為 /setenvs {"KEY1": "VALUE1", "KEY2": "VALUE2"}', "delenv": "刪除用戶配置，完整命令格式為/delenv KEY", "clearenv": "清除所有用戶配置", "system": "查看一些系統信息", "redo": "重做上一次的對話 /redo 加修改過的內容 或者 直接 /redo", "echo": "回显消息", "set": "/set 命令格式為 /set 選項 值 [選項 值…] " }, "new": { "new_chat_start": "開始一個新對話" }, "detail": { "set": `/set 命令格式为 /set 选项 值 [选项 值…] 或 /set "选项" 值 ["选项" 值…] 
  选项预置如下： 
  -p 调整 SYSTEM_INIT_MESSAGE
  -o 调整 CHAT_MODEL
@@ -116,9 +101,7 @@ const zhHant = {
  /set命令可追加消息 此时不会将修改的参数存储
  /set命令追加文本处理时，需要键入换行来进行分割
  调整SYSTEM_INIT_MESSAGE时，若设置了PROMPT可直接使用设置为角色名，自动填充角色prompt，例如：
- /set -p doctor` }
-  }
-};
+ /set -p doctor` } } };
 function loadI18n(lang) {
   switch (lang?.toLowerCase()) {
     case "cn":
@@ -176,7 +159,7 @@ class EnvironmentConfig {
   EXTRA_MESSAGE_CONTEXT = false;
   ENABLE_FILE = true;
   ENABLE_REPLY_TO_MENTION = false;
-  IGNORE_TEXT = "";
+  IGNORE_TEXT_PERFIX = "";
   HIDE_MIDDLE_MESSAGE = false;
   CHAT_MESSAGE_TRIGGER = {};
   CHAT_TRIGGER_PERFIX = "";
@@ -276,7 +259,7 @@ class VertexConfig {
   VERTEX_PROJECT_ID = null;
   VERTEX_LOCATION = "us-central1";
   VERTEX_CREDENTIALS = {};
-  VERTEX_CHAT_MODEL = "gemini-1.5-flash-latest";
+  VERTEX_CHAT_MODEL = "gemini-1.5-flash-002";
   VERTEX_SEARCH_GROUNDING = false;
 }
 class DefineKeys {
@@ -289,9 +272,7 @@ class ExtraUserConfig {
   ENABLE_SHOWTOKEN = false;
   USE_TOOLS = ["duckduckgo", "jina_reader"];
   JINA_API_KEY = [];
-  TOOL_MODEL = "gpt-4o-mini";
-  FUNCTION_CALL_API_KEY = "";
-  FUNCTION_CALL_BASE = "";
+  TOOL_MODEL = "";
   FUNCTION_REPLY_ASAP = true;
   PROMPT = prompts_default;
   MODES = {
@@ -419,8 +400,8 @@ const ENV_KEY_MAPPER = {
   WORKERS_AI_MODEL: "WORKERS_CHAT_MODEL"
 };
 class Environment extends EnvironmentConfig {
-  BUILD_TIMESTAMP = 1731055742;
-  BUILD_VERSION = "6aa3b9d";
+  BUILD_TIMESTAMP = 1731061215;
+  BUILD_VERSION = "c5670aa";
   I18N = loadI18n();
   PLUGINS_ENV = {};
   USER_CONFIG = createAgentUserConfig();
@@ -428,7 +409,7 @@ class Environment extends EnvironmentConfig {
   PLUGINS_COMMAND = {};
   DATABASE = null;
   API_GUARD = null;
-  constructor () {
+  constructor() {
     super();
     this.merge = this.merge.bind(this);
   }
@@ -539,7 +520,7 @@ var _AISDKError = class _AISDKError2 extends Error {
    * @param {string} params.message - The error message.
    * @param {unknown} [params.cause] - The underlying cause of the error.
    */
-  constructor ({
+  constructor({
     name: name14,
     message,
     cause
@@ -581,7 +562,7 @@ var marker2$1 = `vercel.ai.error.${name$1}`;
 var symbol2$1 = Symbol.for(marker2$1);
 var _a2$1;
 var APICallError = class extends AISDKError {
-  constructor ({
+  constructor({
     message,
     url,
     requestBodyValues,
@@ -590,9 +571,9 @@ var APICallError = class extends AISDKError {
     responseBody,
     cause,
     isRetryable = statusCode != null && (statusCode === 408 || // request timeout
-      statusCode === 409 || // conflict
-      statusCode === 429 || // too many requests
-      statusCode >= 500),
+    statusCode === 409 || // conflict
+    statusCode === 429 || // too many requests
+    statusCode >= 500),
     // server error
     data
   }) {
@@ -640,7 +621,7 @@ var symbol3$1 = Symbol.for(marker3$1);
 var _a3$1;
 var EmptyResponseBodyError = class extends AISDKError {
   // used in isInstance
-  constructor ({ message = "Empty response body" } = {}) {
+  constructor({ message = "Empty response body" } = {}) {
     super({ name: name2$1, message });
     this[_a3$1] = true;
   }
@@ -672,7 +653,7 @@ var marker4$1 = `vercel.ai.error.${name3$1}`;
 var symbol4$1 = Symbol.for(marker4$1);
 var _a4$1;
 var InvalidArgumentError$1 = class InvalidArgumentError2 extends AISDKError {
-  constructor ({
+  constructor({
     message,
     cause,
     argument
@@ -691,7 +672,7 @@ var marker5$1 = `vercel.ai.error.${name4$1}`;
 var symbol5$1 = Symbol.for(marker5$1);
 var _a5$1;
 var InvalidPromptError = class extends AISDKError {
-  constructor ({
+  constructor({
     prompt: prompt2,
     message,
     cause
@@ -727,7 +708,7 @@ var marker6$1 = `vercel.ai.error.${name5$1}`;
 var symbol6$1 = Symbol.for(marker6$1);
 var _a6$1;
 var InvalidResponseDataError = class extends AISDKError {
-  constructor ({
+  constructor({
     data,
     message = `Invalid response data: ${JSON.stringify(data)}.`
   }) {
@@ -762,7 +743,7 @@ var marker7 = `vercel.ai.error.${name6$1}`;
 var symbol7 = Symbol.for(marker7);
 var _a7;
 var JSONParseError = class extends AISDKError {
-  constructor ({ text, cause }) {
+  constructor({ text, cause }) {
     super({
       name: name6$1,
       message: `JSON parsing failed: Text: ${text}.
@@ -801,7 +782,7 @@ var symbol8$1 = Symbol.for(marker8$1);
 var _a8$1;
 var LoadAPIKeyError = class extends AISDKError {
   // used in isInstance
-  constructor ({ message }) {
+  constructor({ message }) {
     super({ name: name7, message });
     this[_a8$1] = true;
   }
@@ -822,7 +803,7 @@ var symbol9$1 = Symbol.for(marker9$1);
 var _a9$1;
 var LoadSettingError = class extends AISDKError {
   // used in isInstance
-  constructor ({ message }) {
+  constructor({ message }) {
     super({ name: name8$1, message });
     this[_a9$1] = true;
   }
@@ -842,7 +823,7 @@ var marker11 = `vercel.ai.error.${name10}`;
 var symbol11 = Symbol.for(marker11);
 var _a11;
 var NoSuchModelError = class extends AISDKError {
-  constructor ({
+  constructor({
     errorName = name10,
     modelId,
     modelType,
@@ -881,7 +862,7 @@ var marker12 = `vercel.ai.error.${name11}`;
 var symbol12 = Symbol.for(marker12);
 var _a12;
 var TooManyEmbeddingValuesForCallError = class extends AISDKError {
-  constructor (options2) {
+  constructor(options2) {
     super({
       name: name11,
       message: `Too many values for a single embedding call. The ${options2.provider} model "${options2.modelId}" can only embed up to ${options2.maxEmbeddingsPerCall} values per call, but ${options2.values.length} values were provided.`
@@ -922,7 +903,7 @@ var marker13 = `vercel.ai.error.${name12}`;
 var symbol13 = Symbol.for(marker13);
 var _a13;
 var _TypeValidationError = class _TypeValidationError2 extends AISDKError {
-  constructor ({ value, cause }) {
+  constructor({ value, cause }) {
     super({
       name: name12,
       message: `Type validation failed: Value: ${JSON.stringify(value)}.
@@ -977,7 +958,7 @@ var marker14 = `vercel.ai.error.${name13}`;
 var symbol14 = Symbol.for(marker14);
 var _a14;
 var UnsupportedFunctionalityError = class extends AISDKError {
-  constructor ({ functionality }) {
+  constructor({ functionality }) {
     super({
       name: name13,
       message: `'${functionality}' functionality not supported.`
@@ -1239,7 +1220,7 @@ function hasBom(buffer) {
   return BOM.every((charCode, index2) => buffer.charCodeAt(index2) === charCode);
 }
 class EventSourceParserStream extends TransformStream {
-  constructor () {
+  constructor() {
     let parser;
     super({
       start(controller) {
@@ -1749,7 +1730,7 @@ function setResponseValueAndErrors(res, key, value, errorMessage, refs) {
   addErrorMessage(res, key, errorMessage, refs);
 }
 var util;
-(function (util2) {
+(function(util2) {
   util2.assertEqual = (val) => val;
   function assertIs(_arg) {
   }
@@ -1774,7 +1755,7 @@ var util;
     return util2.objectValues(filtered);
   };
   util2.objectValues = (obj) => {
-    return util2.objectKeys(obj).map(function (e) {
+    return util2.objectKeys(obj).map(function(e) {
       return obj[e];
     });
   };
@@ -1807,7 +1788,7 @@ var util;
   };
 })(util || (util = {}));
 var objectUtil;
-(function (objectUtil2) {
+(function(objectUtil2) {
   objectUtil2.mergeShapes = (first, second) => {
     return {
       ...first,
@@ -1902,7 +1883,7 @@ const quotelessJson = (obj) => {
   return json.replace(/"([^"]+)":/g, "$1:");
 };
 class ZodError extends Error {
-  constructor (issues) {
+  constructor(issues) {
     super();
     this.issues = [];
     this.addIssue = (sub) => {
@@ -1924,7 +1905,7 @@ class ZodError extends Error {
     return this.issues;
   }
   format(_mapper) {
-    const mapper = _mapper || function (issue) {
+    const mapper = _mapper || function(issue) {
       return issue.message;
     };
     const fieldErrors = { _errors: [] };
@@ -2142,7 +2123,7 @@ function addIssueToContext(ctx, issueData) {
   ctx.common.issues.push(issue);
 }
 class ParseStatus {
-  constructor () {
+  constructor() {
     this.value = "valid";
   }
   dirty() {
@@ -2212,18 +2193,18 @@ function __classPrivateFieldSet(receiver, state, value, kind, f2) {
   if (typeof state === "function" ? receiver !== state || !f2 : !state.has(receiver)) throw new TypeError("Cannot write private member to an object whose class did not declare it");
   return state.set(receiver, value), value;
 }
-typeof SuppressedError === "function" ? SuppressedError : function (error, suppressed, message) {
+typeof SuppressedError === "function" ? SuppressedError : function(error, suppressed, message) {
   var e = new Error(message);
   return e.name = "SuppressedError", e.error = error, e.suppressed = suppressed, e;
 };
 var errorUtil;
-(function (errorUtil2) {
+(function(errorUtil2) {
   errorUtil2.errToObj = (message) => typeof message === "string" ? { message } : message || {};
   errorUtil2.toString = (message) => typeof message === "string" ? message : message === null || message === void 0 ? void 0 : message.message;
 })(errorUtil || (errorUtil = {}));
 var _ZodEnum_cache, _ZodNativeEnum_cache;
 class ParseInputLazyPath {
-  constructor (parent, value, path, key) {
+  constructor(parent, value, path, key) {
     this._cachedPath = [];
     this.parent = parent;
     this.data = value;
@@ -2285,7 +2266,7 @@ function processCreateParams(params) {
   return { errorMap: customMap, description };
 }
 class ZodType {
-  constructor (def) {
+  constructor(def) {
     this.spa = this.safeParseAsync;
     this._def = def;
     this.parse = this.parse.bind(this);
@@ -3081,7 +3062,7 @@ function floatSafeRemainder(val, step) {
   return valInt % stepInt / Math.pow(10, decCount);
 }
 class ZodNumber extends ZodType {
-  constructor () {
+  constructor() {
     super(...arguments);
     this.min = this.gte;
     this.max = this.lte;
@@ -3312,7 +3293,7 @@ ZodNumber.create = (params) => {
   });
 };
 class ZodBigInt extends ZodType {
-  constructor () {
+  constructor() {
     super(...arguments);
     this.min = this.gte;
     this.max = this.lte;
@@ -3675,7 +3656,7 @@ ZodNull.create = (params) => {
   });
 };
 class ZodAny extends ZodType {
-  constructor () {
+  constructor() {
     super(...arguments);
     this._any = true;
   }
@@ -3690,7 +3671,7 @@ ZodAny.create = (params) => {
   });
 };
 class ZodUnknown extends ZodType {
-  constructor () {
+  constructor() {
     super(...arguments);
     this._unknown = true;
   }
@@ -3870,7 +3851,7 @@ function deepPartialify(schema2) {
   }
 }
 class ZodObject extends ZodType {
-  constructor () {
+  constructor() {
     super(...arguments);
     this._cached = null;
     this.nonstrict = this.passthrough;
@@ -3931,7 +3912,7 @@ class ZodObject extends ZodType {
           });
           status.dirty();
         }
-      } else if (unknownKeys === "strip");
+      } else if (unknownKeys === "strip") ;
       else {
         throw new Error(`Internal ZodObject error: invalid unknownKeys value.`);
       }
@@ -4768,7 +4749,7 @@ ZodSet.create = (valueType, params) => {
   });
 };
 class ZodFunction extends ZodType {
-  constructor () {
+  constructor() {
     super(...arguments);
     this.validate = this.implement;
   }
@@ -4818,7 +4799,7 @@ class ZodFunction extends ZodType {
     const fn = ctx.data;
     if (this._def.returns instanceof ZodPromise) {
       const me = this;
-      return OK(async function (...args2) {
+      return OK(async function(...args2) {
         const error = new ZodError([]);
         const parsedArgs = await me._def.args.parseAsync(args2, params).catch((e) => {
           error.addIssue(makeArgsIssue(args2, e));
@@ -4833,7 +4814,7 @@ class ZodFunction extends ZodType {
       });
     } else {
       const me = this;
-      return OK(function (...args2) {
+      return OK(function(...args2) {
         const parsedArgs = me._def.args.safeParse(args2, params);
         if (!parsedArgs.success) {
           throw new ZodError([makeArgsIssue(args2, parsedArgs.error)]);
@@ -4931,7 +4912,7 @@ function createZodEnum(values, params) {
   });
 }
 class ZodEnum extends ZodType {
-  constructor () {
+  constructor() {
     super(...arguments);
     _ZodEnum_cache.set(this, void 0);
   }
@@ -5001,7 +4982,7 @@ class ZodEnum extends ZodType {
 _ZodEnum_cache = /* @__PURE__ */ new WeakMap();
 ZodEnum.create = createZodEnum;
 class ZodNativeEnum extends ZodType {
-  constructor () {
+  constructor() {
     super(...arguments);
     _ZodNativeEnum_cache.set(this, void 0);
   }
@@ -5455,7 +5436,7 @@ const late = {
   object: ZodObject.lazycreate
 };
 var ZodFirstPartyTypeKind;
-(function (ZodFirstPartyTypeKind2) {
+(function(ZodFirstPartyTypeKind2) {
   ZodFirstPartyTypeKind2["ZodString"] = "ZodString";
   ZodFirstPartyTypeKind2["ZodNumber"] = "ZodNumber";
   ZodFirstPartyTypeKind2["ZodNaN"] = "ZodNaN";
@@ -6989,7 +6970,7 @@ function _makeCompatibilityCheck(ownVersion) {
   var rejectedVersions = /* @__PURE__ */ new Set();
   var myVersionMatch = ownVersion.match(re);
   if (!myVersionMatch) {
-    return function () {
+    return function() {
       return false;
     };
   }
@@ -7088,7 +7069,7 @@ function unregisterGlobal(type, diag) {
     delete api[type];
   }
 }
-var __read$3 = function (o, n) {
+var __read$3 = function(o, n) {
   var m = typeof Symbol === "function" && o[Symbol.iterator];
   if (!m) return o;
   var i = m.call(o), r, ar = [], e;
@@ -7105,7 +7086,7 @@ var __read$3 = function (o, n) {
   }
   return ar;
 };
-var __spreadArray$3 = function (to, from, pack) {
+var __spreadArray$3 = function(to, from, pack) {
   if (pack || arguments.length === 2) for (var i = 0, l = from.length, ar; i < l; i++) {
     if (ar || !(i in from)) {
       if (!ar) ar = Array.prototype.slice.call(from, 0, i);
@@ -7114,39 +7095,39 @@ var __spreadArray$3 = function (to, from, pack) {
   }
   return to.concat(ar || Array.prototype.slice.call(from));
 };
-var DiagComponentLogger = function () {
+var DiagComponentLogger = function() {
   function DiagComponentLogger2(props) {
     this._namespace = props.namespace || "DiagComponentLogger";
   }
-  DiagComponentLogger2.prototype.debug = function () {
+  DiagComponentLogger2.prototype.debug = function() {
     var args2 = [];
     for (var _i = 0; _i < arguments.length; _i++) {
       args2[_i] = arguments[_i];
     }
     return logProxy("debug", this._namespace, args2);
   };
-  DiagComponentLogger2.prototype.error = function () {
+  DiagComponentLogger2.prototype.error = function() {
     var args2 = [];
     for (var _i = 0; _i < arguments.length; _i++) {
       args2[_i] = arguments[_i];
     }
     return logProxy("error", this._namespace, args2);
   };
-  DiagComponentLogger2.prototype.info = function () {
+  DiagComponentLogger2.prototype.info = function() {
     var args2 = [];
     for (var _i = 0; _i < arguments.length; _i++) {
       args2[_i] = arguments[_i];
     }
     return logProxy("info", this._namespace, args2);
   };
-  DiagComponentLogger2.prototype.warn = function () {
+  DiagComponentLogger2.prototype.warn = function() {
     var args2 = [];
     for (var _i = 0; _i < arguments.length; _i++) {
       args2[_i] = arguments[_i];
     }
     return logProxy("warn", this._namespace, args2);
   };
-  DiagComponentLogger2.prototype.verbose = function () {
+  DiagComponentLogger2.prototype.verbose = function() {
     var args2 = [];
     for (var _i = 0; _i < arguments.length; _i++) {
       args2[_i] = arguments[_i];
@@ -7164,7 +7145,7 @@ function logProxy(funcName, namespace, args2) {
   return logger[funcName].apply(logger, __spreadArray$3([], __read$3(args2), false));
 }
 var DiagLogLevel;
-(function (DiagLogLevel2) {
+(function(DiagLogLevel2) {
   DiagLogLevel2[DiagLogLevel2["NONE"] = 0] = "NONE";
   DiagLogLevel2[DiagLogLevel2["ERROR"] = 30] = "ERROR";
   DiagLogLevel2[DiagLogLevel2["WARN"] = 50] = "WARN";
@@ -7185,7 +7166,7 @@ function createLogLevelDiagLogger(maxLevel, logger) {
     if (typeof theFunc === "function" && maxLevel >= theLevel) {
       return theFunc.bind(logger);
     }
-    return function () {
+    return function() {
     };
   }
   return {
@@ -7196,7 +7177,7 @@ function createLogLevelDiagLogger(maxLevel, logger) {
     verbose: _filterFunc("verbose", DiagLogLevel.VERBOSE)
   };
 }
-var __read$2 = function (o, n) {
+var __read$2 = function(o, n) {
   var m = typeof Symbol === "function" && o[Symbol.iterator];
   if (!m) return o;
   var i = m.call(o), r, ar = [], e;
@@ -7213,7 +7194,7 @@ var __read$2 = function (o, n) {
   }
   return ar;
 };
-var __spreadArray$2 = function (to, from, pack) {
+var __spreadArray$2 = function(to, from, pack) {
   if (pack || arguments.length === 2) for (var i = 0, l = from.length, ar; i < l; i++) {
     if (ar || !(i in from)) {
       if (!ar) ar = Array.prototype.slice.call(from, 0, i);
@@ -7223,10 +7204,10 @@ var __spreadArray$2 = function (to, from, pack) {
   return to.concat(ar || Array.prototype.slice.call(from));
 };
 var API_NAME$2 = "diag";
-var DiagAPI = function () {
+var DiagAPI = function() {
   function DiagAPI2() {
     function _logProxy(funcName) {
-      return function () {
+      return function() {
         var args2 = [];
         for (var _i = 0; _i < arguments.length; _i++) {
           args2[_i] = arguments[_i];
@@ -7238,7 +7219,7 @@ var DiagAPI = function () {
       };
     }
     var self2 = this;
-    var setLogger = function (logger, optionsOrLogLevel) {
+    var setLogger = function(logger, optionsOrLogLevel) {
       var _a15, _b2, _c2;
       if (optionsOrLogLevel === void 0) {
         optionsOrLogLevel = { logLevel: DiagLogLevel.INFO };
@@ -7263,10 +7244,10 @@ var DiagAPI = function () {
       return registerGlobal("diag", newLogger, self2, true);
     };
     self2.setLogger = setLogger;
-    self2.disable = function () {
+    self2.disable = function() {
       unregisterGlobal(API_NAME$2, self2);
     };
-    self2.createComponentLogger = function (options2) {
+    self2.createComponentLogger = function(options2) {
       return new DiagComponentLogger(options2);
     };
     self2.verbose = _logProxy("verbose");
@@ -7275,7 +7256,7 @@ var DiagAPI = function () {
     self2.warn = _logProxy("warn");
     self2.error = _logProxy("error");
   }
-  DiagAPI2.instance = function () {
+  DiagAPI2.instance = function() {
     if (!this._instance) {
       this._instance = new DiagAPI2();
     }
@@ -7286,19 +7267,19 @@ var DiagAPI = function () {
 function createContextKey(description) {
   return Symbol.for(description);
 }
-var BaseContext = /* @__PURE__ */ function () {
+var BaseContext = /* @__PURE__ */ function() {
   function BaseContext2(parentContext) {
     var self2 = this;
     self2._currentContext = parentContext ? new Map(parentContext) : /* @__PURE__ */ new Map();
-    self2.getValue = function (key) {
+    self2.getValue = function(key) {
       return self2._currentContext.get(key);
     };
-    self2.setValue = function (key, value) {
+    self2.setValue = function(key, value) {
       var context = new BaseContext2(self2._currentContext);
       context._currentContext.set(key, value);
       return context;
     };
-    self2.deleteValue = function (key) {
+    self2.deleteValue = function(key) {
       var context = new BaseContext2(self2._currentContext);
       context._currentContext.delete(key);
       return context;
@@ -7307,7 +7288,7 @@ var BaseContext = /* @__PURE__ */ function () {
   return BaseContext2;
 }();
 var ROOT_CONTEXT = new BaseContext();
-var __read$1 = function (o, n) {
+var __read$1 = function(o, n) {
   var m = typeof Symbol === "function" && o[Symbol.iterator];
   if (!m) return o;
   var i = m.call(o), r, ar = [], e;
@@ -7324,7 +7305,7 @@ var __read$1 = function (o, n) {
   }
   return ar;
 };
-var __spreadArray$1 = function (to, from, pack) {
+var __spreadArray$1 = function(to, from, pack) {
   if (pack || arguments.length === 2) for (var i = 0, l = from.length, ar; i < l; i++) {
     if (ar || !(i in from)) {
       if (!ar) ar = Array.prototype.slice.call(from, 0, i);
@@ -7333,31 +7314,31 @@ var __spreadArray$1 = function (to, from, pack) {
   }
   return to.concat(ar || Array.prototype.slice.call(from));
 };
-var NoopContextManager = function () {
+var NoopContextManager = function() {
   function NoopContextManager2() {
   }
-  NoopContextManager2.prototype.active = function () {
+  NoopContextManager2.prototype.active = function() {
     return ROOT_CONTEXT;
   };
-  NoopContextManager2.prototype.with = function (_context, fn, thisArg) {
+  NoopContextManager2.prototype.with = function(_context, fn, thisArg) {
     var args2 = [];
     for (var _i = 3; _i < arguments.length; _i++) {
       args2[_i - 3] = arguments[_i];
     }
     return fn.call.apply(fn, __spreadArray$1([thisArg], __read$1(args2), false));
   };
-  NoopContextManager2.prototype.bind = function (_context, target) {
+  NoopContextManager2.prototype.bind = function(_context, target) {
     return target;
   };
-  NoopContextManager2.prototype.enable = function () {
+  NoopContextManager2.prototype.enable = function() {
     return this;
   };
-  NoopContextManager2.prototype.disable = function () {
+  NoopContextManager2.prototype.disable = function() {
     return this;
   };
   return NoopContextManager2;
 }();
-var __read = function (o, n) {
+var __read = function(o, n) {
   var m = typeof Symbol === "function" && o[Symbol.iterator];
   if (!m) return o;
   var i = m.call(o), r, ar = [], e;
@@ -7374,7 +7355,7 @@ var __read = function (o, n) {
   }
   return ar;
 };
-var __spreadArray = function (to, from, pack) {
+var __spreadArray = function(to, from, pack) {
   if (pack || arguments.length === 2) for (var i = 0, l = from.length, ar; i < l; i++) {
     if (ar || !(i in from)) {
       if (!ar) ar = Array.prototype.slice.call(from, 0, i);
@@ -7385,22 +7366,22 @@ var __spreadArray = function (to, from, pack) {
 };
 var API_NAME$1 = "context";
 var NOOP_CONTEXT_MANAGER = new NoopContextManager();
-var ContextAPI = function () {
+var ContextAPI = function() {
   function ContextAPI2() {
   }
-  ContextAPI2.getInstance = function () {
+  ContextAPI2.getInstance = function() {
     if (!this._instance) {
       this._instance = new ContextAPI2();
     }
     return this._instance;
   };
-  ContextAPI2.prototype.setGlobalContextManager = function (contextManager) {
+  ContextAPI2.prototype.setGlobalContextManager = function(contextManager) {
     return registerGlobal(API_NAME$1, contextManager, DiagAPI.instance());
   };
-  ContextAPI2.prototype.active = function () {
+  ContextAPI2.prototype.active = function() {
     return this._getContextManager().active();
   };
-  ContextAPI2.prototype.with = function (context, fn, thisArg) {
+  ContextAPI2.prototype.with = function(context, fn, thisArg) {
     var _a15;
     var args2 = [];
     for (var _i = 3; _i < arguments.length; _i++) {
@@ -7408,20 +7389,20 @@ var ContextAPI = function () {
     }
     return (_a15 = this._getContextManager()).with.apply(_a15, __spreadArray([context, fn, thisArg], __read(args2), false));
   };
-  ContextAPI2.prototype.bind = function (context, target) {
+  ContextAPI2.prototype.bind = function(context, target) {
     return this._getContextManager().bind(context, target);
   };
-  ContextAPI2.prototype._getContextManager = function () {
+  ContextAPI2.prototype._getContextManager = function() {
     return getGlobal(API_NAME$1) || NOOP_CONTEXT_MANAGER;
   };
-  ContextAPI2.prototype.disable = function () {
+  ContextAPI2.prototype.disable = function() {
     this._getContextManager().disable();
     unregisterGlobal(API_NAME$1, DiagAPI.instance());
   };
   return ContextAPI2;
 }();
 var TraceFlags;
-(function (TraceFlags2) {
+(function(TraceFlags2) {
   TraceFlags2[TraceFlags2["NONE"] = 0] = "NONE";
   TraceFlags2[TraceFlags2["SAMPLED"] = 1] = "SAMPLED";
 })(TraceFlags || (TraceFlags = {}));
@@ -7432,43 +7413,43 @@ var INVALID_SPAN_CONTEXT = {
   spanId: INVALID_SPANID,
   traceFlags: TraceFlags.NONE
 };
-var NonRecordingSpan = function () {
+var NonRecordingSpan = function() {
   function NonRecordingSpan2(_spanContext) {
     if (_spanContext === void 0) {
       _spanContext = INVALID_SPAN_CONTEXT;
     }
     this._spanContext = _spanContext;
   }
-  NonRecordingSpan2.prototype.spanContext = function () {
+  NonRecordingSpan2.prototype.spanContext = function() {
     return this._spanContext;
   };
-  NonRecordingSpan2.prototype.setAttribute = function (_key, _value) {
+  NonRecordingSpan2.prototype.setAttribute = function(_key, _value) {
     return this;
   };
-  NonRecordingSpan2.prototype.setAttributes = function (_attributes) {
+  NonRecordingSpan2.prototype.setAttributes = function(_attributes) {
     return this;
   };
-  NonRecordingSpan2.prototype.addEvent = function (_name, _attributes) {
+  NonRecordingSpan2.prototype.addEvent = function(_name, _attributes) {
     return this;
   };
-  NonRecordingSpan2.prototype.addLink = function (_link) {
+  NonRecordingSpan2.prototype.addLink = function(_link) {
     return this;
   };
-  NonRecordingSpan2.prototype.addLinks = function (_links) {
+  NonRecordingSpan2.prototype.addLinks = function(_links) {
     return this;
   };
-  NonRecordingSpan2.prototype.setStatus = function (_status) {
+  NonRecordingSpan2.prototype.setStatus = function(_status) {
     return this;
   };
-  NonRecordingSpan2.prototype.updateName = function (_name) {
+  NonRecordingSpan2.prototype.updateName = function(_name) {
     return this;
   };
-  NonRecordingSpan2.prototype.end = function (_endTime) {
+  NonRecordingSpan2.prototype.end = function(_endTime) {
   };
-  NonRecordingSpan2.prototype.isRecording = function () {
+  NonRecordingSpan2.prototype.isRecording = function() {
     return false;
   };
-  NonRecordingSpan2.prototype.recordException = function (_exception, _time) {
+  NonRecordingSpan2.prototype.recordException = function(_exception, _time) {
   };
   return NonRecordingSpan2;
 }();
@@ -7507,10 +7488,10 @@ function wrapSpanContext(spanContext) {
   return new NonRecordingSpan(spanContext);
 }
 var contextApi = ContextAPI.getInstance();
-var NoopTracer = function () {
+var NoopTracer = function() {
   function NoopTracer2() {
   }
-  NoopTracer2.prototype.startSpan = function (name14, options2, context) {
+  NoopTracer2.prototype.startSpan = function(name14, options2, context) {
     if (context === void 0) {
       context = contextApi.active();
     }
@@ -7525,7 +7506,7 @@ var NoopTracer = function () {
       return new NonRecordingSpan();
     }
   };
-  NoopTracer2.prototype.startActiveSpan = function (name14, arg2, arg3, arg4) {
+  NoopTracer2.prototype.startActiveSpan = function(name14, arg2, arg3, arg4) {
     var opts;
     var ctx;
     var fn;
@@ -7552,21 +7533,21 @@ function isSpanContext(spanContext) {
   return typeof spanContext === "object" && typeof spanContext["spanId"] === "string" && typeof spanContext["traceId"] === "string" && typeof spanContext["traceFlags"] === "number";
 }
 var NOOP_TRACER = new NoopTracer();
-var ProxyTracer = function () {
+var ProxyTracer = function() {
   function ProxyTracer2(_provider, name14, version, options2) {
     this._provider = _provider;
     this.name = name14;
     this.version = version;
     this.options = options2;
   }
-  ProxyTracer2.prototype.startSpan = function (name14, options2, context) {
+  ProxyTracer2.prototype.startSpan = function(name14, options2, context) {
     return this._getTracer().startSpan(name14, options2, context);
   };
-  ProxyTracer2.prototype.startActiveSpan = function (_name, _options, _context, _fn) {
+  ProxyTracer2.prototype.startActiveSpan = function(_name, _options, _context, _fn) {
     var tracer = this._getTracer();
     return Reflect.apply(tracer.startActiveSpan, tracer, arguments);
   };
-  ProxyTracer2.prototype._getTracer = function () {
+  ProxyTracer2.prototype._getTracer = function() {
     if (this._delegate) {
       return this._delegate;
     }
@@ -7579,43 +7560,43 @@ var ProxyTracer = function () {
   };
   return ProxyTracer2;
 }();
-var NoopTracerProvider = function () {
+var NoopTracerProvider = function() {
   function NoopTracerProvider2() {
   }
-  NoopTracerProvider2.prototype.getTracer = function (_name, _version, _options) {
+  NoopTracerProvider2.prototype.getTracer = function(_name, _version, _options) {
     return new NoopTracer();
   };
   return NoopTracerProvider2;
 }();
 var NOOP_TRACER_PROVIDER = new NoopTracerProvider();
-var ProxyTracerProvider = function () {
+var ProxyTracerProvider = function() {
   function ProxyTracerProvider2() {
   }
-  ProxyTracerProvider2.prototype.getTracer = function (name14, version, options2) {
+  ProxyTracerProvider2.prototype.getTracer = function(name14, version, options2) {
     var _a15;
     return (_a15 = this.getDelegateTracer(name14, version, options2)) !== null && _a15 !== void 0 ? _a15 : new ProxyTracer(this, name14, version, options2);
   };
-  ProxyTracerProvider2.prototype.getDelegate = function () {
+  ProxyTracerProvider2.prototype.getDelegate = function() {
     var _a15;
     return (_a15 = this._delegate) !== null && _a15 !== void 0 ? _a15 : NOOP_TRACER_PROVIDER;
   };
-  ProxyTracerProvider2.prototype.setDelegate = function (delegate) {
+  ProxyTracerProvider2.prototype.setDelegate = function(delegate) {
     this._delegate = delegate;
   };
-  ProxyTracerProvider2.prototype.getDelegateTracer = function (name14, version, options2) {
+  ProxyTracerProvider2.prototype.getDelegateTracer = function(name14, version, options2) {
     var _a15;
     return (_a15 = this._delegate) === null || _a15 === void 0 ? void 0 : _a15.getTracer(name14, version, options2);
   };
   return ProxyTracerProvider2;
 }();
 var SpanStatusCode;
-(function (SpanStatusCode2) {
+(function(SpanStatusCode2) {
   SpanStatusCode2[SpanStatusCode2["UNSET"] = 0] = "UNSET";
   SpanStatusCode2[SpanStatusCode2["OK"] = 1] = "OK";
   SpanStatusCode2[SpanStatusCode2["ERROR"] = 2] = "ERROR";
 })(SpanStatusCode || (SpanStatusCode = {}));
 var API_NAME = "trace";
-var TraceAPI = function () {
+var TraceAPI = function() {
   function TraceAPI2() {
     this._proxyTracerProvider = new ProxyTracerProvider();
     this.wrapSpanContext = wrapSpanContext;
@@ -7627,26 +7608,26 @@ var TraceAPI = function () {
     this.setSpan = setSpan;
     this.setSpanContext = setSpanContext;
   }
-  TraceAPI2.getInstance = function () {
+  TraceAPI2.getInstance = function() {
     if (!this._instance) {
       this._instance = new TraceAPI2();
     }
     return this._instance;
   };
-  TraceAPI2.prototype.setGlobalTracerProvider = function (provider) {
+  TraceAPI2.prototype.setGlobalTracerProvider = function(provider) {
     var success = registerGlobal(API_NAME, this._proxyTracerProvider, DiagAPI.instance());
     if (success) {
       this._proxyTracerProvider.setDelegate(provider);
     }
     return success;
   };
-  TraceAPI2.prototype.getTracerProvider = function () {
+  TraceAPI2.prototype.getTracerProvider = function() {
     return getGlobal(API_NAME) || this._proxyTracerProvider;
   };
-  TraceAPI2.prototype.getTracer = function (name14, version) {
+  TraceAPI2.prototype.getTracer = function(name14, version) {
     return this.getTracerProvider().getTracer(name14, version);
   };
-  TraceAPI2.prototype.disable = function () {
+  TraceAPI2.prototype.disable = function() {
     unregisterGlobal(API_NAME, DiagAPI.instance());
     this._proxyTracerProvider = new ProxyTracerProvider();
   };
@@ -7666,7 +7647,7 @@ var marker = `vercel.ai.error.${name}`;
 var symbol = Symbol.for(marker);
 var _a;
 var RetryError = class extends AISDKError {
-  constructor ({
+  constructor({
     message,
     reason,
     errors
@@ -7933,7 +7914,7 @@ var marker2 = `vercel.ai.error.${name2}`;
 var symbol2 = Symbol.for(marker2);
 var _a2;
 var DownloadError = class extends AISDKError {
-  constructor ({
+  constructor({
     url,
     statusCode,
     statusText,
@@ -8015,7 +7996,7 @@ var marker3 = `vercel.ai.error.${name3}`;
 var symbol3 = Symbol.for(marker3);
 var _a3;
 var InvalidDataContentError = class extends AISDKError {
-  constructor ({
+  constructor({
     content,
     cause,
     message = `Invalid data content. Expected a base64 string, Uint8Array, ArrayBuffer, or Buffer, but got ${typeof content}.`
@@ -8101,7 +8082,7 @@ var marker4 = `vercel.ai.error.${name4}`;
 var symbol4 = Symbol.for(marker4);
 var _a4;
 var InvalidMessageRoleError = class extends AISDKError {
-  constructor ({
+  constructor({
     role,
     message = `Invalid message role: '${role}'. Must be one of: "system", "user", "assistant", "tool".`
   }) {
@@ -8333,7 +8314,7 @@ var marker5 = `vercel.ai.error.${name5}`;
 var symbol5 = Symbol.for(marker5);
 var _a5;
 var InvalidArgumentError = class extends AISDKError {
-  constructor ({
+  constructor({
     parameter,
     value,
     message
@@ -8583,12 +8564,12 @@ function detectPromptType(prompt2) {
 }
 function detectSingleMessageCharacteristics(message) {
   if (typeof message === "object" && message !== null && (message.role === "function" || // UI-only role
-    message.role === "data" || // UI-only role
-    "toolInvocations" in message || // UI-specific field
-    "experimental_attachments" in message)) {
+  message.role === "data" || // UI-only role
+  "toolInvocations" in message || // UI-specific field
+  "experimental_attachments" in message)) {
     return "has-ui-specific-parts";
   } else if (typeof message === "object" && message !== null && "content" in message && (Array.isArray(message.content) || // Core messages can have array content
-    "experimental_providerMetadata" in message)) {
+  "experimental_providerMetadata" in message)) {
     return "has-core-specific-parts";
   } else if (typeof message === "object" && message !== null && "role" in message && "content" in message && typeof message.content === "string" && ["system", "user", "assistant", "tool"].includes(message.role)) {
     return "message";
@@ -8676,7 +8657,7 @@ var marker6 = `vercel.ai.error.${name6}`;
 var symbol6 = Symbol.for(marker6);
 var _a6;
 var MessageConversionError = class extends AISDKError {
-  constructor ({
+  constructor({
     originalMessage,
     message
   }) {
@@ -8948,7 +8929,7 @@ var marker8 = `vercel.ai.error.${name8}`;
 var symbol8 = Symbol.for(marker8);
 var _a8;
 var InvalidToolArgumentsError = class extends AISDKError {
-  constructor ({
+  constructor({
     toolArgs,
     toolName,
     cause,
@@ -8990,7 +8971,7 @@ var marker9 = `vercel.ai.error.${name9}`;
 var symbol9 = Symbol.for(marker9);
 var _a9;
 var NoSuchToolError = class extends AISDKError {
-  constructor ({
+  constructor({
     toolName,
     availableTools = void 0,
     message = `Model tried to call unavailable tool '${toolName}'. ${availableTools === void 0 ? "No tools are available." : `Available tools: ${availableTools.join(", ")}.`}`
@@ -9350,7 +9331,7 @@ async function generateText({
         let nextStepType = "done";
         if (++stepCount < maxSteps) {
           if (continueSteps && currentModelResponse.finishReason === "length" && // only use continue when there are no tool calls:
-            currentToolCalls.length === 0) {
+          currentToolCalls.length === 0) {
             nextStepType = "continue";
           } else if (
             // there are tool calls:
@@ -9362,7 +9343,7 @@ async function generateText({
         }
         const originalText = (_b2 = currentModelResponse.text) != null ? _b2 : "";
         const stepTextLeadingWhitespaceTrimmed = stepType === "continue" && // only for continue steps
-          text.trimEnd() !== text ? originalText.trimStart() : originalText;
+        text.trimEnd() !== text ? originalText.trimStart() : originalText;
         const stepText = nextStepType === "continue" ? removeTextAfterLastWhitespace(stepTextLeadingWhitespaceTrimmed) : stepTextLeadingWhitespaceTrimmed;
         text = nextStepType === "continue" || stepType === "continue" ? text + stepText : stepText;
         if (stepType === "continue") {
@@ -9514,7 +9495,7 @@ async function executeTools({
   );
 }
 var DefaultGenerateTextResult = class {
-  constructor (options2) {
+  constructor(options2) {
     this.text = options2.text;
     this.toolCalls = options2.toolCalls;
     this.toolResults = options2.toolResults;
@@ -10059,7 +10040,7 @@ async function streamText({
   });
 }
 var DefaultStreamTextResult = class {
-  constructor ({
+  constructor({
     stream,
     warnings,
     rawResponse,
@@ -10270,7 +10251,7 @@ var DefaultStreamTextResult = class {
               let nextStepType = "done";
               if (currentStep + 1 < maxSteps) {
                 if (continueSteps && stepFinishReason === "length" && // only use continue when there are no tool calls:
-                  stepToolCalls.length === 0) {
+                stepToolCalls.length === 0) {
                   nextStepType = "continue";
                 } else if (
                   // there are tool calls:
@@ -10281,7 +10262,7 @@ var DefaultStreamTextResult = class {
                 }
               }
               if (continueSteps && chunkBuffer.length > 0 && (nextStepType !== "continue" || // when the next step is a regular step, publish the buffer
-                stepType === "continue" && !chunkTextPublished)) {
+              stepType === "continue" && !chunkTextPublished)) {
                 await publishTextChunk({
                   controller,
                   chunk: {
@@ -11064,7 +11045,7 @@ Ensure that the goal is to provide the most current, relevant, and useful inform
 class APIClientBase {
   token;
   baseURL = ENV.TELEGRAM_API_DOMAIN;
-  constructor (token, baseURL) {
+  constructor(token, baseURL) {
     this.token = token;
     if (baseURL) {
       this.baseURL = baseURL;
@@ -11484,9 +11465,9 @@ const sentMessageIds = /* @__PURE__ */ new WeakMap();
 function Log(value, context) {
   if (context.kind === "field") {
     const configIndex = 1;
-    return function (initialValue) {
+    return function(initialValue) {
       if (typeof initialValue === "function") {
-        return async function (...args2) {
+        return async function(...args2) {
           const config = args2[configIndex];
           const logs = getLogSingleton(config);
           const startTime2 = Date.now();
@@ -11529,7 +11510,7 @@ function Log(value, context) {
     };
   }
   if (context.kind === "method" && typeof value === "function") {
-    return async function (...args2) {
+    return async function(...args2) {
       const config = this.context.USER_CONFIG;
       const logs = getLogSingleton(config);
       const startTime2 = Date.now();
@@ -11844,7 +11825,7 @@ class MessageContext {
   message_thread_id = null;
   chatType;
   message;
-  constructor (message) {
+  constructor(message) {
     this.chat_id = message.chat.id;
     this.chatType = message.chat.type;
     this.message = message;
@@ -11866,7 +11847,7 @@ class MessageContext {
 class MessageSender {
   api;
   context;
-  constructor (token, context) {
+  constructor(token, context) {
     this.api = createTelegramBotAPI(token);
     this.context = context;
     this.sendRichText = this.sendRichText.bind(this);
@@ -12038,7 +12019,7 @@ class TelegraphSender {
     author_name: "A Cat",
     author_url: ENV.TELEGRAPH_AUTHOR_URL
   };
-  constructor (context, botName, telegraphAccessTokenKey) {
+  constructor(context, botName, telegraphAccessTokenKey) {
     this.context = context;
     this.telegraphAccessTokenKey = telegraphAccessTokenKey;
     if (botName) {
@@ -12140,7 +12121,7 @@ class ChosenInlineContext {
   inline_message_id;
   query;
   parse_mode = null;
-  constructor (result2) {
+  constructor(result2) {
     this.result_id = result2.result_id;
     this.from = result2.from;
     this.inline_message_id = result2.inline_message_id;
@@ -12150,7 +12131,7 @@ class ChosenInlineContext {
 class ChosenInlineSender {
   api;
   context;
-  constructor (token, context) {
+  constructor(token, context) {
     this.api = createTelegramBotAPI(token);
     this.context = context;
   }
@@ -12583,7 +12564,7 @@ function prepareTools$5(mode) {
   }
 }
 var AnthropicMessagesLanguageModel = class {
-  constructor (modelId, settings, config) {
+  constructor(modelId, settings, config) {
     this.specificationVersion = "v1";
     this.defaultObjectGenerationMode = "tool";
     this.supportsImageUrls = false;
@@ -13095,7 +13076,7 @@ function createAnthropic(options2 = {}) {
     headers: getHeaders,
     fetch: options2.fetch
   });
-  const provider = function (modelId, settings) {
+  const provider = function(modelId, settings) {
     if (new.target) {
       throw new Error(
         "The Anthropic model function cannot be called with the new keyword."
@@ -13264,7 +13245,7 @@ function prepareTools$4(mode) {
   }
 }
 var CohereChatLanguageModel = class {
-  constructor (modelId, settings, config) {
+  constructor(modelId, settings, config) {
     this.specificationVersion = "v1";
     this.defaultObjectGenerationMode = void 0;
     this.modelId = modelId;
@@ -13649,7 +13630,7 @@ var cohereChatChunkSchema = z.discriminatedUnion("type", [
   })
 ]);
 var CohereEmbeddingModel = class {
-  constructor (modelId, settings, config) {
+  constructor(modelId, settings, config) {
     this.specificationVersion = "v1";
     this.maxEmbeddingsPerCall = 96;
     this.supportsParallelCalls = true;
@@ -13735,7 +13716,7 @@ function createCohere(options2 = {}) {
     headers: getHeaders,
     fetch: options2.fetch
   });
-  const provider = function (modelId, settings) {
+  const provider = function(modelId, settings) {
     if (new.target) {
       throw new Error(
         "The Cohere model function cannot be called with the new keyword."
@@ -14037,7 +14018,7 @@ function mapGoogleGenerativeAIFinishReason({
   }
 }
 var GoogleGenerativeAILanguageModel = class {
-  constructor (modelId, settings, config) {
+  constructor(modelId, settings, config) {
     this.specificationVersion = "v1";
     this.defaultObjectGenerationMode = "json";
     this.supportsImageUrls = false;
@@ -14085,8 +14066,8 @@ var GoogleGenerativeAILanguageModel = class {
       // response format:
       responseMimeType: (responseFormat == null ? void 0 : responseFormat.type) === "json" ? "application/json" : void 0,
       responseSchema: (responseFormat == null ? void 0 : responseFormat.type) === "json" && responseFormat.schema != null && // Google GenAI does not support all OpenAPI Schema features,
-        // so this is needed as an escape hatch:
-        this.supportsObjectGeneration ? convertJSONSchemaToOpenAPISchema(responseFormat.schema) : void 0
+      // so this is needed as an escape hatch:
+      this.supportsObjectGeneration ? convertJSONSchemaToOpenAPISchema(responseFormat.schema) : void 0
     };
     const { contents, systemInstruction } = convertToGoogleGenerativeAIMessages(prompt2);
     switch (type) {
@@ -14112,8 +14093,8 @@ var GoogleGenerativeAILanguageModel = class {
               ...generationConfig,
               responseMimeType: "application/json",
               responseSchema: mode.schema != null && // Google GenAI does not support all OpenAPI Schema features,
-                // so this is needed as an escape hatch:
-                this.supportsObjectGeneration ? convertJSONSchemaToOpenAPISchema(mode.schema) : void 0
+              // so this is needed as an escape hatch:
+              this.supportsObjectGeneration ? convertJSONSchemaToOpenAPISchema(mode.schema) : void 0
             },
             contents,
             systemInstruction,
@@ -14348,7 +14329,7 @@ var chunkSchema = z.object({
   }).optional()
 });
 var GoogleGenerativeAIEmbeddingModel = class {
-  constructor (modelId, settings, config) {
+  constructor(modelId, settings, config) {
     this.specificationVersion = "v1";
     this.modelId = modelId;
     this.settings = settings;
@@ -14430,7 +14411,7 @@ function createGoogleGenerativeAI(options2 = {}) {
     headers: getHeaders,
     fetch: options2.fetch
   });
-  const provider = function (modelId, settings) {
+  const provider = function(modelId, settings) {
     if (new.target) {
       throw new Error(
         "The Google Generative AI model function cannot be called with the new keyword."
@@ -14736,7 +14717,7 @@ function prepareTools$2({
   }
 }
 var OpenAIChatLanguageModel$1 = class OpenAIChatLanguageModel2 {
-  constructor (modelId, settings, config) {
+  constructor(modelId, settings, config) {
     this.specificationVersion = "v1";
     this.modelId = modelId;
     this.settings = settings;
@@ -15405,7 +15386,7 @@ function mapOpenAICompletionLogProbs$1(logprobs) {
   }));
 }
 var OpenAICompletionLanguageModel$1 = class OpenAICompletionLanguageModel2 {
-  constructor (modelId, settings, config) {
+  constructor(modelId, settings, config) {
     this.specificationVersion = "v1";
     this.defaultObjectGenerationMode = void 0;
     this.modelId = modelId;
@@ -15669,7 +15650,7 @@ var openaiCompletionChunkSchema$1 = z.union([
   openAIErrorDataSchema$1
 ]);
 var OpenAIEmbeddingModel$1 = class OpenAIEmbeddingModel2 {
-  constructor (modelId, settings, config) {
+  constructor(modelId, settings, config) {
     this.specificationVersion = "v1";
     this.modelId = modelId;
     this.settings = settings;
@@ -15779,7 +15760,7 @@ function createOpenAI(options2 = {}) {
     }
     return createChatModel(modelId, settings);
   };
-  const provider = function (modelId, settings) {
+  const provider = function(modelId, settings) {
     return createLanguageModel(modelId, settings);
   };
   provider.languageModel = createLanguageModel;
@@ -16364,7 +16345,7 @@ class Stream {
   controller;
   decoder;
   parser;
-  constructor (response, controller, parser = null) {
+  constructor(response, controller, parser = null) {
     this.response = response;
     this.controller = controller;
     this.decoder = new SSEDecoder();
@@ -16427,7 +16408,7 @@ class Stream {
 class SSEDecoder {
   event;
   data;
-  constructor () {
+  constructor() {
     this.event = null;
     this.data = [];
   }
@@ -16488,7 +16469,7 @@ class LineDecoder {
   textDecoder;
   static NEWLINE_CHARS = /* @__PURE__ */ new Set(["\n", "\r"]);
   static NEWLINE_REGEXP = /\r\n|[\n\r]/g;
-  constructor () {
+  constructor() {
     this.buffer = [];
     this.trailingCR = false;
   }
@@ -16559,16 +16540,16 @@ class LineDecoder {
 }
 function fixOpenAICompatibleOptions(options2) {
   options2 = options2 || {};
-  options2.streamBuilder = options2.streamBuilder || function (r, c) {
+  options2.streamBuilder = options2.streamBuilder || function(r, c) {
     return new Stream(r, c);
   };
-  options2.contentExtractor = options2.contentExtractor || function (d) {
+  options2.contentExtractor = options2.contentExtractor || function(d) {
     return d?.choices?.[0]?.delta?.content;
   };
-  options2.fullContentExtractor = options2.fullContentExtractor || function (d) {
+  options2.fullContentExtractor = options2.fullContentExtractor || function(d) {
     return d.choices?.[0]?.message.content;
   };
-  options2.functionCallExtractor = options2.functionCallExtractor || function (d, call_list) {
+  options2.functionCallExtractor = options2.functionCallExtractor || function(d, call_list) {
     const chunck = d?.choices?.[0]?.delta?.tool_calls;
     if (!Array.isArray(chunck))
       return;
@@ -16583,10 +16564,10 @@ function fixOpenAICompatibleOptions(options2) {
       }
     }
   };
-  options2.fullFunctionCallExtractor = options2.fullFunctionCallExtractor || function (d) {
+  options2.fullFunctionCallExtractor = options2.fullFunctionCallExtractor || function(d) {
     return d?.choices?.[0]?.message?.tool_calls;
   };
-  options2.errorExtractor = options2.errorExtractor || function (d) {
+  options2.errorExtractor = options2.errorExtractor || function(d) {
     return d.error?.message;
   };
   return options2;
@@ -17049,7 +17030,7 @@ function prepareTools$1({
   }
 }
 var OpenAIChatLanguageModel = class {
-  constructor (modelId, settings, config) {
+  constructor(modelId, settings, config) {
     this.specificationVersion = "v1";
     this.modelId = modelId;
     this.settings = settings;
@@ -17718,7 +17699,7 @@ function mapOpenAICompletionLogProbs(logprobs) {
   }));
 }
 var OpenAICompletionLanguageModel = class {
-  constructor (modelId, settings, config) {
+  constructor(modelId, settings, config) {
     this.specificationVersion = "v1";
     this.defaultObjectGenerationMode = void 0;
     this.modelId = modelId;
@@ -17982,7 +17963,7 @@ var openaiCompletionChunkSchema = z.union([
   openAIErrorDataSchema
 ]);
 var OpenAIEmbeddingModel = class {
-  constructor (modelId, settings, config) {
+  constructor(modelId, settings, config) {
     this.specificationVersion = "v1";
     this.modelId = modelId;
     this.settings = settings;
@@ -18079,7 +18060,7 @@ function createAzure(options2 = {}) {
     url,
     fetch: options2.fetch
   });
-  const provider = function (deploymentId, settings) {
+  const provider = function(deploymentId, settings) {
     if (new.target) {
       throw new Error(
         "The Azure OpenAI model function cannot be called with the new keyword."
@@ -18373,7 +18354,7 @@ function prepareTools(mode) {
   }
 }
 var MistralChatLanguageModel = class {
-  constructor (modelId, settings, config) {
+  constructor(modelId, settings, config) {
     this.specificationVersion = "v1";
     this.defaultObjectGenerationMode = "json";
     this.supportsImageUrls = false;
@@ -18670,7 +18651,7 @@ var mistralChatChunkSchema = z.object({
   }).nullish()
 });
 var MistralEmbeddingModel = class {
-  constructor (modelId, settings, config) {
+  constructor(modelId, settings, config) {
     this.specificationVersion = "v1";
     this.modelId = modelId;
     this.settings = settings;
@@ -18749,7 +18730,7 @@ function createMistral(options2 = {}) {
     headers: getHeaders,
     fetch: options2.fetch
   });
-  const provider = function (modelId, settings) {
+  const provider = function(modelId, settings) {
     if (new.target) {
       throw new Error(
         "The Mistral model function cannot be called with the new keyword."
@@ -18819,14 +18800,37 @@ class OpenAI extends OpenAIBase {
     });
     const userMessage = params.messages.at(-1);
     const languageModelV1 = provider.languageModel(this.model(context, userMessage), void 0);
+    const { messages, newOnStream } = this.extraHandle(languageModelV1, params.messages, context, onStream);
     return requestChatCompletionsV2(await warpLLMParams({
       model: languageModelV1,
-      messages: params.messages
-    }, context), onStream);
+      messages
+    }, context), newOnStream);
+  };
+  extraHandle = (model, messages, context, onStream) => {
+    if (Object.keys(ENV.DROPS_OPENAI_PARAMS).length > 0) {
+      for (const [models, params] of Object.entries(ENV.DROPS_OPENAI_PARAMS)) {
+        if (models.split(",").includes(model.modelId)) {
+          params.includes("stream") && (onStream = null);
+          break;
+        }
+      }
+    }
+    if (ENV.COVER_MESSAGE_ROLE) {
+      for (const [models, roles] of Object.entries(ENV.COVER_MESSAGE_ROLE)) {
+        const [oldRole, newRole] = roles.split(":");
+        if (models.split(",").includes(model.modelId)) {
+          messages = messages.map((m) => {
+            m.role = m.role === oldRole ? newRole : m.role;
+            return m;
+          });
+        }
+      }
+    }
+    return { messages, onStream };
   };
 }
 class Dalle extends (_a10 = OpenAIBase, _request_dec = [Log], _a10) {
-  constructor () {
+  constructor() {
     super(...arguments);
     __publicField(this, "modelKey", "DALL_E_MODEL");
     __publicField(this, "enable", (context) => {
@@ -18870,7 +18874,7 @@ _init = __decoratorStart(_a10);
 __decorateElement(_init, 5, "request", _request_dec, Dalle);
 __decoratorMetadata(_init, Dalle);
 class Transcription extends (_b = OpenAIBase, _request_dec2 = [Log], _b) {
-  constructor () {
+  constructor() {
     super(...arguments);
     __publicField(this, "modelKey", "OPENAI_STT_MODEL");
     __publicField(this, "enable", (context) => {
@@ -19037,13 +19041,13 @@ class WorkersChat extends WorkerBase {
       stream: onStream !== null
     };
     const options2 = {};
-    options2.contentExtractor = function (data) {
+    options2.contentExtractor = function(data) {
       return data?.response;
     };
-    options2.fullContentExtractor = function (data) {
+    options2.fullContentExtractor = function(data) {
       return data?.result?.response;
     };
-    options2.errorExtractor = function (data) {
+    options2.errorExtractor = function(data) {
       return data?.errors?.[0]?.message;
     };
     const text = await requestChatCompletions(url, header, body, onStream, null, options2);
@@ -19056,7 +19060,7 @@ class WorkersChat extends WorkerBase {
   };
 }
 class WorkersImage extends (_c = WorkerBase, _request_dec3 = [Log], _c) {
-  constructor () {
+  constructor() {
     super(...arguments);
     __publicField(this, "modelKey", "WORKERS_IMAGE_MODEL");
     __publicField(this, "model", (ctx) => {
@@ -19161,7 +19165,6 @@ function customInfo(config) {
     MAPPING_VALUE: config.MAPPING_VALUE,
     USE_TOOLS: config.USE_TOOLS,
     TOOL_MODEL: config.TOOL_MODEL,
-    FUNCTION_REPLY_ASAP: config.FUNCTION_REPLY_ASAP,
     VERTEX_SEARCH_GROUNDING: config.VERTEX_SEARCH_GROUNDING,
     FUNC_LOOP_TIMES: ENV.FUNC_LOOP_TIMES,
     FUNC_CALL_TIMES: ENV.CON_EXEC_FUN_NUM,
@@ -19180,12 +19183,13 @@ async function warpLLMParams(params, context) {
   if (tool2 && tool2.activeTools.length === 0) {
     tool2 = void 0;
   }
-  if (params.messages[0].role === "system") {
-    params.messages[0].content += tool2?.tools_prompt || "";
-  }
   let activeTools = tool2?.activeTools;
-  if (params.model.provider === "vertex" && context.VERTEX_SEARCH_GROUNDING) {
+  if (params.model.provider === "google-vertex" && context.VERTEX_SEARCH_GROUNDING) {
     activeTools = void 0;
+    tool2 = void 0;
+  }
+  if (params.messages[0].role === "system" && activeTools) {
+    params.messages[0].content += tool2?.tools_prompt || "";
   }
   return {
     model: params.model,
@@ -19882,6 +19886,9 @@ ${detailSet}
     if (!(key in context.USER_CONFIG)) {
       return sender.sendPlainText(`Key ${key} not found`);
     }
+    if (typeof context.USER_CONFIG[key] === "boolean") {
+      mappedValue = typeof mappedValue === "boolean" ? mappedValue : mappedValue === "true";
+    }
     context.USER_CONFIG[key] = mappedValue;
     if (!context.USER_CONFIG.DEFINE_KEYS.includes(key)) {
       context.USER_CONFIG.DEFINE_KEYS.push(key);
@@ -20353,7 +20360,7 @@ class ShareContext {
   scheduleDeteleKey = "schedule_detele_message";
   storeMessageKey;
   isForwarding = false;
-  constructor (token, message) {
+  constructor(token, message) {
     const botId = Number.parseInt(token.split(":")[0]);
     const telegramIndex = ENV.TELEGRAM_AVAILABLE_TOKENS.indexOf(token);
     if (telegramIndex === -1) {
@@ -20411,7 +20418,7 @@ class MiddleContext {
 class WorkerContextBase {
   SHARE_CONTEXT;
   MIDDEL_CONTEXT = new MiddleContext();
-  constructor (token, message) {
+  constructor(token, message) {
     this.SHARE_CONTEXT = new ShareContext(token, message);
   }
 }
@@ -20419,7 +20426,7 @@ class WorkerContext {
   USER_CONFIG;
   SHARE_CONTEXT;
   MIDDEL_CONTEXT;
-  constructor (USER_CONFIG, SHARE_CONTEXT, MIDDEL_CONTEXT) {
+  constructor(USER_CONFIG, SHARE_CONTEXT, MIDDEL_CONTEXT) {
     this.USER_CONFIG = USER_CONFIG;
     this.SHARE_CONTEXT = SHARE_CONTEXT;
     this.MIDDEL_CONTEXT = MIDDEL_CONTEXT;
@@ -20441,7 +20448,7 @@ class CallbackQueryContext {
   from;
   USER_CONFIG;
   SHARE_CONTEXT;
-  constructor (callbackQuery, workContext) {
+  constructor(callbackQuery, workContext) {
     this.data = callbackQuery.data;
     this.query_id = callbackQuery.id;
     this.from = callbackQuery.from;
@@ -20455,7 +20462,7 @@ class InlineQueryContext {
   from_id;
   chat_type;
   query;
-  constructor (token, inlineQuery) {
+  constructor(token, inlineQuery) {
     this.token = token;
     this.query_id = inlineQuery.id;
     this.from_id = inlineQuery.from.id;
@@ -20467,7 +20474,7 @@ class ChosenInlineWorkerContext {
   USER_CONFIG;
   botToken;
   MIDDEL_CONTEXT;
-  constructor (token, USER_CONFIG) {
+  constructor(token, USER_CONFIG) {
     this.USER_CONFIG = USER_CONFIG;
     this.botToken = token;
     this.MIDDEL_CONTEXT = {
@@ -20522,7 +20529,6 @@ function checkMention(content, entities, botName, botId) {
     content
   };
 }
-
 function SubstituteWords(message) {
   const oldTrigger = ENV.CHAT_MESSAGE_TRIGGER;
   if (Object.keys(oldTrigger).length > 0) {
@@ -20535,14 +20541,15 @@ function SubstituteWords(message) {
       return false;
     }
   }
+  const isGroup = isTelegramChatTypeGroup(message.chat.type);
   if (!ENV.CHAT_TRIGGER_PERFIX || !(message.text || message.caption)?.startsWith(ENV.CHAT_TRIGGER_PERFIX)) {
-    if (!isTelegramChatTypeGroup(message.chat.type)) {
+    if (isGroup) {
       return false;
     }
   }
   const replacer = ENV.MESSAGE_REPLACER;
   let replacedString = "";
-  let text = (message.text || message.caption || "").substring(ENV.CHAT_TRIGGER_PERFIX.length);
+  let text = (message.text || message.caption || "").substring(isGroup ? ENV.CHAT_TRIGGER_PERFIX.length : 0).trim();
   do {
     const triggerKey = Object.keys(replacer).find(
       (key) => text.startsWith(`${key} `)
@@ -20720,6 +20727,10 @@ class WhiteListFilter {
 }
 class MessageFilter {
   handle = async (message, context) => {
+    if (ENV.IGNORE_TEXT_PERFIX && (message.text || message.caption || "").startsWith(ENV.IGNORE_TEXT_PERFIX)) {
+      log.info(`[IGNORE MESSAGE] Ignore message`);
+      return new Response("success", { status: 200 });
+    }
     const extractMessageData = extractMessage(message, context.SHARE_CONTEXT.botId);
     if (extractMessageData === null) {
       throw new Error("Not supported message type");
@@ -21228,7 +21239,7 @@ class Router {
   routes;
   base;
   errorHandler = async (req, error) => new Response(errorToString(error), { status: 500 });
-  constructor ({ base = "", routes = [], ...other } = {}) {
+  constructor({ base = "", routes = [], ...other } = {}) {
     this.routes = routes;
     this.base = base;
     Object.assign(this, other);
@@ -21406,7 +21417,7 @@ function createRouter() {
 class UpstashRedis {
   baseUrl;
   token;
-  constructor (baseUrl, token) {
+  constructor(baseUrl, token) {
     this.baseUrl = baseUrl;
     this.token = token;
   }
