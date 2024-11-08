@@ -66,13 +66,9 @@ export async function loadHistory(key: string): Promise<HistoryItem[]> {
         // 裁剪开始的tool call 以避免报错
         let validStart = 0;
         for (const h of history) {
-            if (h.role === 'assistant' && Array.isArray(h.content) && h.content.length > 0) {
-                if (h.content[0].type === 'tool-call') {
-                    validStart++;
-                    continue;
-                } else {
-                    break;
-                }
+            if (h.role === 'tool') {
+                validStart++;
+                continue;
             }
             break;
         }

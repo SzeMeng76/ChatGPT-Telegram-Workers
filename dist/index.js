@@ -400,8 +400,8 @@ const ENV_KEY_MAPPER = {
   WORKERS_AI_MODEL: "WORKERS_CHAT_MODEL"
 };
 class Environment extends EnvironmentConfig {
-  BUILD_TIMESTAMP = 1731083991;
-  BUILD_VERSION = "662b62f";
+  BUILD_TIMESTAMP = 1731085485;
+  BUILD_VERSION = "3ce0167";
   I18N = loadI18n();
   PLUGINS_ENV = {};
   USER_CONFIG = createAgentUserConfig();
@@ -15826,13 +15826,9 @@ async function loadHistory(key) {
     history = trimHistory(history, 0, ENV.MAX_HISTORY_LENGTH, ENV.MAX_TOKEN_LENGTH);
     let validStart = 0;
     for (const h of history) {
-      if (h.role === "assistant" && Array.isArray(h.content) && h.content.length > 0) {
-        if (h.content[0].type === "tool-call") {
-          validStart++;
-          continue;
-        } else {
-          break;
-        }
+      if (h.role === "tool") {
+        validStart++;
+        continue;
       }
       break;
     }
