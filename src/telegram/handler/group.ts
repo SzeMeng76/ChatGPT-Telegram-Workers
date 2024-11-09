@@ -68,7 +68,7 @@ export function SubstituteWords(message: Telegram.Message): boolean {
             return false;
         }
     }
-    const replacer = ENV.MESSAGE_REPLACER as Record<string, string>;
+    const replacer = ENV.MESSAGE_REPLACER;
     let replacedString = '';
     let text = (message.text || message.caption || '').substring(isGroup ? ENV.CHAT_TRIGGER_PERFIX.length : 0).trim();
 
@@ -83,7 +83,7 @@ export function SubstituteWords(message: Telegram.Message): boolean {
             break;
         }
     } while (true);
-    replacedString && (message.text ? (message.text = replacedString + text) : (message.caption = replacedString + text));
+    message.text ? (message.text = replacedString + text) : (message.caption = replacedString + text);
     return true;
 }
 

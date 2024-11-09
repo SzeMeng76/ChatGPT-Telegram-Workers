@@ -400,8 +400,8 @@ const ENV_KEY_MAPPER = {
   WORKERS_AI_MODEL: "WORKERS_CHAT_MODEL"
 };
 class Environment extends EnvironmentConfig {
-  BUILD_TIMESTAMP = 1731089913;
-  BUILD_VERSION = "a04ea7b";
+  BUILD_TIMESTAMP = 1731129332;
+  BUILD_VERSION = "0dd7212";
   I18N = loadI18n();
   PLUGINS_ENV = {};
   USER_CONFIG = createAgentUserConfig();
@@ -20658,7 +20658,7 @@ function SubstituteWords(message) {
       break;
     }
   } while (true);
-  replacedString && (message.text ? message.text = replacedString + text : message.caption = replacedString + text);
+  message.text ? message.text = replacedString + text : message.caption = replacedString + text;
   return true;
 }
 class GroupMention {
