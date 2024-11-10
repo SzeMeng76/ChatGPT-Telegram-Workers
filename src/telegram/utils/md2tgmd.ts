@@ -75,7 +75,7 @@ function handleEscape(text: string, type: string = 'text'): string {
             .replace(/\\_(\S|\S.*?\S)\\_/g, '_$1_') // italic
             .replace(/\\~(\S|\S.*?\S)\\~/g, '~$1~') // strikethrough
             .replace(/\\\|\\\|(\S|\S.*?\S)\\\|\\\|/g, '||$1||') // spoiler
-            .replace(/\\\[([^\]]+)\]\\((.+?)\\)/g, '[$1]($2)') // url
+            .replace(/\\\[([^\]]+)\\\]\\\((.+?)\\\)/g, '[$1]($2)') // url
             .replace(/\\`(.*?)\\`/g, '`$1`') // inline code
             .replace(/^(\s*)\\(>.+\s*)$/gm, '$1$2') // >
             .replace(/^(\s*)\\-\s+(.+)$/gm, '$1• $2') // -

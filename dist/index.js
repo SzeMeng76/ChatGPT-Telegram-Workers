@@ -400,8 +400,8 @@ const ENV_KEY_MAPPER = {
   WORKERS_AI_MODEL: "WORKERS_CHAT_MODEL"
 };
 class Environment extends EnvironmentConfig {
-  BUILD_TIMESTAMP = 1731221435;
-  BUILD_VERSION = "9cea301";
+  BUILD_TIMESTAMP = 1731223221;
+  BUILD_VERSION = "9904678";
   I18N = loadI18n();
   PLUGINS_ENV = {};
   USER_CONFIG = createAgentUserConfig();
@@ -11832,7 +11832,7 @@ function handleEscape(text, type = "text") {
   }
   text = text.replace(/\\[*_~|`\\()[\]{}>#+\-=.!]/g, (match) => escapedChars[match]);
   if (type === "text") {
-    text = text.replace(escapeChars, "\\$1").replace(/\\\*\\\*(\S|\S.*?\S)\\\*\\\*/g, "*$1*").replace(/\\_\\_(\S|\S.*?\S)\\_\\_/g, "__$1__").replace(/\\_(\S|\S.*?\S)\\_/g, "_$1_").replace(/\\~(\S|\S.*?\S)\\~/g, "~$1~").replace(/\\\|\\\|(\S|\S.*?\S)\\\|\\\|/g, "||$1||").replace(/\\\[([^\]]+)\]\\((.+?)\\)/g, "[$1]($2)").replace(/\\`(.*?)\\`/g, "`$1`").replace(/^(\s*)\\(>.+\s*)$/gm, "$1$2").replace(/^(\s*)\\-\s+(.+)$/gm, "$1• $2").replace(/^((\\#){1,3}\s)(.+)/gm, "$1*$3*");
+    text = text.replace(escapeChars, "\\$1").replace(/\\\*\\\*(\S|\S.*?\S)\\\*\\\*/g, "*$1*").replace(/\\_\\_(\S|\S.*?\S)\\_\\_/g, "__$1__").replace(/\\_(\S|\S.*?\S)\\_/g, "_$1_").replace(/\\~(\S|\S.*?\S)\\~/g, "~$1~").replace(/\\\|\\\|(\S|\S.*?\S)\\\|\\\|/g, "||$1||").replace(/\\\[([^\]]+)\\\]\\\((.+?)\\\)/g, "[$1]($2)").replace(/\\`(.*?)\\`/g, "`$1`").replace(/^(\s*)\\(>.+\s*)$/gm, "$1$2").replace(/^(\s*)\\-\s+(.+)$/gm, "$1• $2").replace(/^((\\#){1,3}\s)(.+)/gm, "$1*$3*");
   } else {
     const codeBlank = text.length - text.trimStart().length;
     if (codeBlank > 0) {
