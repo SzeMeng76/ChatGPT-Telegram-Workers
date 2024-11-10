@@ -195,6 +195,8 @@ export async function requestChatCompletionsV2(params: { model: LanguageModelV1;
             maxSteps: 3,
             maxRetries: 0,
             temperature: (params.activeTools?.length || 0) > 0 ? 0.1 : 1,
+            tools: params.tools,
+            activeTools: params.activeTools,
             onStepFinish: middleware.onStepFinish as (data: StepResult<any>) => void,
         };
         if (onStream !== null) {

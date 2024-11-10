@@ -401,8 +401,8 @@ const ENV_KEY_MAPPER = {
   WORKERS_AI_MODEL: "WORKERS_CHAT_MODEL"
 };
 class Environment extends EnvironmentConfig {
-  BUILD_TIMESTAMP = 1731249631;
-  BUILD_VERSION = "77a9802";
+  BUILD_TIMESTAMP = 1731250885;
+  BUILD_VERSION = "f9960eb";
   I18N = loadI18n();
   PLUGINS_ENV = {};
   USER_CONFIG = createAgentUserConfig();
@@ -16988,6 +16988,8 @@ async function requestChatCompletionsV2(params, onStream, onResult = null) {
       maxSteps: 3,
       maxRetries: 0,
       temperature: (params.activeTools?.length || 0) > 0 ? 0.1 : 1,
+      tools: params.tools,
+      activeTools: params.activeTools,
       onStepFinish: middleware.onStepFinish
     };
     if (onStream !== null) {
