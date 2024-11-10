@@ -57,7 +57,8 @@ export function escape(text: string): string {
     }
     const regexp = /^LOGSTART\s(.*?)LOGEND/s;
     return result.join('\n')
-        .replace(regexp, '**$1||')
+        // extra \n to avoid markdown render error
+        .replace(regexp, '**$1||\n')
         .replace(new RegExp(Object.values(escapedChars).join('|'), 'g'), match => escapedCharsReverseMap.get(match) ?? match);
 }
 
