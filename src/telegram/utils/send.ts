@@ -112,19 +112,12 @@ export class MessageSender {
         };
     }
 
-    private renderMessage(parse_mode: Telegram.ParseMode | null, message: string): string {
-        if (parse_mode === 'MarkdownV2') {
-            return escape(message);
-        }
-        return message;
-    }
-
     private async sendLongMessage(message: string, context: MessageContext): Promise<Response> {
         const chatContext = { ...context };
         const limit = 4096;
         if (message.length <= limit) {
             // 原始消息长度小于限制，直接使用当前parse_mode发送
-            const resp = await this.sendMessage(this.renderMessage(context.parse_mode, message), chatContext);
+            const resp = await this.sendMessage(renderMessage(context.parse_mode, message), chatContext);
             if (resp.status === 200) {
                 // 发送成功，直接返回
                 return resp;
@@ -178,7 +171,7 @@ export class MessageSender {
         const params: Telegram.SendPhotoParams = {
             chat_id: this.context.chat_id,
             photo,
-            ...(caption ? { caption: this.renderMessage(parse_mode || null, caption) } : {}),
+            ...(caption ? { caption: renderMessage(parse_mode || null, caption) } : {}),
             parse_mode,
         };
         if (this.context.reply_to_message_id) {
@@ -462,7 +455,7 @@ export class ChosenInlineSender {
     editMessageText(text: string, parse_mode?: Telegram.ParseMode): Promise<Response> {
         return this.api.editMessageText({
             inline_message_id: this.context.inline_message_id,
-            text: this.renderMessage(parse_mode || null, text),
+            text: renderMessage(parse_mode || null, text),
             parse_mode,
             link_preview_options: {
                 is_disabled: ENV.DISABLE_WEB_PREVIEW,
@@ -476,15 +469,15 @@ export class ChosenInlineSender {
             media: {
                 type,
                 media,
-                ...(caption ? { caption: this.renderMessage(parse_mode || null, caption) } : {}),
+                ...(caption ? { caption: renderMessage(parse_mode || null, caption) } : {}),
             },
         });
     }
+}
 
-    private renderMessage(parse_mode: Telegram.ParseMode | null, message: string): string {
-        if (parse_mode === 'MarkdownV2') {
-            return escape(message);
-        }
-        return message;
+function renderMessage(parse_mode: Telegram.ParseMode | null, message: string): string {
+    if (parse_mode === 'MarkdownV2') {
+        return escape(message);
     }
+    return message;
 }

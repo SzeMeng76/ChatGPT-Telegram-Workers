@@ -197,6 +197,8 @@ export class OpenAIConfig {
     OPENAI_VISION_MODEL = 'gpt-4o-mini';
     // OpenAI TTS Model
     OPENAI_TTS_MODEL = 'tts-1';
+    // OpenAI need transform model
+    OPENAI_NEED_TRANSFORM_MODEL: string[] = ['o1-mini-all', 'o1-mini-preview-all'];
 }
 
 // -- DALLE 配置 --

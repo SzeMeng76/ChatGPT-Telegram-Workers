@@ -1,4 +1,4 @@
-import type { CoreMessage, CoreUserMessage, LanguageModelV1 } from 'ai';
+import type { CoreMessage, CoreUserMessage } from 'ai';
 import type { UnionData } from '../telegram/utils/utils';
 import type { AudioAgent, ChatAgent, ChatStreamTextHandler, ImageAgent, ImageResult, LLMChatParams, LLMChatRequestParams, ResponseMessage } from './types';
 import { createOpenAI } from '@ai-sdk/openai';
@@ -23,6 +23,7 @@ class OpenAIBase {
 
 export class OpenAI extends OpenAIBase implements ChatAgent {
     readonly modelKey = 'OPENAI_CHAT_MODEL';
+    static readonly transformModelPerfix = 'TRANSFROM-';
 
     readonly enable = (context: AgentUserConfig): boolean => {
         return context.OPENAI_API_KEY.length > 0;
@@ -30,6 +31,13 @@ export class OpenAI extends OpenAIBase implements ChatAgent {
 
     readonly model = (ctx: AgentUserConfig, params?: LLMChatRequestParams): string => {
         return Array.isArray(params?.content) ? ctx.OPENAI_VISION_MODEL : ctx.OPENAI_CHAT_MODEL;
+    };
+
+    readonly transformModel = (model: string, context: AgentUserConfig): string => {
+        if (context.OPENAI_NEED_TRANSFORM_MODEL.includes(model)) {
+            return `${OpenAI.transformModelPerfix}${model}`;
+        }
+        return model;
     };
 
     // 仅文本对话使用该地址
@@ -45,11 +53,13 @@ export class OpenAI extends OpenAIBase implements ChatAgent {
             baseURL: context.OPENAI_API_BASE,
             apiKey: this.apikey(context),
             compatibility: 'strict',
+            fetch: this.fetch,
         });
 
         const userMessage = params.messages.at(-1) as CoreUserMessage;
-        const languageModelV1 = provider.languageModel(this.model(context, userMessage), undefined);
-        const { messages, onStream: newOnStream } = this.extraHandle(languageModelV1, params.messages, context, onStream);
+        const originalModel = this.model(context, userMessage);
+        const languageModelV1 = provider.languageModel(this.transformModel(originalModel, context), undefined);
+        const { messages, onStream: newOnStream } = this.extraHandle(originalModel, params.messages, context, onStream);
 
         return requestChatCompletionsV2(await warpLLMParams({
             model: languageModelV1,
@@ -57,10 +67,10 @@ export class OpenAI extends OpenAIBase implements ChatAgent {
         }, context), newOnStream);
     };
 
-    readonly extraHandle = (model: LanguageModelV1, messages: CoreMessage[], context: AgentUserConfig, onStream: ChatStreamTextHandler | null): any => {
+    readonly extraHandle = (model: string, messages: CoreMessage[], context: AgentUserConfig, onStream: ChatStreamTextHandler | null): any => {
         if (Object.keys(ENV.DROPS_OPENAI_PARAMS).length > 0) {
             for (const [models, params] of Object.entries(ENV.DROPS_OPENAI_PARAMS)) {
-                if (models.split(',').includes(model.modelId)) {
+                if (models.split(',').includes(model)) {
                     params.includes('stream') && (onStream = null);
                     break;
                 }
@@ -70,7 +80,7 @@ export class OpenAI extends OpenAIBase implements ChatAgent {
         if (ENV.COVER_MESSAGE_ROLE) {
             for (const [models, roles] of Object.entries(ENV.COVER_MESSAGE_ROLE)) {
                 const [oldRole, newRole] = roles.split(':');
-                if (models.split(',').includes(model.modelId)) {
+                if (models.split(',').includes(model)) {
                     messages = messages.map((m: any) => {
                         m.role = m.role === oldRole ? newRole : m.role;
                         return m;
@@ -80,6 +90,17 @@ export class OpenAI extends OpenAIBase implements ChatAgent {
         }
 
         return { messages, onStream };
+    };
+
+    readonly fetch = async (url: RequestInfo | URL, options?: RequestInit): Promise<Response> => {
+        const body = JSON.parse(options?.body as string);
+        if (body?.model.startsWith(OpenAI.transformModelPerfix)) {
+            body.model = body.model.slice(OpenAI.transformModelPerfix.length);
+        }
+        return fetch(url, {
+            ...options,
+            body: JSON.stringify(body),
+        });
     };
 }
 

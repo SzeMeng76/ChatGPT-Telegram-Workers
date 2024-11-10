@@ -186,36 +186,27 @@ export async function requestChatCompletionsV2(params: { model: LanguageModelV1;
             activeTools: params.activeTools || [],
             onStream,
         });
+        const hander_params = {
+            model: wrapLanguageModel({
+                model: params.activeTools ? params?.toolModel || params.model : params.model,
+                middleware,
+            }),
+            messages: params.messages,
+            maxSteps: 3,
+            maxRetries: 0,
+            temperature: (params.activeTools?.length || 0) > 0 ? 0.1 : 1,
+            onStepFinish: middleware.onStepFinish as (data: StepResult<any>) => void,
+        };
         if (onStream !== null) {
             const stream = await streamText({
-                model: wrapLanguageModel({
-                    model: params.activeTools ? params?.toolModel || params.model : params.model,
-                    middleware,
-                }),
-                prompt: params.prompt,
-                messages: params.messages,
-                tools: params.tools,
-                experimental_activeTools: params.activeTools,
-                maxSteps: 3,
-                maxRetries: 0,
-                temperature: 0.1,
+                ...hander_params,
                 onChunk: middleware.onChunk as (data: any) => void,
-                onStepFinish: middleware.onStepFinish as (data: StepResult<any>) => void,
             });
             const contentFull = await streamHandler(stream.textStream, t => t, onStream);
             onResult?.(contentFull);
             return (await stream.response).messages;
         } else {
-            const result = await generateText({
-                model: wrapLanguageModel({
-                    model: params.model,
-                    middleware,
-                }),
-                prompt: params.prompt,
-                messages: params.messages,
-                tools: params.tools,
-                onStepFinish: middleware.onStepFinish as (data: StepResult<any>) => void,
-            });
+            const result = await generateText(hander_params);
             onResult?.(result.text);
             return result.response.messages;
         }

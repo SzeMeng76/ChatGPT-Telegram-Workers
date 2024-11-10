@@ -209,6 +209,7 @@ class OpenAIConfig {
   OPENAI_STT_MODEL = "whisper-1";
   OPENAI_VISION_MODEL = "gpt-4o-mini";
   OPENAI_TTS_MODEL = "tts-1";
+  OPENAI_NEED_TRANSFORM_MODEL = ["o1-mini-all", "o1-mini-preview-all"];
 }
 class DalleAIConfig {
   DALL_E_MODEL = "dall-e-3";
@@ -400,8 +401,8 @@ const ENV_KEY_MAPPER = {
   WORKERS_AI_MODEL: "WORKERS_CHAT_MODEL"
 };
 class Environment extends EnvironmentConfig {
-  BUILD_TIMESTAMP = 1731223221;
-  BUILD_VERSION = "9904678";
+  BUILD_TIMESTAMP = 1731244126;
+  BUILD_VERSION = "7ba419d";
   I18N = loadI18n();
   PLUGINS_ENV = {};
   USER_CONFIG = createAgentUserConfig();
@@ -11590,8 +11591,10 @@ function getLog(context, returnModel = false) {
   if (logObj.tokens.length > 0 && showToken) {
     logList.push(`${logObj.tokens.join("|")}`);
   }
+  const formattedEntries = logList.filter(Boolean).map((entry) => `>\`${entry}\``).join("\n");
   return `LOGSTART
-${logList.filter(Boolean).map((entry) => `>\`${entry}\``).join("\n")}LOGEND`;
+${formattedEntries}LOGEND
+`;
 }
 function clearLog(context) {
   logSingleton.delete(context);
@@ -11797,8 +11800,10 @@ function escape(text) {
   const stack = [];
   const result2 = [];
   let lineTrim = "";
+  let modifiedLine = "";
   for (const [i, line] of lines.entries()) {
     lineTrim = line.trim();
+    modifiedLine = line;
     let startIndex = 0;
     if (/^```.+/.test(lineTrim)) {
       stack.push(i);
@@ -11813,9 +11818,11 @@ function escape(text) {
       } else {
         stack.push(i);
       }
+    } else if (lineTrim && i > 0 && /^\s*>/.test(result2.at(-1) ?? "") && !lineTrim.startsWith(">")) {
+      modifiedLine = `>${line}`;
     }
     if (!stack.length) {
-      result2.push(handleEscape(line));
+      result2.push(handleEscape(modifiedLine));
     }
   }
   if (stack.length) {
@@ -11832,7 +11839,7 @@ function handleEscape(text, type = "text") {
   }
   text = text.replace(/\\[*_~|`\\()[\]{}>#+\-=.!]/g, (match) => escapedChars[match]);
   if (type === "text") {
-    text = text.replace(escapeChars, "\\$1").replace(/\\\*\\\*(\S|\S.*?\S)\\\*\\\*/g, "*$1*").replace(/\\_\\_(\S|\S.*?\S)\\_\\_/g, "__$1__").replace(/\\_(\S|\S.*?\S)\\_/g, "_$1_").replace(/\\~(\S|\S.*?\S)\\~/g, "~$1~").replace(/\\\|\\\|(\S|\S.*?\S)\\\|\\\|/g, "||$1||").replace(/\\\[([^\]]+)\\\]\\\((.+?)\\\)/g, "[$1]($2)").replace(/\\`(.*?)\\`/g, "`$1`").replace(/^(\s*)\\(>.+\s*)$/gm, "$1$2").replace(/^(\s*)\\-\s+(.+)$/gm, "$1• $2").replace(/^((\\#){1,3}\s)(.+)/gm, "$1*$3*");
+    text = text.replace(escapeChars, "\\$1").replace(/\\\*\\\*(\S|\S.*?\S)\\\*\\\*/g, "*$1*").replace(/\\_\\_(\S|\S.*?\S)\\_\\_/g, "__$1__").replace(/\\_(\S|\S.*?\S)\\_/g, "_$1_").replace(/\\~(\S|\S.*?\S)\\~/g, "~$1~").replace(/\\\|\\\|(\S|\S.*?\S)\\\|\\\|/g, "||$1||").replace(/\\\[([^\]]+)\\\]\\\((.+?)\\\)/g, "[$1]($2)").replace(/\\`(.*?)\\`/g, "`$1`").replace(/^\s*\\>\s*(.+)$/gm, ">$1").replace(/^(>?\s*)\\(-|\*)\s+(.+)$/gm, "$1• $3").replace(/^((\\#){1,3}\s)(.+)/gm, "$1*$3*");
   } else {
     const codeBlank = text.length - text.trimStart().length;
     if (codeBlank > 0) {
@@ -11934,17 +11941,11 @@ class MessageSender {
       return this.api.sendMessage(params);
     }
   }
-  renderMessage(parse_mode, message) {
-    if (parse_mode === "MarkdownV2") {
-      return escape(message);
-    }
-    return message;
-  }
   async sendLongMessage(message, context) {
     const chatContext = { ...context };
     const limit = 4096;
     if (message.length <= limit) {
-      const resp = await this.sendMessage(this.renderMessage(context.parse_mode, message), chatContext);
+      const resp = await this.sendMessage(renderMessage(context.parse_mode, message), chatContext);
       if (resp.status === 200) {
         return resp;
       }
@@ -11993,7 +11994,7 @@ class MessageSender {
     const params = {
       chat_id: this.context.chat_id,
       photo,
-      ...caption ? { caption: this.renderMessage(parse_mode || null, caption) } : {},
+      ...caption ? { caption: renderMessage(parse_mode || null, caption) } : {},
       parse_mode
     };
     if (this.context.reply_to_message_id) {
@@ -12175,7 +12176,7 @@ class ChosenInlineSender {
   editMessageText(text, parse_mode) {
     return this.api.editMessageText({
       inline_message_id: this.context.inline_message_id,
-      text: this.renderMessage(parse_mode || null, text),
+      text: renderMessage(parse_mode || null, text),
       parse_mode,
       link_preview_options: {
         is_disabled: ENV.DISABLE_WEB_PREVIEW
@@ -12188,16 +12189,16 @@ class ChosenInlineSender {
       media: {
         type,
         media,
-        ...caption ? { caption: this.renderMessage(parse_mode || null, caption) } : {}
+        ...caption ? { caption: renderMessage(parse_mode || null, caption) } : {}
       }
     });
   }
-  renderMessage(parse_mode, message) {
-    if (parse_mode === "MarkdownV2") {
-      return escape(message);
-    }
-    return message;
+}
+function renderMessage(parse_mode, message) {
+  if (parse_mode === "MarkdownV2") {
+    return escape(message);
   }
+  return message;
 }
 async function loadChatRoleWithContext(message, context, isCallbackQuery = false) {
   const { groupAdminsKey } = context.SHARE_CONTEXT;
@@ -16371,6 +16372,180 @@ function chunckArray(arr, size) {
   }
   return result2;
 }
+class OpenAIBase {
+  name = "openai";
+  type = "chat";
+  apikey = (context) => {
+    if (this.type === "tool" && context.FUNCTION_CALL_API_KEY) {
+      return context.FUNCTION_CALL_API_KEY;
+    }
+    const length = context.OPENAI_API_KEY.length;
+    return context.OPENAI_API_KEY[Math.floor(Math.random() * length)];
+  };
+}
+class OpenAI extends OpenAIBase {
+  modelKey = "OPENAI_CHAT_MODEL";
+  static transformModelPerfix = "TRANSFROM-";
+  enable = (context) => {
+    return context.OPENAI_API_KEY.length > 0;
+  };
+  model = (ctx, params) => {
+    return Array.isArray(params?.content) ? ctx.OPENAI_VISION_MODEL : ctx.OPENAI_CHAT_MODEL;
+  };
+  transformModel = (model, context) => {
+    if (context.OPENAI_NEED_TRANSFORM_MODEL.includes(model)) {
+      return `${OpenAI.transformModelPerfix}${model}`;
+    }
+    return model;
+  };
+  base_url = (context) => {
+    if (this.type === "tool" && context.FUNCTION_CALL_BASE) {
+      return context.FUNCTION_CALL_BASE;
+    }
+    return context.OPENAI_API_BASE;
+  };
+  request = async (params, context, onStream) => {
+    const provider = createOpenAI({
+      baseURL: context.OPENAI_API_BASE,
+      apiKey: this.apikey(context),
+      compatibility: "strict",
+      fetch: this.fetch
+    });
+    const userMessage = params.messages.at(-1);
+    const originalModel = this.model(context, userMessage);
+    const languageModelV1 = provider.languageModel(this.transformModel(originalModel, context), void 0);
+    const { messages, onStream: newOnStream } = this.extraHandle(originalModel, params.messages, context, onStream);
+    return requestChatCompletionsV2(await warpLLMParams({
+      model: languageModelV1,
+      messages
+    }, context), newOnStream);
+  };
+  extraHandle = (model, messages, context, onStream) => {
+    if (Object.keys(ENV.DROPS_OPENAI_PARAMS).length > 0) {
+      for (const [models, params] of Object.entries(ENV.DROPS_OPENAI_PARAMS)) {
+        if (models.split(",").includes(model)) {
+          params.includes("stream") && (onStream = null);
+          break;
+        }
+      }
+    }
+    if (ENV.COVER_MESSAGE_ROLE) {
+      for (const [models, roles] of Object.entries(ENV.COVER_MESSAGE_ROLE)) {
+        const [oldRole, newRole] = roles.split(":");
+        if (models.split(",").includes(model)) {
+          messages = messages.map((m) => {
+            m.role = m.role === oldRole ? newRole : m.role;
+            return m;
+          });
+        }
+      }
+    }
+    return { messages, onStream };
+  };
+  fetch = async (url, options2) => {
+    const body = JSON.parse(options2?.body);
+    if (body?.model.startsWith(OpenAI.transformModelPerfix)) {
+      body.model = body.model.slice(OpenAI.transformModelPerfix.length);
+    }
+    return fetch(url, {
+      ...options2,
+      body: JSON.stringify(body)
+    });
+  };
+}
+class Dalle extends (_a10 = OpenAIBase, _request_dec = [Log], _a10) {
+  constructor() {
+    super(...arguments);
+    __publicField(this, "modelKey", "DALL_E_MODEL");
+    __publicField(this, "enable", (context) => {
+      return context.OPENAI_API_KEY.length > 0;
+    });
+    __publicField(this, "model", (ctx) => {
+      return ctx.DALL_E_MODEL;
+    });
+    __publicField(this, "request", __runInitializers(_init, 8, this, async (prompt2, context) => {
+      const url = `${context.OPENAI_API_BASE}/images/generations`;
+      const header = {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${this.apikey(context)}`
+      };
+      const body = {
+        prompt: prompt2,
+        n: 1,
+        size: context.DALL_E_IMAGE_SIZE,
+        model: context.DALL_E_MODEL
+      };
+      if (body.model === "dall-e-3") {
+        body.quality = context.DALL_E_IMAGE_QUALITY;
+        body.style = context.DALL_E_IMAGE_STYLE;
+      }
+      return requestText2Image(url, header, body, this.render);
+    })), __runInitializers(_init, 11, this);
+    __publicField(this, "render", async (response) => {
+      const resp = await response.json();
+      if (resp.error?.message) {
+        throw new Error(resp.error.message);
+      }
+      return {
+        type: "image",
+        url: resp?.data?.map((i) => i?.url),
+        text: resp?.data?.[0]?.revised_prompt || ""
+      };
+    });
+  }
+}
+_init = __decoratorStart(_a10);
+__decorateElement(_init, 5, "request", _request_dec, Dalle);
+__decoratorMetadata(_init, Dalle);
+class Transcription extends (_b = OpenAIBase, _request_dec2 = [Log], _b) {
+  constructor() {
+    super(...arguments);
+    __publicField(this, "modelKey", "OPENAI_STT_MODEL");
+    __publicField(this, "enable", (context) => {
+      return context.OPENAI_API_KEY.length > 0;
+    });
+    __publicField(this, "model", (ctx) => {
+      return ctx.OPENAI_STT_MODEL;
+    });
+    __publicField(this, "request", __runInitializers(_init2, 8, this, async (audio, context) => {
+      const url = `${context.OPENAI_API_BASE}/audio/transcriptions`;
+      const header = {
+        Authorization: `Bearer ${this.apikey(context)}`,
+        Accept: "application/json"
+      };
+      const formData = new FormData();
+      formData.append("file", audio, "audio.ogg");
+      formData.append("model", this.model(context));
+      if (context.OPENAI_STT_EXTRA_PARAMS) {
+        Object.entries(context.OPENAI_STT_EXTRA_PARAMS).forEach(([k, v]) => {
+          formData.append(k, v);
+        });
+      }
+      formData.append("response_format", "json");
+      const resp = await fetch(url, {
+        method: "POST",
+        headers: header,
+        body: formData,
+        redirect: "follow"
+      }).then((res) => res.json());
+      if (resp.error?.message) {
+        throw new Error(resp.error.message);
+      }
+      if (resp.text === void 0) {
+        console.error(resp);
+        throw new Error(resp);
+      }
+      log.info(`Transcription: ${resp.text}`);
+      return {
+        type: "text",
+        text: resp.text
+      };
+    })), __runInitializers(_init2, 11, this);
+  }
+}
+_init2 = __decoratorStart(_b);
+__decorateElement(_init2, 5, "request", _request_dec2, Transcription);
+__decoratorMetadata(_init2, Transcription);
 function AIMiddleware({ config, _models, activeTools, onStream }) {
   let startTime2;
   let sendToolCall = false;
@@ -16378,21 +16553,24 @@ function AIMiddleware({ config, _models, activeTools, onStream }) {
     wrapGenerate: async ({ doGenerate, params, model }) => {
       log.info("doGenerate called");
       log.debug(`params: ${JSON.stringify(params, null, 2)}`);
-      log.info(`provider: ${model.provider}, modelId: ${model.modelId} `);
+      const modelId = model.modelId.startsWith(OpenAI.transformModelPerfix) ? model.modelId.slice(OpenAI.transformModelPerfix.length) : model.modelId;
+      log.info(`provider: ${model.provider}, modelId: ${modelId} `);
       const logs = getLogSingleton(config);
-      activeTools.length > 0 ? logs.tool.model = model.modelId : logs.chat.model.push(model.modelId);
+      activeTools.length > 0 ? logs.tool.model = modelId : logs.chat.model.push(modelId);
       const result2 = await doGenerate();
       log.info(`generated text: ${result2.text}`);
       return result2;
     },
     wrapStream: async ({ doStream, params, model }) => {
       log.info("doStream called");
-      log.info(`provider: ${model.provider}, modelId: ${model.modelId} `);
+      log.debug(`params: ${JSON.stringify(params, null, 2)}`);
+      const modelId = model.modelId.startsWith(OpenAI.transformModelPerfix) ? model.modelId.slice(OpenAI.transformModelPerfix.length) : model.modelId;
+      log.info(`provider: ${model.provider}, modelId: ${modelId} `);
       const logs = getLogSingleton(config);
       if (activeTools.length > 0) {
-        logs.tool.model = model.modelId;
+        logs.tool.model = modelId;
       } else {
-        logs.chat.model.push(model.modelId);
+        logs.chat.model.push(modelId);
       }
       return doStream();
     },
@@ -16409,7 +16587,6 @@ function AIMiddleware({ config, _models, activeTools, onStream }) {
           });
         }
       }
-      onStream && onStream(`start ${type} chat`);
       return params;
     },
     onChunk: (data) => {
@@ -16417,7 +16594,7 @@ function AIMiddleware({ config, _models, activeTools, onStream }) {
       if (chunk.type === "tool-call" && !sendToolCall) {
         sendToolCall = true;
         log.info(`tool call: ${chunk.toolName}`);
-        onStream && onStream(`will start tool: ${chunk.toolName}`);
+        onStream?.(`will start tool: ${chunk.toolName}`);
       }
       return sendToolCall;
     },
@@ -16443,7 +16620,7 @@ function AIMiddleware({ config, _models, activeTools, onStream }) {
         log.info(func_logs);
         logs.functions.push(...func_logs);
         logs.tool.time.push((+time - maxFuncTime).toFixed(1));
-        onStream && onStream(`finish ${[...new Set(toolResults.map((i) => i.toolName))]}`);
+        onStream?.(`finish ${[...new Set(toolResults.map((i) => i.toolName))]}`);
       } else if (text === "") {
         throw new Error("None text");
       } else {
@@ -16801,36 +16978,27 @@ async function requestChatCompletionsV2(params, onStream, onResult = null) {
       activeTools: params.activeTools || [],
       onStream
     });
+    const hander_params = {
+      model: experimental_wrapLanguageModel({
+        model: params.activeTools ? params?.toolModel || params.model : params.model,
+        middleware
+      }),
+      messages: params.messages,
+      maxSteps: 3,
+      maxRetries: 0,
+      temperature: (params.activeTools?.length || 0) > 0 ? 0.1 : 1,
+      onStepFinish: middleware.onStepFinish
+    };
     if (onStream !== null) {
       const stream = await streamText({
-        model: experimental_wrapLanguageModel({
-          model: params.activeTools ? params?.toolModel || params.model : params.model,
-          middleware
-        }),
-        prompt: params.prompt,
-        messages: params.messages,
-        tools: params.tools,
-        experimental_activeTools: params.activeTools,
-        maxSteps: 3,
-        maxRetries: 0,
-        temperature: 0.1,
-        onChunk: middleware.onChunk,
-        onStepFinish: middleware.onStepFinish
+        ...hander_params,
+        onChunk: middleware.onChunk
       });
       const contentFull = await streamHandler(stream.textStream, (t) => t, onStream);
       onResult?.(contentFull);
       return (await stream.response).messages;
     } else {
-      const result2 = await generateText({
-        model: experimental_wrapLanguageModel({
-          model: params.model,
-          middleware
-        }),
-        prompt: params.prompt,
-        messages: params.messages,
-        tools: params.tools,
-        onStepFinish: middleware.onStepFinish
-      });
+      const result2 = await generateText(hander_params);
       onResult?.(result2.text);
       return result2.response.messages;
     }
@@ -18886,161 +19054,6 @@ class Mistral {
     }, context), onStream);
   };
 }
-class OpenAIBase {
-  name = "openai";
-  type = "chat";
-  apikey = (context) => {
-    if (this.type === "tool" && context.FUNCTION_CALL_API_KEY) {
-      return context.FUNCTION_CALL_API_KEY;
-    }
-    const length = context.OPENAI_API_KEY.length;
-    return context.OPENAI_API_KEY[Math.floor(Math.random() * length)];
-  };
-}
-class OpenAI extends OpenAIBase {
-  modelKey = "OPENAI_CHAT_MODEL";
-  enable = (context) => {
-    return context.OPENAI_API_KEY.length > 0;
-  };
-  model = (ctx, params) => {
-    return Array.isArray(params?.content) ? ctx.OPENAI_VISION_MODEL : ctx.OPENAI_CHAT_MODEL;
-  };
-  base_url = (context) => {
-    if (this.type === "tool" && context.FUNCTION_CALL_BASE) {
-      return context.FUNCTION_CALL_BASE;
-    }
-    return context.OPENAI_API_BASE;
-  };
-  request = async (params, context, onStream) => {
-    const provider = createOpenAI({
-      baseURL: context.OPENAI_API_BASE,
-      apiKey: this.apikey(context),
-      compatibility: "strict"
-    });
-    const userMessage = params.messages.at(-1);
-    const languageModelV1 = provider.languageModel(this.model(context, userMessage), void 0);
-    const { messages, onStream: newOnStream } = this.extraHandle(languageModelV1, params.messages, context, onStream);
-    return requestChatCompletionsV2(await warpLLMParams({
-      model: languageModelV1,
-      messages
-    }, context), newOnStream);
-  };
-  extraHandle = (model, messages, context, onStream) => {
-    if (Object.keys(ENV.DROPS_OPENAI_PARAMS).length > 0) {
-      for (const [models, params] of Object.entries(ENV.DROPS_OPENAI_PARAMS)) {
-        if (models.split(",").includes(model.modelId)) {
-          params.includes("stream") && (onStream = null);
-          break;
-        }
-      }
-    }
-    if (ENV.COVER_MESSAGE_ROLE) {
-      for (const [models, roles] of Object.entries(ENV.COVER_MESSAGE_ROLE)) {
-        const [oldRole, newRole] = roles.split(":");
-        if (models.split(",").includes(model.modelId)) {
-          messages = messages.map((m) => {
-            m.role = m.role === oldRole ? newRole : m.role;
-            return m;
-          });
-        }
-      }
-    }
-    return { messages, onStream };
-  };
-}
-class Dalle extends (_a10 = OpenAIBase, _request_dec = [Log], _a10) {
-  constructor() {
-    super(...arguments);
-    __publicField(this, "modelKey", "DALL_E_MODEL");
-    __publicField(this, "enable", (context) => {
-      return context.OPENAI_API_KEY.length > 0;
-    });
-    __publicField(this, "model", (ctx) => {
-      return ctx.DALL_E_MODEL;
-    });
-    __publicField(this, "request", __runInitializers(_init, 8, this, async (prompt2, context) => {
-      const url = `${context.OPENAI_API_BASE}/images/generations`;
-      const header = {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${this.apikey(context)}`
-      };
-      const body = {
-        prompt: prompt2,
-        n: 1,
-        size: context.DALL_E_IMAGE_SIZE,
-        model: context.DALL_E_MODEL
-      };
-      if (body.model === "dall-e-3") {
-        body.quality = context.DALL_E_IMAGE_QUALITY;
-        body.style = context.DALL_E_IMAGE_STYLE;
-      }
-      return requestText2Image(url, header, body, this.render);
-    })), __runInitializers(_init, 11, this);
-    __publicField(this, "render", async (response) => {
-      const resp = await response.json();
-      if (resp.error?.message) {
-        throw new Error(resp.error.message);
-      }
-      return {
-        type: "image",
-        url: resp?.data?.map((i) => i?.url),
-        text: resp?.data?.[0]?.revised_prompt || ""
-      };
-    });
-  }
-}
-_init = __decoratorStart(_a10);
-__decorateElement(_init, 5, "request", _request_dec, Dalle);
-__decoratorMetadata(_init, Dalle);
-class Transcription extends (_b = OpenAIBase, _request_dec2 = [Log], _b) {
-  constructor() {
-    super(...arguments);
-    __publicField(this, "modelKey", "OPENAI_STT_MODEL");
-    __publicField(this, "enable", (context) => {
-      return context.OPENAI_API_KEY.length > 0;
-    });
-    __publicField(this, "model", (ctx) => {
-      return ctx.OPENAI_STT_MODEL;
-    });
-    __publicField(this, "request", __runInitializers(_init2, 8, this, async (audio, context) => {
-      const url = `${context.OPENAI_API_BASE}/audio/transcriptions`;
-      const header = {
-        Authorization: `Bearer ${this.apikey(context)}`,
-        Accept: "application/json"
-      };
-      const formData = new FormData();
-      formData.append("file", audio, "audio.ogg");
-      formData.append("model", this.model(context));
-      if (context.OPENAI_STT_EXTRA_PARAMS) {
-        Object.entries(context.OPENAI_STT_EXTRA_PARAMS).forEach(([k, v]) => {
-          formData.append(k, v);
-        });
-      }
-      formData.append("response_format", "json");
-      const resp = await fetch(url, {
-        method: "POST",
-        headers: header,
-        body: formData,
-        redirect: "follow"
-      }).then((res) => res.json());
-      if (resp.error?.message) {
-        throw new Error(resp.error.message);
-      }
-      if (resp.text === void 0) {
-        console.error(resp);
-        throw new Error(resp);
-      }
-      log.info(`Transcription: ${resp.text}`);
-      return {
-        type: "text",
-        text: resp.text
-      };
-    })), __runInitializers(_init2, 11, this);
-  }
-}
-_init2 = __decoratorStart(_b);
-__decorateElement(_init2, 5, "request", _request_dec2, Transcription);
-__decoratorMetadata(_init2, Transcription);
 class OpenAILikeBase {
   name = "olike";
   enable = (context) => {

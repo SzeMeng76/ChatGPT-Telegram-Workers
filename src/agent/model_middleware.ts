@@ -8,6 +8,7 @@ import type { AgentUserConfig } from '../config/env';
 import type { ChatStreamTextHandler } from './types';
 import { getLogSingleton } from '../extra/log/logDecortor';
 import { log } from '../extra/log/logger';
+import { OpenAI } from './openai';
 
 export function AIMiddleware({ config, _models, activeTools, onStream }: { config: AgentUserConfig; _models: Record<string, LanguageModelV1>; activeTools: string[]; onStream: ChatStreamTextHandler | null }): LanguageModelV1Middleware & { onChunk: (data: any) => boolean; onStepFinish: (data: StepResult<any>, context: AgentUserConfig) => void } {
     let startTime: number | undefined;
@@ -16,9 +17,10 @@ export function AIMiddleware({ config, _models, activeTools, onStream }: { confi
         wrapGenerate: async ({ doGenerate, params, model }) => {
             log.info('doGenerate called');
             log.debug(`params: ${JSON.stringify(params, null, 2)}`);
-            log.info(`provider: ${model.provider}, modelId: ${model.modelId} `);
+            const modelId = model.modelId.startsWith(OpenAI.transformModelPerfix) ? model.modelId.slice(OpenAI.transformModelPerfix.length) : model.modelId;
+            log.info(`provider: ${model.provider}, modelId: ${modelId} `);
             const logs = getLogSingleton(config);
-            activeTools.length > 0 ? logs.tool.model = model.modelId : logs.chat.model.push(model.modelId);
+            activeTools.length > 0 ? logs.tool.model = modelId : logs.chat.model.push(modelId);
             const result = await doGenerate();
             log.info(`generated text: ${result.text}`);
             return result;
@@ -26,13 +28,14 @@ export function AIMiddleware({ config, _models, activeTools, onStream }: { confi
 
         wrapStream: async ({ doStream, params, model }) => {
             log.info('doStream called');
-            // log.debug(`params: ${JSON.stringify(params, null, 2)}`);
-            log.info(`provider: ${model.provider}, modelId: ${model.modelId} `);
+            log.debug(`params: ${JSON.stringify(params, null, 2)}`);
+            const modelId = model.modelId.startsWith(OpenAI.transformModelPerfix) ? model.modelId.slice(OpenAI.transformModelPerfix.length) : model.modelId;
+            log.info(`provider: ${model.provider}, modelId: ${modelId} `);
             const logs = getLogSingleton(config);
             if (activeTools.length > 0) {
-                logs.tool.model = model.modelId;
+                logs.tool.model = modelId;
             } else {
-                logs.chat.model.push(model.modelId);
+                logs.chat.model.push(modelId);
             }
             return doStream();
         },
@@ -50,20 +53,7 @@ export function AIMiddleware({ config, _models, activeTools, onStream }: { confi
                     });
                 }
             }
-            // 能修改的参数有限
-            // switch (params.prompt.at(-1)?.role) {
-            //     case 'assistant':
-            //         // 上一次是工具内容
-            //         // if (params.prompt.at(-2)?.role === 'tool') {
-            //         // TODO: 无法修改模型 必须中断 generate 再次处理
-            //         // }
-            //         break;
-            //     case 'tool':
-            //         break;
-            //     default:
-            //         break;
-            // }
-            onStream && onStream(`start ${type} chat`);
+
             return params;
         },
 
@@ -72,7 +62,7 @@ export function AIMiddleware({ config, _models, activeTools, onStream }: { confi
             if (chunk.type === 'tool-call' && !sendToolCall) {
                 sendToolCall = true;
                 log.info(`tool call: ${chunk.toolName}`);
-                onStream && onStream(`will start tool: ${chunk.toolName}`);
+                onStream?.(`will start tool: ${chunk.toolName}`);
             }
             return sendToolCall;
         },
@@ -99,7 +89,7 @@ export function AIMiddleware({ config, _models, activeTools, onStream }: { confi
                 log.info(func_logs);
                 logs.functions.push(...func_logs);
                 logs.tool.time.push((+time - maxFuncTime).toFixed(1));
-                onStream && onStream(`finish ${[...new Set(toolResults.map(i => i.toolName))]}`);
+                onStream?.(`finish ${[...new Set(toolResults.map(i => i.toolName))]}`);
             } else if (text === '') {
                 throw new Error('None text');
             } else {

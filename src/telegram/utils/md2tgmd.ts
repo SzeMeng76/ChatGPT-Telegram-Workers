@@ -29,8 +29,12 @@ export function escape(text: string): string {
     const stack: number[] = [];
     const result: string[] = [];
     let lineTrim = '';
+    let modifiedLine = '';
+
     for (const [i, line] of lines.entries()) {
         lineTrim = line.trim();
+        modifiedLine = line;
+
         let startIndex: number | undefined = 0;
         if (/^```.+/.test(lineTrim)) {
             stack.push(i);
@@ -45,10 +49,14 @@ export function escape(text: string): string {
             } else {
                 stack.push(i);
             }
+            // If the current line does not start with > and the previous line starts with >,
+            // add > to the beginning of the current line.
+        } else if (lineTrim && i > 0 && /^\s*>/.test(result.at(-1) ?? '') && !lineTrim.startsWith('>')) {
+            modifiedLine = `>${line}`;
         }
 
         if (!stack.length) {
-            result.push(handleEscape(line));
+            result.push(handleEscape(modifiedLine));
         }
     }
     if (stack.length) {
@@ -58,7 +66,7 @@ export function escape(text: string): string {
     const regexp = /^LOGSTART\s(.*?)LOGEND/s;
     return result.join('\n')
         // extra \n to avoid markdown render error
-        .replace(regexp, '**$1||\n')
+        .replace(regexp, '**$1||')
         .replace(new RegExp(Object.values(escapedChars).join('|'), 'g'), match => escapedCharsReverseMap.get(match) ?? match);
 }
 
@@ -78,8 +86,8 @@ function handleEscape(text: string, type: string = 'text'): string {
             .replace(/\\\|\\\|(\S|\S.*?\S)\\\|\\\|/g, '||$1||') // spoiler
             .replace(/\\\[([^\]]+)\\\]\\\((.+?)\\\)/g, '[$1]($2)') // url
             .replace(/\\`(.*?)\\`/g, '`$1`') // inline code
-            .replace(/^(\s*)\\(>.+\s*)$/gm, '$1$2') // >
-            .replace(/^(\s*)\\-\s+(.+)$/gm, '$1• $2') // -
+            .replace(/^\s*\\>\s*(.+)$/gm, '>$1') // >
+            .replace(/^(>?\s*)\\(-|\*)\s+(.+)$/gm, '$1• $3') // item
             .replace(/^((\\#){1,3}\s)(.+)/gm, '$1*$3*'); // number sign
     } else {
         const codeBlank = text.length - text.trimStart().length;
