@@ -178,7 +178,7 @@ export async function streamHandler(stream: AsyncIterable<any>, contentExtractor
     await msgPromise;
     return contentFull;
 }
-export async function requestChatCompletionsV2(params: { model: LanguageModelV1; toolModel?: LanguageModelV1; prompt?: string; messages: CoreMessage[]; tools?: any; activeTools?: string[]; context: AgentUserConfig }, onStream: ChatStreamTextHandler | null, onResult: ChatStreamTextHandler | null = null): Promise<ResponseMessage[]> {
+export async function requestChatCompletionsV2(params: { model: LanguageModelV1; toolModel?: LanguageModelV1; prompt?: string; messages: CoreMessage[]; tools?: any; activeTools?: string[]; context: AgentUserConfig }, onStream: ChatStreamTextHandler | null, onResult: ChatStreamTextHandler | null = null): Promise<{ messages: ResponseMessage[]; content: string }> {
     try {
         const middleware = AIMiddleware({
             config: params.context,
@@ -206,11 +206,17 @@ export async function requestChatCompletionsV2(params: { model: LanguageModelV1;
             });
             const contentFull = await streamHandler(stream.textStream, t => t, onStream);
             onResult?.(contentFull);
-            return (await stream.response).messages;
+            return {
+                messages: (await stream.response).messages,
+                content: contentFull,
+            };
         } else {
             const result = await generateText(hander_params);
             onResult?.(result.text);
-            return result.response.messages;
+            return {
+                messages: result.response.messages,
+                content: result.text,
+            };
         }
     } catch (error) {
         console.error((error as Error).message, (error as Error).stack);

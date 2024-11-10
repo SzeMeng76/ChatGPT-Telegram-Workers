@@ -16,7 +16,7 @@ export class Google implements ChatAgent {
         return ctx.GOOGLE_CHAT_MODEL;
     };
 
-    readonly request = async (params: LLMChatParams, context: AgentUserConfig, onStream: ChatStreamTextHandler | null): Promise<ResponseMessage[]> => {
+    readonly request = async (params: LLMChatParams, context: AgentUserConfig, onStream: ChatStreamTextHandler | null): Promise<{ messages: ResponseMessage[]; content: string }> => {
         const provider = createGoogleGenerativeAI({
             baseURL: context.GOOGLE_API_BASE,
             apiKey: context.GOOGLE_API_KEY || undefined,

@@ -80,7 +80,7 @@ export async function loadHistory(key: string): Promise<HistoryItem[]> {
 
 export type StreamResultHandler = (text: string) => Promise<any>;
 
-export async function requestCompletionsFromLLM(params: LLMChatRequestParams | null, context: WorkerContext, agent: ChatAgent, modifier: HistoryModifier | null, onStream: StreamResultHandler | null): Promise<ResponseMessage[]> {
+export async function requestCompletionsFromLLM(params: LLMChatRequestParams | null, context: WorkerContext, agent: ChatAgent, modifier: HistoryModifier | null, onStream: StreamResultHandler | null): Promise<string> {
     let history = context.MIDDEL_CONTEXT.history;
     const historyDisable = ENV.AUTO_TRIM_HISTORY && ENV.MAX_HISTORY_LENGTH <= 0;
     // const historyKey = context.SHARE_CONTEXT.chatHistoryKey;
@@ -102,15 +102,17 @@ export async function requestCompletionsFromLLM(params: LLMChatRequestParams | n
     const llmParams: LLMChatParams = {
         messages,
     };
-    const answer = await agent.request(llmParams, context.USER_CONFIG, onStream) as ResponseMessage[];
+    const answer = await agent.request(llmParams, context.USER_CONFIG, onStream);
+    const { messages: raw_messages, content } = answer;
+
     if (!historyDisable) {
         // only push valid chat history
-        if (answer.at(-1)?.role === 'assistant') {
+        if (raw_messages.at(-1)?.role === 'assistant') {
             history.push(params);
-            history.push(...answer);
+            history.push(...raw_messages);
         }
     }
-    return answer;
+    return content;
 }
 
 export async function requestText2Image(url: string, headers: Record<string, any>, body: any, render: (arg: Response) => Promise<ImageResult>) {

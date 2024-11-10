@@ -33,21 +33,11 @@ export class AnswerChatInlineQuery implements answerInlineQuery {
             const resp = await agent.request({
                 messages: messages as CoreMessage[],
             }, context.USER_CONFIG, isStream ? OnStream : null);
-            const lastAnswer = resp[resp.length - 1];
-            if (lastAnswer.content.length === 0) {
+            const { content: answer } = resp;
+            if (answer === '') {
                 return sender.sendPlainText('No response');
             }
-            if (typeof lastAnswer.content === 'string') {
-                return sender.sendPlainText(lastAnswer.content);
-            } else if (Array.isArray(lastAnswer.content) && lastAnswer.content.length > 0) {
-                for (const part of lastAnswer.content) {
-                    if (Object.hasOwn(part, 'text')) {
-                        await OnStream.end?.((part as any).text);
-                    }
-                }
-                return new Response('ok');
-            }
-            return sender.sendPlainText('Unknown response');
+            return sender.sendRichText(answer);
         } catch (error) {
             return sender.sendPlainText(`Error: ${(error as Error).message.substring(0, 4000)}`);
         }

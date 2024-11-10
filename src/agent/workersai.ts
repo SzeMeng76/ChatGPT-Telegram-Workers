@@ -29,7 +29,7 @@ export class WorkersChat extends WorkerBase implements ChatAgent {
         return ctx.WORKERS_CHAT_MODEL;
     };
 
-    readonly request = async (params: LLMChatParams, context: AgentUserConfig, onStream: ChatStreamTextHandler | null): Promise<ResponseMessage[]> => {
+    readonly request = async (params: LLMChatParams, context: AgentUserConfig, onStream: ChatStreamTextHandler | null): Promise<{ messages: ResponseMessage[]; content: string }> => {
         const { messages, prompt } = params;
         const id = context.CLOUDFLARE_ACCOUNT_ID;
         const token = context.CLOUDFLARE_TOKEN;
@@ -65,12 +65,15 @@ export class WorkersChat extends WorkerBase implements ChatAgent {
             return data?.errors?.[0]?.message;
         };
         const text = await requestChatCompletions(url, header, body, onStream, null, options);
-        return [
-            {
-                role: 'assistant',
-                content: text,
-            },
-        ];
+        return {
+            messages: [
+                {
+                    role: 'assistant',
+                    content: text,
+                },
+            ],
+            content: text,
+        };
     };
 }
 

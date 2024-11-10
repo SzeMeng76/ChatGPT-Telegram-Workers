@@ -16,7 +16,7 @@ export class Cohere implements ChatAgent {
         return ctx.COHERE_CHAT_MODEL;
     };
 
-    readonly request = async (params: LLMChatParams, context: AgentUserConfig, onStream: ChatStreamTextHandler | null): Promise<ResponseMessage[]> => {
+    readonly request = async (params: LLMChatParams, context: AgentUserConfig, onStream: ChatStreamTextHandler | null): Promise<{ messages: ResponseMessage[]; content: string }> => {
         const provider = createCohere({
             baseURL: context.COHERE_API_BASE,
             apiKey: context.COHERE_API_KEY || undefined,

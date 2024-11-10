@@ -15,7 +15,7 @@ export class Vertex implements ChatAgent {
         return ctx.VERTEX_CHAT_MODEL;
     };
 
-    readonly request = async (params: LLMChatParams, context: AgentUserConfig, onStream: ChatStreamTextHandler | null): Promise<ResponseMessage[]> => {
+    readonly request = async (params: LLMChatParams, context: AgentUserConfig, onStream: ChatStreamTextHandler | null): Promise<{ messages: ResponseMessage[]; content: string }> => {
         const languageModelV1 = await createLlmModel(this.model(context), context);
         return requestChatCompletionsV2(await warpLLMParams({
             model: languageModelV1,

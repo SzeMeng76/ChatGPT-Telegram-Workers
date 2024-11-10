@@ -23,7 +23,7 @@ export class OpenAILike extends OpenAILikeBase implements ChatAgent {
         return ctx.OPENAILIKE_CHAT_MODEL;
     };
 
-    readonly request = async (params: LLMChatParams, context: AgentUserConfig, onStream: ChatStreamTextHandler | null): Promise<ResponseMessage[]> => {
+    readonly request = async (params: LLMChatParams, context: AgentUserConfig, onStream: ChatStreamTextHandler | null): Promise<{ messages: ResponseMessage[]; content: string }> => {
         const provider = createOpenAI({
             name: 'openaiLike',
             baseURL: context.OPENAILIKE_API_BASE || undefined,

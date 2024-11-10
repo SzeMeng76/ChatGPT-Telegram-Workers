@@ -16,7 +16,7 @@ export class Anthropic implements ChatAgent {
         return ctx.ANTHROPIC_CHAT_MODEL;
     };
 
-    readonly request = async (params: LLMChatParams, context: AgentUserConfig, onStream: ChatStreamTextHandler | null): Promise<ResponseMessage[]> => {
+    readonly request = async (params: LLMChatParams, context: AgentUserConfig, onStream: ChatStreamTextHandler | null): Promise<{ messages: ResponseMessage[]; content: string }> => {
         const provider = createAnthropic({
             baseURL: context.ANTHROPIC_API_BASE,
             apiKey: context.ANTHROPIC_API_KEY || undefined,

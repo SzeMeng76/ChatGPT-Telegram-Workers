@@ -48,7 +48,7 @@ export class OpenAI extends OpenAIBase implements ChatAgent {
         return context.OPENAI_API_BASE;
     };
 
-    readonly request = async (params: LLMChatParams, context: AgentUserConfig, onStream: ChatStreamTextHandler | null): Promise<ResponseMessage[]> => {
+    readonly request = async (params: LLMChatParams, context: AgentUserConfig, onStream: ChatStreamTextHandler | null): Promise<{ messages: ResponseMessage[]; content: string }> => {
         const userMessage = params.messages.at(-1) as CoreUserMessage;
         const originalModel = this.model(context, userMessage);
         const transformedModel = this.transformModel(originalModel, context);

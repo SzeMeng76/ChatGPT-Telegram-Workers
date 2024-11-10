@@ -18,7 +18,7 @@ export class AzureChatAI implements ChatAgent {
         return ctx.AZURE_CHAT_MODEL || '';
     };
 
-    readonly request = async (params: LLMChatParams, context: AgentUserConfig, onStream: ChatStreamTextHandler | null): Promise<ResponseMessage[]> => {
+    readonly request = async (params: LLMChatParams, context: AgentUserConfig, onStream: ChatStreamTextHandler | null): Promise<{ messages: ResponseMessage[]; content: string }> => {
         const provider = createAzure({
             resourceName: context.AZURE_RESOURCE_NAME || undefined,
             apiKey: context.AZURE_API_KEY || undefined,

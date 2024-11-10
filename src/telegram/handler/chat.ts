@@ -58,34 +58,20 @@ export async function chatWithLLM(
         log.info(`start chat with LLM`);
         const answer = await requestCompletionsFromLLM(params, context, agent, modifier, onStream);
         log.info(`chat with LLM done`);
-        if (answer.length === 0) {
+        if (answer === '') {
             return sender.sendPlainText('No response');
         }
-        const lastAnswer = answer[answer.length - 1];
-        if (onStream && typeof lastAnswer.content === 'string') {
-            await onStream(lastAnswer.content, true);
-        } else if (typeof lastAnswer.content === 'string') {
+        if (onStream) {
+            await onStream(answer, true);
+        } else {
             await sender.sendRichText(
-                `${getLog(context.USER_CONFIG)}${lastAnswer.content}`,
+                `${getLog(context.USER_CONFIG)}${answer}`,
                 ENV.DEFAULT_PARSE_MODE as Telegram.ParseMode,
                 'chat',
             );
-        } else if (Array.isArray(lastAnswer.content)) {
-            for (const part of lastAnswer.content) {
-                if (Object.hasOwn(part, 'text')) {
-                    await sender.sendRichText(
-                        `${getLog(context.USER_CONFIG)}\n${(part as any).text}`,
-                        ENV.DEFAULT_PARSE_MODE as Telegram.ParseMode,
-                        'chat',
-                    );
-                }
-            }
-            log.info(`send chat end message via rich text`);
-        } else {
-            await sender.sendPlainText('unknown answer');
         }
 
-        return { type: 'text', text: lastAnswer.content } as UnionData;
+        return { type: 'text', text: answer } as UnionData;
     } catch (e) {
         let errMsg = `Error: `;
         if ((e as Error).name === 'AbortError') {

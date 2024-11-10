@@ -401,8 +401,8 @@ const ENV_KEY_MAPPER = {
   WORKERS_AI_MODEL: "WORKERS_CHAT_MODEL"
 };
 class Environment extends EnvironmentConfig {
-  BUILD_TIMESTAMP = 1731250885;
-  BUILD_VERSION = "f9960eb";
+  BUILD_TIMESTAMP = 1731258080;
+  BUILD_VERSION = "2e19c70";
   I18N = loadI18n();
   PLUGINS_ENV = {};
   USER_CONFIG = createAgentUserConfig();
@@ -15887,13 +15887,14 @@ async function requestCompletionsFromLLM(params, context, agent, modifier, onStr
     messages
   };
   const answer = await agent.request(llmParams, context.USER_CONFIG, onStream);
+  const { messages: raw_messages, content } = answer;
   if (!historyDisable) {
-    if (answer.at(-1)?.role === "assistant") {
+    if (raw_messages.at(-1)?.role === "assistant") {
       history.push(params);
-      history.push(...answer);
+      history.push(...raw_messages);
     }
   }
-  return answer;
+  return content;
 }
 async function requestText2Image(url, headers, body, render) {
   console.log("start generate image.");
@@ -16025,34 +16026,19 @@ async function chatWithLLM(message, params, context, modifier) {
     log.info(`start chat with LLM`);
     const answer = await requestCompletionsFromLLM(params, context, agent, modifier, onStream);
     log.info(`chat with LLM done`);
-    if (answer.length === 0) {
+    if (answer === "") {
       return sender.sendPlainText("No response");
     }
-    const lastAnswer = answer[answer.length - 1];
-    if (onStream && typeof lastAnswer.content === "string") {
-      await onStream(lastAnswer.content, true);
-    } else if (typeof lastAnswer.content === "string") {
+    if (onStream) {
+      await onStream(answer, true);
+    } else {
       await sender.sendRichText(
-        `${getLog(context.USER_CONFIG)}${lastAnswer.content}`,
+        `${getLog(context.USER_CONFIG)}${answer}`,
         ENV.DEFAULT_PARSE_MODE,
         "chat"
       );
-    } else if (Array.isArray(lastAnswer.content)) {
-      for (const part of lastAnswer.content) {
-        if (Object.hasOwn(part, "text")) {
-          await sender.sendRichText(
-            `${getLog(context.USER_CONFIG)}
-${part.text}`,
-            ENV.DEFAULT_PARSE_MODE,
-            "chat"
-          );
-        }
-      }
-      log.info(`send chat end message via rich text`);
-    } else {
-      await sender.sendPlainText("unknown answer");
     }
-    return { type: "text", text: lastAnswer.content };
+    return { type: "text", text: answer };
   } catch (e) {
     let errMsg = `Error: `;
     if (e.name === "AbortError") {
@@ -16553,9 +16539,8 @@ function AIMiddleware({ config, _models, activeTools, onStream }) {
   return {
     wrapGenerate: async ({ doGenerate, params, model }) => {
       log.info("doGenerate called");
-      log.debug(`params: ${JSON.stringify(params, null, 2)}`);
+      log.info(`provider: ${model.provider}, modelId: ${model.modelId} `);
       const modelId = model.modelId.startsWith(OpenAI.transformModelPerfix) ? model.modelId.slice(OpenAI.transformModelPerfix.length) : model.modelId;
-      log.info(`provider: ${model.provider}, modelId: ${modelId} `);
       const logs = getLogSingleton(config);
       activeTools.length > 0 ? logs.tool.model = modelId : logs.chat.model.push(modelId);
       const result2 = await doGenerate();
@@ -16564,9 +16549,8 @@ function AIMiddleware({ config, _models, activeTools, onStream }) {
     },
     wrapStream: async ({ doStream, params, model }) => {
       log.info("doStream called");
-      log.debug(`params: ${JSON.stringify(params, null, 2)}`);
-      const modelId = model.modelId.startsWith(OpenAI.transformModelPerfix) ? model.modelId.slice(OpenAI.transformModelPerfix.length) : model.modelId;
-      log.info(`provider: ${model.provider}, modelId: ${modelId} `);
+      log.info(`provider: ${model.provider}, modelId: ${model.modelId} `);
+      const modelId = model.modelId?.startsWith(OpenAI.transformModelPerfix) ? model.modelId?.slice(OpenAI.transformModelPerfix.length) : model.modelId;
       const logs = getLogSingleton(config);
       if (activeTools.length > 0) {
         logs.tool.model = modelId;
@@ -16594,17 +16578,19 @@ function AIMiddleware({ config, _models, activeTools, onStream }) {
       const { chunk } = data;
       if (chunk.type === "tool-call" && !sendToolCall) {
         sendToolCall = true;
-        log.info(`tool call: ${chunk.toolName}`);
-        onStream?.(`will start tool: ${chunk.toolName}`);
+        log.info(`will start tool: ${chunk.toolName}`);
       }
       return sendToolCall;
     },
     onStepFinish: (data) => {
-      const { text, toolResults, finishReason, usage } = data;
+      const { text, toolResults, finishReason, usage, request, response } = data;
       const logs = getLogSingleton(config);
       log.info("llm request end");
+      log.info(finishReason);
+      log.info("step text:", text);
+      log.debug("step raw request:", request);
+      log.debug("step raw response:", response);
       const time = ((Date.now() - startTime2) / 1e3).toFixed(1);
-      log.debug(toolResults);
       if (toolResults.length > 0) {
         if (toolResults.find((i) => i.result === "")) {
           throw new Error("Function result is empty");
@@ -16621,14 +16607,12 @@ function AIMiddleware({ config, _models, activeTools, onStream }) {
         log.info(func_logs);
         logs.functions.push(...func_logs);
         logs.tool.time.push((+time - maxFuncTime).toFixed(1));
-        onStream?.(`finish ${[...new Set(toolResults.map((i) => i.toolName))]}`);
+        log.info(`finish ${[...new Set(toolResults.map((i) => i.toolName))]}`);
       } else if (text === "") {
         throw new Error("None text");
       } else {
         activeTools.length > 0 ? logs.tool.time.push(time) : logs.chat.time.push(time);
       }
-      log.debug("step text:", text);
-      finishReason && log.info(finishReason);
       if (usage && !Number.isNaN(usage.promptTokens) && !Number.isNaN(usage.completionTokens)) {
         logs.tokens.push(`${usage.promptTokens},${usage.completionTokens}`);
         log.info(`tokens: ${JSON.stringify(usage)}`);
@@ -16999,11 +16983,17 @@ async function requestChatCompletionsV2(params, onStream, onResult = null) {
       });
       const contentFull = await streamHandler(stream.textStream, (t) => t, onStream);
       onResult?.(contentFull);
-      return (await stream.response).messages;
+      return {
+        messages: (await stream.response).messages,
+        content: contentFull
+      };
     } else {
       const result2 = await generateText(hander_params);
       onResult?.(result2.text);
-      return result2.response.messages;
+      return {
+        messages: result2.response.messages,
+        content: result2.text
+      };
     }
   } catch (error) {
     console.error(error.message, error.stack);
@@ -19186,12 +19176,15 @@ class WorkersChat extends WorkerBase {
       return data?.errors?.[0]?.message;
     };
     const text = await requestChatCompletions(url, header, body, onStream, null, options2);
-    return [
-      {
-        role: "assistant",
-        content: text
-      }
-    ];
+    return {
+      messages: [
+        {
+          role: "assistant",
+          content: text
+        }
+      ],
+      content: text
+    };
   };
 }
 class WorkersImage extends (_c = WorkerBase, _request_dec3 = [Log], _c) {
@@ -20765,21 +20758,11 @@ class AnswerChatInlineQuery {
       const resp = await agent.request({
         messages
       }, context.USER_CONFIG, isStream ? OnStream : null);
-      const lastAnswer = resp[resp.length - 1];
-      if (lastAnswer.content.length === 0) {
+      const { content: answer } = resp;
+      if (answer === "") {
         return sender.sendPlainText("No response");
       }
-      if (typeof lastAnswer.content === "string") {
-        return sender.sendPlainText(lastAnswer.content);
-      } else if (Array.isArray(lastAnswer.content) && lastAnswer.content.length > 0) {
-        for (const part of lastAnswer.content) {
-          if (Object.hasOwn(part, "text")) {
-            await OnStream.end?.(part.text);
-          }
-        }
-        return new Response("ok");
-      }
-      return sender.sendPlainText("Unknown response");
+      return sender.sendRichText(answer);
     } catch (error) {
       return sender.sendPlainText(`Error: ${error.message.substring(0, 4e3)}`);
     }

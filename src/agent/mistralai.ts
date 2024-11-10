@@ -16,7 +16,7 @@ export class Mistral implements ChatAgent {
         return ctx.MISTRAL_CHAT_MODEL;
     };
 
-    readonly request = async (params: LLMChatParams, context: AgentUserConfig, onStream: ChatStreamTextHandler | null): Promise<ResponseMessage[]> => {
+    readonly request = async (params: LLMChatParams, context: AgentUserConfig, onStream: ChatStreamTextHandler | null): Promise<{ messages: ResponseMessage[]; content: string }> => {
         const provider = createMistral({
             baseURL: context.MISTRAL_API_BASE,
             apiKey: context.MISTRAL_API_KEY || undefined,

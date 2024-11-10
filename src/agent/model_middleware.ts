@@ -16,9 +16,8 @@ export function AIMiddleware({ config, _models, activeTools, onStream }: { confi
     return {
         wrapGenerate: async ({ doGenerate, params, model }) => {
             log.info('doGenerate called');
-            log.debug(`params: ${JSON.stringify(params, null, 2)}`);
+            log.info(`provider: ${model.provider}, modelId: ${model.modelId} `);
             const modelId = model.modelId.startsWith(OpenAI.transformModelPerfix) ? model.modelId.slice(OpenAI.transformModelPerfix.length) : model.modelId;
-            log.info(`provider: ${model.provider}, modelId: ${modelId} `);
             const logs = getLogSingleton(config);
             activeTools.length > 0 ? logs.tool.model = modelId : logs.chat.model.push(modelId);
             const result = await doGenerate();
@@ -28,9 +27,8 @@ export function AIMiddleware({ config, _models, activeTools, onStream }: { confi
 
         wrapStream: async ({ doStream, params, model }) => {
             log.info('doStream called');
-            log.debug(`params: ${JSON.stringify(params, null, 2)}`);
-            const modelId = model.modelId.startsWith(OpenAI.transformModelPerfix) ? model.modelId.slice(OpenAI.transformModelPerfix.length) : model.modelId;
-            log.info(`provider: ${model.provider}, modelId: ${modelId} `);
+            log.info(`provider: ${model.provider}, modelId: ${model.modelId} `);
+            const modelId = model.modelId?.startsWith(OpenAI.transformModelPerfix) ? model.modelId?.slice(OpenAI.transformModelPerfix.length) : model.modelId;
             const logs = getLogSingleton(config);
             if (activeTools.length > 0) {
                 logs.tool.model = modelId;
@@ -61,18 +59,21 @@ export function AIMiddleware({ config, _models, activeTools, onStream }: { confi
             const { chunk } = data;
             if (chunk.type === 'tool-call' && !sendToolCall) {
                 sendToolCall = true;
-                log.info(`tool call: ${chunk.toolName}`);
-                onStream?.(`will start tool: ${chunk.toolName}`);
+                log.info(`will start tool: ${chunk.toolName}`);
             }
             return sendToolCall;
         },
 
         onStepFinish: (data: StepResult<any>) => {
-            const { text, toolResults, finishReason, usage } = data;
+            const { text, toolResults, finishReason, usage, request, response } = data;
             const logs = getLogSingleton(config);
             log.info('llm request end');
+            log.info(finishReason);
+            log.info('step text:', text);
+            log.debug('step raw request:', request);
+            log.debug('step raw response:', response);
+
             const time = ((Date.now() - startTime!) / 1e3).toFixed(1);
-            log.debug(toolResults);
             if (toolResults.length > 0) {
                 if (toolResults.find(i => i.result === '')) {
                     throw new Error('Function result is empty');
@@ -89,16 +90,14 @@ export function AIMiddleware({ config, _models, activeTools, onStream }: { confi
                 log.info(func_logs);
                 logs.functions.push(...func_logs);
                 logs.tool.time.push((+time - maxFuncTime).toFixed(1));
-                onStream?.(`finish ${[...new Set(toolResults.map(i => i.toolName))]}`);
+                log.info(`finish ${[...new Set(toolResults.map(i => i.toolName))]}`);
+                // onStream?.(`finish ${[...new Set(toolResults.map(i => i.toolName))]}`);
             } else if (text === '') {
                 throw new Error('None text');
             } else {
                 activeTools.length > 0 ? logs.tool.time.push(time) : logs.chat.time.push(time);
             }
-
-            log.debug('step text:', text);
-
-            finishReason && log.info(finishReason);
+            
             if (usage && !Number.isNaN(usage.promptTokens) && !Number.isNaN(usage.completionTokens)) {
                 logs.tokens.push(`${usage.promptTokens},${usage.completionTokens}`);
                 log.info(`tokens: ${JSON.stringify(usage)}`);
