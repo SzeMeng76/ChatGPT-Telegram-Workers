@@ -66,7 +66,7 @@ export async function chatWithLLM(
             await onStream(lastAnswer.content, true);
         } else if (typeof lastAnswer.content === 'string') {
             await sender.sendRichText(
-                `${getLog(context.USER_CONFIG)}\n${lastAnswer.content}`,
+                `${getLog(context.USER_CONFIG)}${lastAnswer.content}`,
                 ENV.DEFAULT_PARSE_MODE as Telegram.ParseMode,
                 'chat',
             );

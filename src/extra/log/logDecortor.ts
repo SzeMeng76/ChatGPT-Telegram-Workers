@@ -168,7 +168,7 @@ export function getLog(context: AgentUserConfig, returnModel: boolean = false): 
         logList.push(`${logObj.tokens.join('|')}`);
     }
 
-    return logList.filter(Boolean).map(entry => `>\`${entry}\``).join('\n');
+    return `LOGSTART\n${logList.filter(Boolean).map(entry => `>\`${entry}\``).join('\n')}LOGEND`;
 }
 
 export function clearLog(context: AgentUserConfig) {

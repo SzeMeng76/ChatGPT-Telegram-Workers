@@ -1,5 +1,4 @@
 /* eslint-disable unused-imports/no-unused-vars */
-
 import { log } from '../../log/logger';
 
 // original repo: https://github.com/navetacandra/ddg
@@ -8,23 +7,21 @@ async function getJS(query: string, signal?: AbortSignal | undefined) {
         `https://duckduckgo.com/?q=${encodeURIComponent(query)}`,
         { signal },
     ).then(res => res.text());
-    const url = html.match(
-        /"(https:\/\/links\.duckduckgo\.com\/d\.js[^">]+)">/,
-    )?.[1];
+    const url = /"(https:\/\/links\.duckduckgo\.com\/d\.js[^">]+)">/.exec(html)?.[1];
     if (!url)
         throw new Error('Failed to get JS URL');
     return {
         url,
-        path: url?.match(/\/d\.js.*/)?.[0],
-        vqd: url?.match(/vqd=([^&]+)/)?.[1],
+        path: /\/d\.js.*/.exec(url)?.[0],
+        vqd: /vqd=([^&]+)/.exec(url)?.[1],
     };
 };
 
 async function regularSearch(path: string, signal?: AbortSignal) {
     const js = await fetch(`https://links.duckduckgo.com${path}`, { signal }).then(res => res.text());
-    const result = js.match(/DDG\.pageLayout\.load\('d',?\s?(\[.+\])?\);/);
+    const result = /DDG\.pageLayout\.load\('d',?\s?(\[.+\])?\);/.exec(js);
     let data;
-    if (result && result[1]) {
+    if (result?.[1]) {
         try {
             data = JSON.parse(result[1]);
         } catch (e) {

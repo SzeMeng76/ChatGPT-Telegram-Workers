@@ -400,8 +400,8 @@ const ENV_KEY_MAPPER = {
   WORKERS_AI_MODEL: "WORKERS_CHAT_MODEL"
 };
 class Environment extends EnvironmentConfig {
-  BUILD_TIMESTAMP = 1731129332;
-  BUILD_VERSION = "0dd7212";
+  BUILD_TIMESTAMP = 1731220537;
+  BUILD_VERSION = "ffada28";
   I18N = loadI18n();
   PLUGINS_ENV = {};
   USER_CONFIG = createAgentUserConfig();
@@ -10989,22 +10989,20 @@ async function getJS(query, signal2) {
     `https://duckduckgo.com/?q=${encodeURIComponent(query)}`,
     { signal: signal2 }
   ).then((res) => res.text());
-  const url = html.match(
-    /"(https:\/\/links\.duckduckgo\.com\/d\.js[^">]+)">/
-  )?.[1];
+  const url = /"(https:\/\/links\.duckduckgo\.com\/d\.js[^">]+)">/.exec(html)?.[1];
   if (!url)
     throw new Error("Failed to get JS URL");
   return {
     url,
-    path: url?.match(/\/d\.js.*/)?.[0],
-    vqd: url?.match(/vqd=([^&]+)/)?.[1]
+    path: /\/d\.js.*/.exec(url)?.[0],
+    vqd: /vqd=([^&]+)/.exec(url)?.[1]
   };
 }
 async function regularSearch(path, signal2) {
   const js = await fetch(`https://links.duckduckgo.com${path}`, { signal: signal2 }).then((res) => res.text());
-  const result2 = js.match(/DDG\.pageLayout\.load\('d',?\s?(\[.+\])?\);/);
+  const result2 = /DDG\.pageLayout\.load\('d',?\s?(\[.+\])?\);/.exec(js);
   let data;
-  if (result2 && result2[1]) {
+  if (result2?.[1]) {
     try {
       data = JSON.parse(result2[1]);
     } catch (e) {
@@ -11592,7 +11590,8 @@ function getLog(context, returnModel = false) {
   if (logObj.tokens.length > 0 && showToken) {
     logList.push(`${logObj.tokens.join("|")}`);
   }
-  return logList.filter(Boolean).map((entry) => `>\`${entry}\``).join("\n");
+  return `LOGSTART
+${logList.filter(Boolean).map((entry) => `>\`${entry}\``).join("\n")}LOGEND`;
 }
 function clearLog(context) {
   logSingleton.delete(context);
@@ -11770,6 +11769,29 @@ function processInlineElements(text) {
   return children;
 }
 const escapeChars = /([_*[\]()\\~`>#+\-=|{}.!])/g;
+const escapedChars = {
+  "\\*": "ESCAPEASTERISK",
+  "\\_": "ESCAPEUNDERSCORE",
+  "\\~": "ESCAPETILDE",
+  "\\|": "ESCAPEPIP",
+  "\\`": "ESCAPEBACKTICK",
+  "\\\\": "ESCAPEBACKSLASH",
+  "\\(": "ESCAPELEFTPARENTHESIS",
+  "\\)": "ESCAPERIGHTPARENTHESIS",
+  "\\[": "ESCAPELEFTBRACKET",
+  "\\]": "ESCAPERIGHTBRACKET",
+  "\\{": "ESCAPELEFTBRACE",
+  "\\}": "ESCAPERIGHTBRACE",
+  "\\>": "ESCAPEGREATERTHAN",
+  "\\#": "ESCAPEHASH",
+  "\\+": "ESCAPEPLUS",
+  "\\-": "ESCAPEMINUS",
+  "\\=": "ESCAPEEQUAL",
+  "\\.": "ESCAPEDOT",
+  "\\!": "ESCAPEEXCLAMATION",
+  "\\?": "ESCAPEQUESTION"
+};
+const escapedCharsReverseMap = new Map(Object.entries(escapedChars).map(([key, value]) => [value, key]));
 function escape(text) {
   const lines = text.split("\n");
   const stack = [];
@@ -11801,14 +11823,16 @@ function escape(text) {
 \`\`\``;
     result2.push(handleEscape(last, "code"));
   }
-  return result2.join("\n");
+  const regexp = /^LOGSTART\s(.*?)LOGEND/s;
+  return result2.join("\n").replace(regexp, "**$1||").replace(new RegExp(Object.values(escapedChars).join("|"), "g"), (match) => escapedCharsReverseMap.get(match) ?? match);
 }
 function handleEscape(text, type = "text") {
   if (!text.trim()) {
     return text;
   }
+  text = text.replace(/\\[*_~|`\\()[\]{}>#+\-=.!]/g, (match) => escapedChars[match]);
   if (type === "text") {
-    text = text.replace(escapeChars, "\\$1").replace(/\\\*\\\*(.*?[^\\])\\\*\\\*/g, "*$1*").replace(/\\_\\_(.*?[^\\])\\_\\_/g, "__$1__").replace(/\\_(.*?[^\\])\\_/g, "_$1_").replace(/\\~(.*?[^\\])\\~/g, "~$1~").replace(/\\\|\\\|(.*?[^\\])\\\|\\\|/g, "||$1||").replace(/\\\[([^\]]+?)\\\]\\\((.+?)\\\)/g, "[$1]($2)").replace(/\\`(.*?[^\\])\\`/g, "`$1`").replace(/\\\\\\([_*[\]()\\~`>#+\-=|{}.!])/g, "\\$1").replace(/^(\s*)\\(>.+\s*)$/gm, "$1$2").replace(/^(\s*)\\-\s*(.+)$/gm, "$1• $2").replace(/^((\\#){1,3}\s)(.+)/gm, "$1*$3*");
+    text = text.replace(escapeChars, "\\$1").replace(/\\\*\\\*(\S|\S.*?\S)\\\*\\\*/g, "*$1*").replace(/\\_\\_(\S|\S.*?\S)\\_\\_/g, "__$1__").replace(/\\_(\S|\S.*?\S)\\_/g, "_$1_").replace(/\\~(\S|\S.*?\S)\\~/g, "~$1~").replace(/\\\|\\\|(\S|\S.*?\S)\\\|\\\|/g, "||$1||").replace(/\\\[([^\]]+)\]\\((.+?)\\)/g, "[$1]($2)").replace(/\\`(.*?)\\`/g, "`$1`").replace(/^(\s*)\\(>.+\s*)$/gm, "$1$2").replace(/^(\s*)\\-\s+(.+)$/gm, "$1• $2").replace(/^((\\#){1,3}\s)(.+)/gm, "$1*$3*");
   } else {
     const codeBlank = text.length - text.trimStart().length;
     if (codeBlank > 0) {
@@ -16008,8 +16032,7 @@ async function chatWithLLM(message, params, context, modifier) {
       await onStream(lastAnswer.content, true);
     } else if (typeof lastAnswer.content === "string") {
       await sender.sendRichText(
-        `${getLog(context.USER_CONFIG)}
-${lastAnswer.content}`,
+        `${getLog(context.USER_CONFIG)}${lastAnswer.content}`,
         ENV.DEFAULT_PARSE_MODE,
         "chat"
       );
