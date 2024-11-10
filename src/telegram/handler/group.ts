@@ -62,8 +62,9 @@ export function SubstituteWords(message: Telegram.Message): boolean {
         }
     }
     // 新的触发逻辑
-    const isGroup = isTelegramChatTypeGroup(message.chat.type);
-    if (!ENV.CHAT_TRIGGER_PERFIX || !(message.text || message.caption)?.startsWith(ENV.CHAT_TRIGGER_PERFIX)) {
+    // inline message not exist chat property
+    const isGroup = isTelegramChatTypeGroup(message?.chat?.type || 'private');
+    if (!ENV.CHAT_TRIGGER_PERFIX || !(message?.text || message.caption)?.startsWith(ENV.CHAT_TRIGGER_PERFIX)) {
         if (isGroup) {
             return false;
         }

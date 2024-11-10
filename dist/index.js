@@ -400,8 +400,8 @@ const ENV_KEY_MAPPER = {
   WORKERS_AI_MODEL: "WORKERS_CHAT_MODEL"
 };
 class Environment extends EnvironmentConfig {
-  BUILD_TIMESTAMP = 1731220537;
-  BUILD_VERSION = "ffada28";
+  BUILD_TIMESTAMP = 1731221435;
+  BUILD_VERSION = "9cea301";
   I18N = loadI18n();
   PLUGINS_ENV = {};
   USER_CONFIG = createAgentUserConfig();
@@ -20661,8 +20661,8 @@ function SubstituteWords(message) {
       return false;
     }
   }
-  const isGroup = isTelegramChatTypeGroup(message.chat.type);
-  if (!ENV.CHAT_TRIGGER_PERFIX || !(message.text || message.caption)?.startsWith(ENV.CHAT_TRIGGER_PERFIX)) {
+  const isGroup = isTelegramChatTypeGroup(message?.chat?.type || "private");
+  if (!ENV.CHAT_TRIGGER_PERFIX || !(message?.text || message.caption)?.startsWith(ENV.CHAT_TRIGGER_PERFIX)) {
     if (isGroup) {
       return false;
     }
@@ -20745,24 +20745,28 @@ class AnswerChatInlineQuery {
     if (context.USER_CONFIG.SYSTEM_INIT_MESSAGE) {
       messages.unshift({ role: "system", content: context.USER_CONFIG.SYSTEM_INIT_MESSAGE });
     }
-    const resp = await agent.request({
-      messages
-    }, context.USER_CONFIG, isStream ? OnStream : null);
-    const lastAnswer = resp[resp.length - 1];
-    if (lastAnswer.content.length === 0) {
-      return sender.sendPlainText("No response");
-    }
-    if (typeof lastAnswer.content === "string") {
-      return sender.sendPlainText(lastAnswer.content);
-    } else if (Array.isArray(lastAnswer.content) && lastAnswer.content.length > 0) {
-      for (const part of lastAnswer.content) {
-        if (Object.hasOwn(part, "text")) {
-          await OnStream.end?.(part.text);
-        }
+    try {
+      const resp = await agent.request({
+        messages
+      }, context.USER_CONFIG, isStream ? OnStream : null);
+      const lastAnswer = resp[resp.length - 1];
+      if (lastAnswer.content.length === 0) {
+        return sender.sendPlainText("No response");
       }
-      return new Response("ok");
+      if (typeof lastAnswer.content === "string") {
+        return sender.sendPlainText(lastAnswer.content);
+      } else if (Array.isArray(lastAnswer.content) && lastAnswer.content.length > 0) {
+        for (const part of lastAnswer.content) {
+          if (Object.hasOwn(part, "text")) {
+            await OnStream.end?.(part.text);
+          }
+        }
+        return new Response("ok");
+      }
+      return sender.sendPlainText("Unknown response");
+    } catch (error) {
+      return sender.sendPlainText(`Error: ${error.message.substring(0, 4e3)}`);
     }
-    return sender.sendPlainText("Unknown response");
   };
   handlerQuestion = async (chosenInline, context, sender) => {
     const question = chosenInline.query.substring(0, chosenInline.query.length - 1).trim();

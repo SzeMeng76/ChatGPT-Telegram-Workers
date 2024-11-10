@@ -29,24 +29,28 @@ export class AnswerChatInlineQuery implements answerInlineQuery {
         if (context.USER_CONFIG.SYSTEM_INIT_MESSAGE) {
             messages.unshift({ role: 'system', content: context.USER_CONFIG.SYSTEM_INIT_MESSAGE });
         }
-        const resp = await agent.request({
-            messages: messages as CoreMessage[],
-        }, context.USER_CONFIG, isStream ? OnStream : null);
-        const lastAnswer = resp[resp.length - 1];
-        if (lastAnswer.content.length === 0) {
-            return sender.sendPlainText('No response');
-        }
-        if (typeof lastAnswer.content === 'string') {
-            return sender.sendPlainText(lastAnswer.content);
-        } else if (Array.isArray(lastAnswer.content) && lastAnswer.content.length > 0) {
-            for (const part of lastAnswer.content) {
-                if (Object.hasOwn(part, 'text')) {
-                    await OnStream.end?.((part as any).text);
-                }
+        try {
+            const resp = await agent.request({
+                messages: messages as CoreMessage[],
+            }, context.USER_CONFIG, isStream ? OnStream : null);
+            const lastAnswer = resp[resp.length - 1];
+            if (lastAnswer.content.length === 0) {
+                return sender.sendPlainText('No response');
             }
-            return new Response('ok');
+            if (typeof lastAnswer.content === 'string') {
+                return sender.sendPlainText(lastAnswer.content);
+            } else if (Array.isArray(lastAnswer.content) && lastAnswer.content.length > 0) {
+                for (const part of lastAnswer.content) {
+                    if (Object.hasOwn(part, 'text')) {
+                        await OnStream.end?.((part as any).text);
+                    }
+                }
+                return new Response('ok');
+            }
+            return sender.sendPlainText('Unknown response');
+        } catch (error) {
+            return sender.sendPlainText(`Error: ${(error as Error).message.substring(0, 4000)}`);
         }
-        return sender.sendPlainText('Unknown response');
     };
 
     handlerQuestion = async (chosenInline: ChosenInlineResult, context: ChosenInlineWorkerContext, sender: MessageSender): Promise<string> => {
