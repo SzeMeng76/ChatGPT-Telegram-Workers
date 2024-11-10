@@ -49,16 +49,17 @@ export class OpenAI extends OpenAIBase implements ChatAgent {
     };
 
     readonly request = async (params: LLMChatParams, context: AgentUserConfig, onStream: ChatStreamTextHandler | null): Promise<ResponseMessage[]> => {
+        const userMessage = params.messages.at(-1) as CoreUserMessage;
+        const originalModel = this.model(context, userMessage);
+        const transformedModel = this.transformModel(originalModel, context);
         const provider = createOpenAI({
             baseURL: context.OPENAI_API_BASE,
             apiKey: this.apikey(context),
             compatibility: 'strict',
-            fetch: this.fetch,
+            fetch: originalModel === transformedModel ? undefined : this.fetch,
         });
 
-        const userMessage = params.messages.at(-1) as CoreUserMessage;
-        const originalModel = this.model(context, userMessage);
-        const languageModelV1 = provider.languageModel(this.transformModel(originalModel, context), undefined);
+        const languageModelV1 = provider.languageModel(transformedModel, undefined);
         const { messages, onStream: newOnStream } = this.extraHandle(originalModel, params.messages, context, onStream);
 
         return requestChatCompletionsV2(await warpLLMParams({

@@ -401,8 +401,8 @@ const ENV_KEY_MAPPER = {
   WORKERS_AI_MODEL: "WORKERS_CHAT_MODEL"
 };
 class Environment extends EnvironmentConfig {
-  BUILD_TIMESTAMP = 1731244126;
-  BUILD_VERSION = "7ba419d";
+  BUILD_TIMESTAMP = 1731249631;
+  BUILD_VERSION = "77a9802";
   I18N = loadI18n();
   PLUGINS_ENV = {};
   USER_CONFIG = createAgentUserConfig();
@@ -16405,15 +16405,16 @@ class OpenAI extends OpenAIBase {
     return context.OPENAI_API_BASE;
   };
   request = async (params, context, onStream) => {
+    const userMessage = params.messages.at(-1);
+    const originalModel = this.model(context, userMessage);
+    const transformedModel = this.transformModel(originalModel, context);
     const provider = createOpenAI({
       baseURL: context.OPENAI_API_BASE,
       apiKey: this.apikey(context),
       compatibility: "strict",
-      fetch: this.fetch
+      fetch: originalModel === transformedModel ? void 0 : this.fetch
     });
-    const userMessage = params.messages.at(-1);
-    const originalModel = this.model(context, userMessage);
-    const languageModelV1 = provider.languageModel(this.transformModel(originalModel, context), void 0);
+    const languageModelV1 = provider.languageModel(transformedModel, void 0);
     const { messages, onStream: newOnStream } = this.extraHandle(originalModel, params.messages, context, onStream);
     return requestChatCompletionsV2(await warpLLMParams({
       model: languageModelV1,
