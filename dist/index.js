@@ -407,8 +407,8 @@ const ENV_KEY_MAPPER = {
   WORKERS_AI_MODEL: "WORKERS_CHAT_MODEL"
 };
 class Environment extends EnvironmentConfig {
-  BUILD_TIMESTAMP = 1731306073;
-  BUILD_VERSION = "8d67994";
+  BUILD_TIMESTAMP = 1731306915;
+  BUILD_VERSION = "493a7d6";
   I18N = loadI18n();
   PLUGINS_ENV = {};
   USER_CONFIG = createAgentUserConfig();
@@ -18477,10 +18477,7 @@ class Google {
   request = async (params, context, onStream) => {
     const provider = createGoogleGenerativeAI({
       baseURL: context.GOOGLE_API_BASE,
-      apiKey: context.GOOGLE_API_KEY || void 0,
-      fetch: async (url, options2) => {
-        return fetch(url, options2);
-      }
+      apiKey: context.GOOGLE_API_KEY || void 0
     });
     const languageModelV1 = provider.languageModel(this.model(context), void 0);
     return requestChatCompletionsV2(await warpLLMParams({
