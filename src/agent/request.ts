@@ -70,7 +70,9 @@ export function isEventStreamResponse(resp: Response): boolean {
     return false;
 }
 
-export async function requestChatCompletions(url: string, header: Record<string, string>, body: any, onStream: ChatStreamTextHandler | null, onResult: ChatStreamTextHandler | null = null, options: SseChatCompatibleOptions | null = null): Promise<string> {
+type OnResult = ((result: any) => Promise<any>) | null;
+
+export async function requestChatCompletions(url: string, header: Record<string, string>, body: any, onStream: ChatStreamTextHandler | null, onResult: OnResult = null, options: SseChatCompatibleOptions | null = null): Promise<string> {
     const controller = new AbortController();
     const { signal } = controller;
 
@@ -129,13 +131,12 @@ function clearTimeoutID(timeoutID: any) {
         clearTimeout(timeoutID);
 }
 
-export async function streamHandler(stream: AsyncIterable<any>, contentExtractor: (data: any) => string | null, onStream: ChatStreamTextHandler): Promise<string> {
+export async function streamHandler(stream: AsyncIterable<any>, contentExtractor: (data: any) => string | null, onStream: ChatStreamTextHandler, messageReferencer?: string[]): Promise<string> {
     log.info(`start handle stream`);
 
     let contentFull = '';
     let lengthDelta = 0;
     let updateStep = 5;
-    let msgPromise = null;
     let lastChunk = '';
 
     const immediatePromise = Promise.resolve('[PROMISE DONE]');
@@ -143,27 +144,26 @@ export async function streamHandler(stream: AsyncIterable<any>, contentExtractor
     try {
         for await (const part of stream) {
             const textPart = contentExtractor(part);
-            if (textPart === null) {
+            if (textPart === null || textPart === '') {
                 continue;
             }
-            if (textPart === '')
-                continue;
             // 已有delta + 上次chunk的长度
             lengthDelta += lastChunk.length;
             // 当前内容为上次迭代后的数据 （减少一次迭代）
             contentFull += lastChunk;
+            messageReferencer?.push(lastChunk);
             // 更新chunk
             lastChunk = textPart;
 
             if (lastChunk && lengthDelta > updateStep) {
                 // 已发送过消息且消息未发送完成
-                if (msgPromise && (await Promise.race([msgPromise, immediatePromise]) === '[PROMISE DONE]')) {
+                if (onStream.sentPromise && (await Promise.race([onStream.sentPromise, immediatePromise]) === '[PROMISE DONE]')) {
                     continue;
                 }
 
                 lengthDelta = 0;
                 updateStep += 20;
-                msgPromise = onStream(`${contentFull}●`);
+                onStream.send(`${contentFull}●`);
             }
         }
         contentFull += lastChunk;
@@ -175,10 +175,11 @@ export async function streamHandler(stream: AsyncIterable<any>, contentExtractor
         contentFull += `\nERROR: ${(e as Error).message}`;
     }
 
-    await msgPromise;
+    await onStream.sentPromise;
     return contentFull;
 }
-export async function requestChatCompletionsV2(params: { model: LanguageModelV1; toolModel?: LanguageModelV1; prompt?: string; messages: CoreMessage[]; tools?: any; activeTools?: string[]; toolChoice?: CoreToolChoice<any>[]; context: AgentUserConfig }, onStream: ChatStreamTextHandler | null, onResult: ChatStreamTextHandler | null = null): Promise<{ messages: ResponseMessage[]; content: string }> {
+export async function requestChatCompletionsV2(params: { model: LanguageModelV1; toolModel?: LanguageModelV1; prompt?: string; messages: CoreMessage[]; tools?: any; activeTools?: string[]; toolChoice?: CoreToolChoice<any>[]; context: AgentUserConfig }, onStream: ChatStreamTextHandler | null, onResult: OnResult | null = null): Promise<{ messages: ResponseMessage[]; content: string }> {
+    const messageReferencer = [] as string[];
     try {
         const middleware = AIMiddleware({
             config: params.context,
@@ -186,6 +187,7 @@ export async function requestChatCompletionsV2(params: { model: LanguageModelV1;
             activeTools: params.activeTools || [],
             onStream,
             toolChoice: params.toolChoice || [],
+            messageReferencer,
         });
         const hander_params = {
             model: wrapLanguageModel({
@@ -205,7 +207,7 @@ export async function requestChatCompletionsV2(params: { model: LanguageModelV1;
                 ...hander_params,
                 onChunk: middleware.onChunk as (data: any) => void,
             });
-            const contentFull = await streamHandler(stream.textStream, t => t, onStream);
+            const contentFull = await streamHandler(stream.textStream, t => t, onStream, messageReferencer);
             onResult?.(contentFull);
             return {
                 messages: (await stream.response).messages,

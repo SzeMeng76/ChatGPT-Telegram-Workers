@@ -407,8 +407,8 @@ const ENV_KEY_MAPPER = {
   WORKERS_AI_MODEL: "WORKERS_CHAT_MODEL"
 };
 class Environment extends EnvironmentConfig {
-  BUILD_TIMESTAMP = 1731306915;
-  BUILD_VERSION = "493a7d6";
+  BUILD_TIMESTAMP = 1731341135;
+  BUILD_VERSION = "a2cb7b4";
   I18N = loadI18n();
   PLUGINS_ENV = {};
   USER_CONFIG = createAgentUserConfig();
@@ -11609,7 +11609,8 @@ function getLog(context, returnModel = false) {
   }
   const formattedEntries = logList.filter(Boolean).map((entry) => `>\`${entry}\``).join("\n");
   return `LOGSTART
-${formattedEntries}LOGEND
+${formattedEntries}
+LOGEND
 `;
 }
 function clearLog(context) {
@@ -11846,7 +11847,7 @@ function escape(text) {
 \`\`\``;
     result2.push(handleEscape(last, "code"));
   }
-  const regexp = /^LOGSTART\s(.*?)LOGEND/s;
+  const regexp = /^\s*LOGSTART\n(.*?)\s*LOGEND/s;
   return result2.join("\n").replace(regexp, "**$1||").replace(new RegExp(Object.values(escapedChars).join("|"), "g"), (match) => escapedCharsReverseMap.get(match) ?? match);
 }
 function handleEscape(text, type2 = "text") {
@@ -11881,7 +11882,7 @@ class MessageContext {
     this.chatType = message.chat.type;
     this.message = message;
     if (message.chat.type === "group" || message.chat.type === "supergroup") {
-      if (message?.reply_to_message && ENV.EXTRA_MESSAGE_CONTEXT && ENV.ENABLE_REPLY_TO_MENTION && !message.reply_to_message.from?.is_bot) {
+      if (message?.reply_to_message && ENV.EXTRA_MESSAGE_CONTEXT && !message.is_topic_message && ENV.ENABLE_REPLY_TO_MENTION && !message.reply_to_message.from?.is_bot) {
         this.reply_to_message_id = message.reply_to_message.message_id;
       } else {
         this.reply_to_message_id = message.message_id;
@@ -11939,6 +11940,7 @@ class MessageSender {
     } else {
       const params = {
         chat_id: context.chat_id,
+        message_thread_id: context.message_thread_id || void 0,
         parse_mode: context.parse_mode || void 0,
         text: message
       };
@@ -12009,6 +12011,7 @@ class MessageSender {
     }
     const params = {
       chat_id: this.context.chat_id,
+      message_thread_id: this.context.message_thread_id || void 0,
       photo,
       ...caption ? { caption: renderMessage(parse_mode || null, caption) } : {},
       parse_mode
@@ -12029,8 +12032,16 @@ class MessageSender {
     }
     const params = {
       chat_id: this.context.chat_id,
+      message_thread_id: this.context.message_thread_id || void 0,
       media
     };
+    if (this.context.reply_to_message_id) {
+      params.reply_parameters = {
+        message_id: this.context.reply_to_message_id,
+        chat_id: this.context.chat_id,
+        allow_sending_without_reply: this.context.allow_sending_without_reply || void 0
+      };
+    }
     const resp = this.api.sendMediaGroup(params);
     return checkIsNeedTagIds(this.context, resp, "chat");
   }
@@ -12040,6 +12051,7 @@ class MessageSender {
     }
     const params = {
       chat_id: this.context.chat_id,
+      message_thread_id: this.context.message_thread_id || void 0,
       document,
       caption,
       parse_mode
@@ -12052,6 +12064,25 @@ class MessageSender {
       };
     }
     return this.api.sendDocument(params);
+  }
+  editMessageMedia(media, caption, parse_mode) {
+    if (!this.context) {
+      throw new Error("Message context not set");
+    }
+    if (!this.context.message_id) {
+      throw new Error("Message id is null");
+    }
+    const params = {
+      chat_id: this.context.chat_id,
+      message_id: this.context.message_id,
+      media: {
+        ...media,
+        ...caption ? { caption: parse_mode ? renderMessage(parse_mode, caption) : caption } : {},
+        parse_mode
+      }
+    };
+    const resp = this.api.editMessageMedia(params);
+    return checkIsNeedTagIds(this.context, resp, "chat");
   }
 }
 class TelegraphSender {
@@ -16028,33 +16059,21 @@ async function messageInitialize(sender) {
   }
 }
 async function chatWithLLM(message, params, context, modifier) {
-  const sender = context.MIDDEL_CONTEXT.sender ?? MessageSender.from(context.SHARE_CONTEXT.botToken, message);
-  await messageInitialize(sender);
-  let onStream = null;
-  if (ENV.STREAM_MODE) {
-    onStream = OnStreamHander(sender, context);
-  }
+  const sender = MessageSender.from(context.SHARE_CONTEXT.botToken, message);
+  const streamSender = OnStreamHander(sender, context, message.text || "");
+  streamSender.sentPromise = messageInitialize(sender);
   const agent = loadChatLLM(context.USER_CONFIG);
   if (!agent) {
-    return sender.sendPlainText("LLM is not enabled");
+    return streamSender.end?.("LLM is not enabled");
   }
   try {
     log.info(`start chat with LLM`);
-    const answer = await requestCompletionsFromLLM(params, context, agent, modifier, onStream);
+    const answer = await requestCompletionsFromLLM(params, context, agent, modifier, ENV.STREAM_MODE ? streamSender : null);
     log.info(`chat with LLM done`);
     if (answer === "") {
       return sender.sendPlainText("No response");
     }
-    if (onStream) {
-      await onStream(answer, true);
-    } else {
-      await sender.sendRichText(
-        `${getLog(context.USER_CONFIG)}${answer}`,
-        ENV.DEFAULT_PARSE_MODE,
-        "chat"
-      );
-    }
-    return { type: "text", text: answer };
+    return streamSender.end?.(answer);
   } catch (e) {
     let errMsg = `Error: `;
     if (e.name === "AbortError") {
@@ -16062,8 +16081,7 @@ async function chatWithLLM(message, params, context, modifier) {
     } else {
       errMsg += e.message.slice(0, 2048);
     }
-    return sender.sendRichText(`${getLog(context.USER_CONFIG)}
-${errMsg}`);
+    return streamSender.end?.(errMsg);
   }
 }
 function findPhotoFileID(photos, offset) {
@@ -16137,19 +16155,25 @@ ${urls.join("\n")}`);
     return params;
   }
 }
-function OnStreamHander(sender, context) {
-  let nextEnableTime = Date.now();
-  async function onStream(text, isEnd = false) {
+function OnStreamHander(sender, context, question) {
+  const streamSender = {
+    nextEnableTime: Date.now(),
+    sentMessageIds: sender instanceof MessageSender && sender.context.message_id ? [sender.context.message_id] : [],
+    sentPromise: null,
+    send: null,
+    end: null
+  };
+  streamSender.send = async (text, isEnd = false) => {
     try {
-      if (isEnd && context && ENV.TELEGRAPH_NUM_LIMIT > 0 && text.length > ENV.TELEGRAPH_NUM_LIMIT && ["group", "supergroup"].includes(sender.context.chatType)) {
-        return sendTelegraph(context, sender, context.MIDDEL_CONTEXT.originalMessage.text || "Redo", text);
+      if (sender instanceof MessageSender && isTelegramChatTypeGroup(sender.context.chatType) && ENV.TELEGRAPH_NUM_LIMIT > 0 && text.length > ENV.TELEGRAPH_NUM_LIMIT && context) {
+        return;
       }
-      if (!isEnd && nextEnableTime && nextEnableTime > Date.now()) {
-        log.info(`Need await: ${nextEnableTime - Date.now()}ms`);
+      if (!isEnd && (streamSender.nextEnableTime || 0) > Date.now()) {
+        log.info(`Need await: ${(streamSender.nextEnableTime || 0) - Date.now()}ms`);
         return;
       }
       if (ENV.TELEGRAM_MIN_STREAM_INTERVAL > 0) {
-        nextEnableTime = Date.now() + ENV.TELEGRAM_MIN_STREAM_INTERVAL;
+        streamSender.nextEnableTime = Date.now() + ENV.TELEGRAM_MIN_STREAM_INTERVAL;
       }
       const data = context ? `${getLog(context.USER_CONFIG)}
 ${text}` : text;
@@ -16158,8 +16182,8 @@ ${text}` : text;
       if (resp.status === 429) {
         const retryAfter = Number.parseInt(resp.headers.get("Retry-After") || "");
         if (retryAfter) {
-          nextEnableTime = Date.now() + retryAfter * 1e3;
-          log.info(`Status 429, need wait: ${nextEnableTime - Date.now()}ms`);
+          streamSender.nextEnableTime = Date.now() + retryAfter * 1e3;
+          log.info(`Status 429, need wait: ${streamSender.nextEnableTime - Date.now()}ms`);
           return;
         }
       }
@@ -16168,6 +16192,7 @@ ${text}` : text;
         sender.update({
           message_id: respJson.result.message_id
         });
+        streamSender.sentMessageIds.push(respJson.result.message_id);
       } else if (!resp.ok) {
         log.error(`send message failed: ${resp.status} ${resp.statusText}`);
         return sender.sendPlainText(text);
@@ -16175,21 +16200,26 @@ ${text}` : text;
     } catch (e) {
       console.error(e);
     }
-  }
-  onStream.nextEnableTime = () => nextEnableTime;
-  onStream.end = async (text) => {
-    if (nextEnableTime > Date.now()) {
-      await new Promise((resolve) => setTimeout(resolve, nextEnableTime - Date.now()));
-    }
-    return sender.sendRichText(text, ENV.DEFAULT_PARSE_MODE);
   };
-  return onStream;
+  streamSender.end = async (text) => {
+    await waitUntil((streamSender.nextEnableTime || 0) + 10);
+    if (sender instanceof MessageSender && isTelegramChatTypeGroup(sender.context.chatType) && ENV.TELEGRAPH_NUM_LIMIT > 0 && text.length > ENV.TELEGRAPH_NUM_LIMIT && context) {
+      return sendTelegraph(context, sender, question || "Redo Question", text);
+    }
+    const data = context ? `${getLog(context.USER_CONFIG)}
+${text}` : text;
+    return sender.sendRichText(data, ENV.DEFAULT_PARSE_MODE, "chat");
+  };
+  return streamSender;
 }
 async function sendTelegraph(context, sender, question, text) {
   log.info(`send telegraph`);
+  if (question.length > 600) {
+    question = `${question.slice(0, 300)}...${question.slice(-300)}`;
+  }
   const prefix = `#Question
 \`\`\`
-${question.length > 400 ? `${question.slice(0, 200)}...${question.slice(-200)}` : question}
+${question}
 \`\`\`
 ---`;
   const botName = context.SHARE_CONTEXT.botName;
@@ -16198,7 +16228,7 @@ ${question.length > 400 ? `${question.slice(0, 200)}...${question.slice(-200)}` 
 🤖 **${getLog(context.USER_CONFIG, true)}**
 `;
   const debug_info = `debug info:
-${getLog(context.USER_CONFIG)}`;
+${getLog(context.USER_CONFIG)}`.replace("LOGSTART", "").replace("LOGEND", "").replace("`", "").trim();
   const telegraph_suffix = `
 ---
 \`\`\`
@@ -16210,8 +16240,9 @@ ${debug_info}
     telegraph_prefix + text + telegraph_suffix
   );
   const url = `https://telegra.ph/${telegraphSender.teleph_path}`;
-  const msg = `回答已经转换成完整文章~
+  const msg = `回答已经转换成完整文章，请及时查看~
 [🔗点击进行查看](${url})`;
+  log.info(`send telegraph message: ${msg}`);
   await sender.sendRichText(msg);
   return resp;
 }
@@ -16255,12 +16286,13 @@ async function handleTextToImage(eMsg, message, params, context) {
     return sender.sendPlainText("ERROR: Image generator not found");
   }
   sendAction(context.SHARE_CONTEXT.botToken, message.chat.id);
-  const msg = await sender.sendPlainText("Please wait a moment...", "tip").then((r) => r.json());
+  const { message_id } = await sender.sendPlainText("Please wait a moment...", "tip").then((r) => r.json());
+  sender.update({ message_id });
   const result2 = await agent.request(eMsg.text, context.USER_CONFIG);
   log.info("imageresult", JSON.stringify(result2));
   await sendImages(result2, ENV.SEND_IMAGE_FILE, sender, context.USER_CONFIG);
   const api = createTelegramBotAPI(context.SHARE_CONTEXT.botToken);
-  await api.deleteMessage({ chat_id: sender.context.chat_id, message_id: msg.result.message_id });
+  await api.deleteMessage({ chat_id: sender.context.chat_id, message_id });
   return result2;
 }
 async function handleAudioToText(eMsg, message, params, context) {
@@ -16282,13 +16314,19 @@ async function sendImages(img, SEND_IMAGE_FILE, sender, config) {
 > \`${img.text}\`` : getLog(config);
   if (img.url && img.url.length > 1) {
     const images = img.url.map((url) => ({
-      type: SEND_IMAGE_FILE ? "file" : "photo",
+      type: SEND_IMAGE_FILE ? "document" : "photo",
       media: url
     }));
     images[0].caption = caption;
+    images[0].parse_mode = ENV.DEFAULT_PARSE_MODE;
     return await sender.sendMediaGroup(images);
+  } else if (img.url && img.url.length === 1) {
+    return sender.editMessageMedia({
+      type: "photo",
+      media: img.url[0]
+    }, caption, ENV.DEFAULT_PARSE_MODE);
   } else if (img.url || img.raw) {
-    return await sender.sendPhoto((img.url || img.raw)[0], caption, "MarkdownV2");
+    return sender.sendPhoto((img.url || img.raw)[0], caption, "MarkdownV2");
   } else {
     return sender.sendPlainText("ERROR: No image found");
   }
@@ -16373,6 +16411,9 @@ function chunckArray(arr, size) {
     result2.push(arr.slice(i, i + size));
   }
   return result2;
+}
+async function waitUntil(timestamp) {
+  return new Promise((resolve) => setTimeout(resolve, Math.max(0, timestamp - Date.now())));
 }
 class OpenAIBase {
   name = "openai";
@@ -16549,10 +16590,10 @@ class Transcription extends (_b = OpenAIBase, _request_dec2 = [Log], _b) {
 _init2 = __decoratorStart(_b);
 __decorateElement(_init2, 5, "request", _request_dec2, Transcription);
 __decoratorMetadata(_init2, Transcription);
-function AIMiddleware({ config, _models, activeTools, onStream, toolChoice }) {
+function AIMiddleware({ config, _models, activeTools, onStream, toolChoice, messageReferencer }) {
   let startTime2;
   let sendToolCall = false;
-  let toolChoiceIndex = 0;
+  let step = 0;
   return {
     wrapGenerate: async ({ doGenerate, params, model }) => {
       log.info("doGenerate called");
@@ -16589,16 +16630,17 @@ function AIMiddleware({ config, _models, activeTools, onStream, toolChoice }) {
           });
         }
       }
-      if (toolChoice.length > 0 && toolChoiceIndex < toolChoice.length && params.mode.type === "regular") {
-        params.mode.toolChoice = toolChoice[toolChoiceIndex];
-        log.info(`toolChoice changed: ${JSON.stringify(toolChoice[toolChoiceIndex])}`);
-        toolChoiceIndex++;
+      if (toolChoice.length > 0 && step < toolChoice.length && params.mode.type === "regular") {
+        params.mode.toolChoice = toolChoice[step];
+        log.info(`toolChoice changed: ${JSON.stringify(toolChoice[step])}`);
       }
       return params;
     },
     onChunk: (data) => {
       const { chunk } = data;
       if (chunk.type === "tool-call" && !sendToolCall) {
+        onStream?.send(`${messageReferencer.join("")}...
+tool call will start: ${chunk.toolName}`);
         sendToolCall = true;
         log.info(`will start tool: ${chunk.toolName}`);
       }
@@ -16630,6 +16672,8 @@ function AIMiddleware({ config, _models, activeTools, onStream, toolChoice }) {
         logs.functions.push(...func_logs);
         logs.tool.time.push((+time - maxFuncTime).toFixed(1));
         log.info(`finish ${[...new Set(toolResults.map((i) => i.toolName))]}`);
+        onStream?.send(`${messageReferencer.join("")}...
+finish ${[...new Set(toolResults.map((i) => i.toolName))]}`);
       } else if (text === "") {
         throw new Error("None text");
       } else {
@@ -16643,6 +16687,9 @@ function AIMiddleware({ config, _models, activeTools, onStream, toolChoice }) {
       }
       logs.ongoingFunctions = logs.ongoingFunctions.filter((i) => i.startTime !== startTime2);
       sendToolCall = false;
+      step++;
+      onStream?.send(`${messageReferencer.join("")}...
+step ${step} finished`);
     }
   };
 }
@@ -16937,32 +16984,30 @@ function clearTimeoutID(timeoutID) {
   if (timeoutID)
     clearTimeout(timeoutID);
 }
-async function streamHandler(stream, contentExtractor, onStream) {
+async function streamHandler(stream, contentExtractor, onStream, messageReferencer) {
   log.info(`start handle stream`);
   let contentFull = "";
   let lengthDelta = 0;
   let updateStep = 5;
-  let msgPromise = null;
   let lastChunk = "";
   const immediatePromise = Promise.resolve("[PROMISE DONE]");
   try {
     for await (const part of stream) {
       const textPart = contentExtractor(part);
-      if (textPart === null) {
+      if (textPart === null || textPart === "") {
         continue;
       }
-      if (textPart === "")
-        continue;
       lengthDelta += lastChunk.length;
       contentFull += lastChunk;
+      messageReferencer?.push(lastChunk);
       lastChunk = textPart;
       if (lastChunk && lengthDelta > updateStep) {
-        if (msgPromise && await Promise.race([msgPromise, immediatePromise]) === "[PROMISE DONE]") {
+        if (onStream.sentPromise && await Promise.race([onStream.sentPromise, immediatePromise]) === "[PROMISE DONE]") {
           continue;
         }
         lengthDelta = 0;
         updateStep += 20;
-        msgPromise = onStream(`${contentFull}●`);
+        onStream.send(`${contentFull}●`);
       }
     }
     contentFull += lastChunk;
@@ -16974,17 +17019,19 @@ async function streamHandler(stream, contentExtractor, onStream) {
     contentFull += `
 ERROR: ${e.message}`;
   }
-  await msgPromise;
+  await onStream.sentPromise;
   return contentFull;
 }
 async function requestChatCompletionsV2(params, onStream, onResult = null) {
+  const messageReferencer = [];
   try {
     const middleware = AIMiddleware({
       config: params.context,
       _models: {},
       activeTools: params.activeTools || [],
       onStream,
-      toolChoice: params.toolChoice || []
+      toolChoice: params.toolChoice || [],
+      messageReferencer
     });
     const hander_params = {
       model: experimental_wrapLanguageModel({
@@ -17004,7 +17051,7 @@ async function requestChatCompletionsV2(params, onStream, onResult = null) {
         ...hander_params,
         onChunk: middleware.onChunk
       });
-      const contentFull = await streamHandler(stream.textStream, (t) => t, onStream);
+      const contentFull = await streamHandler(stream.textStream, (t) => t, onStream, messageReferencer);
       onResult?.(contentFull);
       return {
         messages: (await stream.response).messages,
@@ -19647,6 +19694,10 @@ class ImgCommandHandler {
         return sender.sendPlainText("ERROR: Image generator not found");
       }
       sendAction(context.SHARE_CONTEXT.botToken, message.chat.id, "upload_photo");
+      const respJson = await sender.sendPlainText("Please wait a moment...").then((resp2) => resp2.json());
+      sender.update({
+        message_id: respJson.result.message_id
+      });
       const img = await agent.request(subcommand, context.USER_CONFIG);
       log.info("img", img);
       const resp = await sendImages(img, ENV.SEND_IMAGE_FILE, sender, context.USER_CONFIG);
@@ -19694,6 +19745,7 @@ class BaseNewCommandHandler {
     const text = ENV.I18N.command.new.new_chat_start + (showID ? `(${message.chat.id})` : "");
     const params = {
       chat_id: message.chat.id,
+      message_thread_id: message.message_thread_id || void 0,
       text
     };
     if (ENV.SHOW_REPLY_BUTTON && !isTelegramChatTypeGroup(message.chat.type)) {
@@ -20131,17 +20183,14 @@ class PerplexityCommandHandler {
     sender.update({
       message_id: resp.result.message_id
     });
-    const onStream = OnStreamHander(sender, context);
+    const onStream = OnStreamHander(sender, context, subcommand);
     const logs = getLogSingleton(context.USER_CONFIG);
     logs.chat.model.push(`Perplexity ${mode}`);
     const startTime2 = Date.now();
     const result2 = await WssRequest(perplexityWsUrl, null, perplexityWsOptions, perplexityMessage, { onStream }).catch(console.error);
     logs.chat.time.push(((Date.now() - startTime2) / 1e3).toFixed(1));
-    const nextTime = onStream.nextEnableTime?.() ?? 0;
-    if (nextTime > Date.now()) {
-      await new Promise((resolve) => setTimeout(resolve, nextTime - Date.now()));
-    }
-    await onStream(result2, true);
+    await waitUntil(onStream.nextEnableTime || 0);
+    await onStream.end?.(result2);
     return new Response("success");
   };
 }

@@ -169,7 +169,7 @@ export function getLog(context: AgentUserConfig, returnModel: boolean = false): 
     }
 
     const formattedEntries = logList.filter(Boolean).map(entry => `>\`${entry}\``).join('\n');
-    return `LOGSTART\n${formattedEntries}LOGEND\n`;
+    return `LOGSTART\n${formattedEntries}\nLOGEND\n`;
 }
 
 export function clearLog(context: AgentUserConfig) {

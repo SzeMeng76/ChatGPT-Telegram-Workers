@@ -18,8 +18,10 @@ import '../config/env.test';
         ],
     };
     console.log(agent?.name, agent?.model(ENV.USER_CONFIG));
-    agent?.request(params, ENV.USER_CONFIG, async (text) => {
-        console.log(text);
+    agent?.request(params, ENV.USER_CONFIG, {
+        send: async (text) => {
+            console.log(text);
+        },
     }).then((res) => {
         console.log(res);
     });

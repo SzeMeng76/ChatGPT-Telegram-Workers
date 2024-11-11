@@ -102,3 +102,7 @@ export function chunckArray(arr: any[], size: number): any[][] {
     }
     return result;
 }
+
+export async function waitUntil(timestamp: number) {
+    return new Promise(resolve => setTimeout(resolve, Math.max(0, timestamp - Date.now())));
+}

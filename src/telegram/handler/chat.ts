@@ -4,7 +4,6 @@ import type { ChatStreamTextHandler, HistoryModifier, ImageResult, LLMChatReques
 import type { WorkerContext } from '../../config/context';
 import type { AgentUserConfig } from '../../config/env';
 import type { ChosenInlineSender } from '../utils/send';
-import type { UnionData } from '../utils/utils';
 import type { MessageHandler } from './types';
 import { loadAudioLLM, loadChatLLM, loadImageGen } from '../../agent';
 import { loadHistory, requestCompletionsFromLLM } from '../../agent/chat';
@@ -14,6 +13,7 @@ import { log } from '../../extra/log/logger';
 import { imageToBase64String, renderBase64DataURI } from '../../utils/image';
 import { createTelegramBotAPI } from '../api';
 import { MessageSender, sendAction, TelegraphSender } from '../utils/send';
+import { isTelegramChatTypeGroup, type UnionData, waitUntil } from '../utils/utils';
 
 async function messageInitialize(sender: MessageSender): Promise<void> {
     if (!sender.context.message_id) {
@@ -41,37 +41,23 @@ export async function chatWithLLM(
     context: WorkerContext,
     modifier: HistoryModifier | null,
 ): Promise<UnionData | Response> {
-    const sender = context.MIDDEL_CONTEXT.sender ?? MessageSender.from(context.SHARE_CONTEXT.botToken, message);
-    await messageInitialize(sender);
-    let onStream: ChatStreamTextHandler | null = null;
-
-    if (ENV.STREAM_MODE) {
-        onStream = OnStreamHander(sender, context);
-    }
+    const sender = MessageSender.from(context.SHARE_CONTEXT.botToken, message);
+    const streamSender = OnStreamHander(sender, context, message.text || '');
+    streamSender.sentPromise = messageInitialize(sender);
 
     const agent = loadChatLLM(context.USER_CONFIG);
     if (!agent) {
-        return sender.sendPlainText('LLM is not enabled');
+        return streamSender.end?.('LLM is not enabled');
     }
 
     try {
         log.info(`start chat with LLM`);
-        const answer = await requestCompletionsFromLLM(params, context, agent, modifier, onStream);
+        const answer = await requestCompletionsFromLLM(params, context, agent, modifier, ENV.STREAM_MODE ? streamSender : null);
         log.info(`chat with LLM done`);
         if (answer === '') {
             return sender.sendPlainText('No response');
         }
-        if (onStream) {
-            await onStream(answer, true);
-        } else {
-            await sender.sendRichText(
-                `${getLog(context.USER_CONFIG)}${answer}`,
-                ENV.DEFAULT_PARSE_MODE as Telegram.ParseMode,
-                'chat',
-            );
-        }
-
-        return { type: 'text', text: answer } as UnionData;
+        return streamSender.end?.(answer);
     } catch (e) {
         let errMsg = `Error: `;
         if ((e as Error).name === 'AbortError') {
@@ -79,7 +65,7 @@ export async function chatWithLLM(
         } else {
             errMsg += (e as Error).message.slice(0, 2048);
         }
-        return sender.sendRichText(`${getLog(context.USER_CONFIG)}\n${errMsg}`);
+        return streamSender.end?.(errMsg);
     }
 }
 
@@ -168,28 +154,34 @@ export class ChatHandler implements MessageHandler<WorkerContext> {
     }
 }
 
-export function OnStreamHander(sender: MessageSender | ChosenInlineSender, context?: WorkerContext): ChatStreamTextHandler {
-    let nextEnableTime = Date.now();
-    async function onStream(text: string, isEnd: boolean = false): Promise<any> {
+export function OnStreamHander(sender: MessageSender | ChosenInlineSender, context?: WorkerContext, question?: string): ChatStreamTextHandler {
+    const streamSender = {
+        nextEnableTime: Date.now(),
+        sentMessageIds: sender instanceof MessageSender && sender.context.message_id ? [sender.context.message_id] : [],
+        sentPromise: null as Promise<Response> | null,
+        send: null as ((text: string, isEnd: boolean, sendType?: 'chat' | 'telegraph') => Promise<any>) | null,
+        end: null as ((text: string) => Promise<any>) | null,
+    };
+    streamSender.send = async (text: string, isEnd: boolean = false): Promise<any> => {
         try {
-            if (isEnd
-                && context
+            if (sender instanceof MessageSender
+                && isTelegramChatTypeGroup(sender.context.chatType)
                 && ENV.TELEGRAPH_NUM_LIMIT > 0
                 && text.length > ENV.TELEGRAPH_NUM_LIMIT
-                && ['group', 'supergroup'].includes((sender as MessageSender).context.chatType)) {
-                return sendTelegraph(context, sender as MessageSender, context.MIDDEL_CONTEXT.originalMessage.text || 'Redo', text);
+                && context) {
+                return;
             }
             // 判断是否需要等待
-            if (!isEnd && nextEnableTime && nextEnableTime > Date.now()) {
-                log.info(`Need await: ${nextEnableTime - Date.now()}ms`);
+            if (!isEnd && (streamSender.nextEnableTime || 0) > Date.now()) {
+                log.info(`Need await: ${(streamSender.nextEnableTime || 0) - Date.now()}ms`);
                 return;
             }
 
             // 设置最小流间隔
             if (ENV.TELEGRAM_MIN_STREAM_INTERVAL > 0) {
-                nextEnableTime = Date.now() + ENV.TELEGRAM_MIN_STREAM_INTERVAL;
+                streamSender.nextEnableTime = Date.now() + ENV.TELEGRAM_MIN_STREAM_INTERVAL;
             }
-            // log.info(`LOG:\n${context ? getLog(context.USER_CONFIG) : ''}`);
+
             const data = context ? `${getLog(context.USER_CONFIG)}\n${text}` : text;
             log.info(`send ${isEnd ? 'end' : 'stream'} message`);
             const resp = await sender.sendRichText(data, ENV.DEFAULT_PARSE_MODE as Telegram.ParseMode, 'chat');
@@ -198,8 +190,8 @@ export function OnStreamHander(sender: MessageSender | ChosenInlineSender, conte
                 // 获取重试时间
                 const retryAfter = Number.parseInt(resp.headers.get('Retry-After') || '');
                 if (retryAfter) {
-                    nextEnableTime = Date.now() + retryAfter * 1000;
-                    log.info(`Status 429, need wait: ${nextEnableTime - Date.now()}ms`);
+                    streamSender.nextEnableTime = Date.now() + retryAfter * 1000;
+                    log.info(`Status 429, need wait: ${streamSender.nextEnableTime - Date.now()}ms`);
                     return;
                 }
             }
@@ -209,6 +201,7 @@ export function OnStreamHander(sender: MessageSender | ChosenInlineSender, conte
                 sender.update({
                     message_id: respJson.result.message_id,
                 });
+                streamSender.sentMessageIds.push(respJson.result.message_id);
             } else if (!resp.ok) {
                 log.error(`send message failed: ${resp.status} ${resp.statusText}`);
                 return sender.sendPlainText(text);
@@ -218,23 +211,36 @@ export function OnStreamHander(sender: MessageSender | ChosenInlineSender, conte
         }
     };
 
-    onStream.nextEnableTime = () => nextEnableTime;
-    onStream.end = async (text: string): Promise<any> => {
-        if (nextEnableTime > Date.now()) {
-            await new Promise(resolve => setTimeout(resolve, nextEnableTime - Date.now()));
+    streamSender.end = async (text: string): Promise<any> => {
+        await waitUntil((streamSender.nextEnableTime || 0) + 10);
+        if (sender instanceof MessageSender
+            && isTelegramChatTypeGroup(sender.context.chatType)
+            && ENV.TELEGRAPH_NUM_LIMIT > 0
+            && text.length > ENV.TELEGRAPH_NUM_LIMIT
+            && context) {
+            return sendTelegraph(context, sender, question || 'Redo Question', text);
         }
-        return sender.sendRichText(text, ENV.DEFAULT_PARSE_MODE as Telegram.ParseMode);
+        const data = context ? `${getLog(context.USER_CONFIG)}\n${text}` : text;
+        return sender.sendRichText(data, ENV.DEFAULT_PARSE_MODE as Telegram.ParseMode, 'chat');
     };
-    return onStream;
+
+    return streamSender as unknown as ChatStreamTextHandler;
 }
 
 async function sendTelegraph(context: WorkerContext, sender: MessageSender, question: string, text: string) {
     log.info(`send telegraph`);
-    const prefix = `#Question\n\`\`\`\n${question.length > 400 ? `${question.slice(0, 200)}...${question.slice(-200)}` : question}\n\`\`\`\n---`;
+    if (question.length > 600) {
+        question = `${question.slice(0, 300)}...${question.slice(-300)}`;
+    }
+    const prefix = `#Question\n\`\`\`\n${question}\n\`\`\`\n---`;
     const botName = context.SHARE_CONTEXT.botName;
 
     const telegraph_prefix = `${prefix}\n#Answer\n🤖 **${getLog(context.USER_CONFIG, true)}**\n`;
-    const debug_info = `debug info:\n${getLog(context.USER_CONFIG) as string}`;
+    const debug_info = `debug info:\n${getLog(context.USER_CONFIG) as string}`
+        .replace('LOGSTART', '')
+        .replace('LOGEND', '')
+        .replace('`', '')
+        .trim();
     const telegraph_suffix = `\n---\n\`\`\`\n${debug_info}\n\`\`\``;
     const telegraphSender = new TelegraphSender(sender.context, botName, context.SHARE_CONTEXT.telegraphAccessTokenKey!);
     const resp = await telegraphSender.send(
@@ -242,7 +248,8 @@ async function sendTelegraph(context: WorkerContext, sender: MessageSender, ques
         telegraph_prefix + text + telegraph_suffix,
     );
     const url = `https://telegra.ph/${telegraphSender.teleph_path}`;
-    const msg = `回答已经转换成完整文章~\n[🔗点击进行查看](${url})`;
+    const msg = `回答已经转换成完整文章，请及时查看~\n[🔗点击进行查看](${url})`;
+    log.info(`send telegraph message: ${msg}`);
     await sender.sendRichText(msg);
     return resp;
 }
@@ -321,12 +328,13 @@ async function handleTextToImage(
         return sender.sendPlainText('ERROR: Image generator not found');
     }
     sendAction(context.SHARE_CONTEXT.botToken, message.chat.id);
-    const msg = await sender.sendPlainText('Please wait a moment...', 'tip').then(r => r.json());
+    const { message_id } = await sender.sendPlainText('Please wait a moment...', 'tip').then(r => r.json());
+    sender.update({ message_id });
     const result = await agent.request(eMsg.text, context.USER_CONFIG);
     log.info('imageresult', JSON.stringify(result));
     await sendImages(result, ENV.SEND_IMAGE_FILE, sender, context.USER_CONFIG);
     const api = createTelegramBotAPI(context.SHARE_CONTEXT.botToken);
-    await api.deleteMessage({ chat_id: sender.context.chat_id, message_id: msg.result.message_id });
+    await api.deleteMessage({ chat_id: sender.context.chat_id, message_id });
     return result as UnionData;
 }
 
@@ -353,13 +361,19 @@ export async function sendImages(img: ImageResult, SEND_IMAGE_FILE: boolean, sen
     const caption = img.text ? `${getLog(config)}\n> \`${img.text}\`` : getLog(config);
     if (img.url && img.url.length > 1) {
         const images = img.url.map((url: string) => ({
-            type: (SEND_IMAGE_FILE ? 'file' : 'photo'),
+            type: (SEND_IMAGE_FILE ? 'document' : 'photo'),
             media: url,
         })) as Telegram.InputMedia[];
         images[0].caption = caption;
+        images[0].parse_mode = ENV.DEFAULT_PARSE_MODE as Telegram.ParseMode;
         return await sender.sendMediaGroup(images);
+    } else if (img.url && img.url.length === 1) {
+        return sender.editMessageMedia({
+            type: 'photo',
+            media: img.url[0],
+        }, caption, ENV.DEFAULT_PARSE_MODE as Telegram.ParseMode);
     } else if (img.url || img.raw) {
-        return await sender.sendPhoto((img.url || img.raw)![0], caption, 'MarkdownV2');
+        return sender.sendPhoto((img.url || img.raw)![0], caption, 'MarkdownV2');
     } else {
         return sender.sendPlainText('ERROR: No image found');
     }

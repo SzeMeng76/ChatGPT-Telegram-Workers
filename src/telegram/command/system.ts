@@ -18,7 +18,7 @@ import { createTelegramBotAPI } from '../api';
 import { chatWithLLM, OnStreamHander, sendImages } from '../handler/chat';
 import { escape } from '../utils/md2tgmd';
 import { type MessageSender, sendAction } from '../utils/send';
-import { chunckArray, isCfWorker, isTelegramChatTypeGroup, UUIDv4 } from '../utils/utils';
+import { chunckArray, isCfWorker, isTelegramChatTypeGroup, UUIDv4, waitUntil } from '../utils/utils';
 
 export const COMMAND_AUTH_CHECKER = {
     default(chatType: string): string[] | null {
@@ -52,6 +52,10 @@ export class ImgCommandHandler implements CommandHandler {
                 return sender.sendPlainText('ERROR: Image generator not found');
             }
             sendAction(context.SHARE_CONTEXT.botToken, message.chat.id, 'upload_photo');
+            const respJson = await sender.sendPlainText('Please wait a moment...').then(resp => resp.json());
+            sender.update({
+                message_id: respJson.result.message_id,
+            });
             const img = await agent.request(subcommand, context.USER_CONFIG);
             log.info('img', img);
             const resp = await sendImages(img, ENV.SEND_IMAGE_FILE, sender, context.USER_CONFIG);
@@ -98,6 +102,7 @@ class BaseNewCommandHandler {
         const text = ENV.I18N.command.new.new_chat_start + (showID ? `(${message.chat.id})` : '');
         const params: Telegram.SendMessageParams = {
             chat_id: message.chat.id,
+            message_thread_id: message.message_thread_id || undefined,
             text,
         };
         if (ENV.SHOW_REPLY_BUTTON && !isTelegramChatTypeGroup(message.chat.type)) {
@@ -588,17 +593,14 @@ export class PerplexityCommandHandler implements CommandHandler {
             message_id: resp.result.message_id,
         });
 
-        const onStream = OnStreamHander(sender, context);
+        const onStream = OnStreamHander(sender, context, subcommand);
         const logs = getLogSingleton(context.USER_CONFIG);
         logs.chat.model.push(`Perplexity ${mode}`);
         const startTime = Date.now();
         const result = await WssRequest(perplexityWsUrl, null, perplexityWsOptions, perplexityMessage, { onStream }).catch(console.error);
         logs.chat.time.push(((Date.now() - startTime) / 1e3).toFixed(1));
-        const nextTime = onStream.nextEnableTime?.() ?? 0;
-        if (nextTime > Date.now()) {
-            await new Promise(resolve => setTimeout(resolve, nextTime - Date.now()));
-        }
-        await onStream(result, true);
+        await waitUntil(onStream.nextEnableTime || 0);
+        await onStream.end?.(result);
         return new Response('success');
     };
 }

@@ -27,7 +27,7 @@ class MessageContext implements Record<string, any> {
         // this.messageId = message.message_id;
         if (message.chat.type === 'group' || message.chat.type === 'supergroup') {
             // 是否回复被回复的消息
-            if (message?.reply_to_message && ENV.EXTRA_MESSAGE_CONTEXT
+            if (message?.reply_to_message && ENV.EXTRA_MESSAGE_CONTEXT && !message.is_topic_message
                 && ENV.ENABLE_REPLY_TO_MENTION && !message.reply_to_message.from?.is_bot) {
                 this.reply_to_message_id = message.reply_to_message.message_id;
             } else {
@@ -93,6 +93,7 @@ export class MessageSender {
         } else {
             const params: Telegram.SendMessageParams = {
                 chat_id: context.chat_id,
+                message_thread_id: context.message_thread_id || undefined,
                 parse_mode: context.parse_mode || undefined,
                 text: message,
             };
@@ -170,6 +171,7 @@ export class MessageSender {
         }
         const params: Telegram.SendPhotoParams = {
             chat_id: this.context.chat_id,
+            message_thread_id: this.context.message_thread_id || undefined,
             photo,
             ...(caption ? { caption: renderMessage(parse_mode || null, caption) } : {}),
             parse_mode,
@@ -191,8 +193,16 @@ export class MessageSender {
         }
         const params: Telegram.SendMediaGroupParams = {
             chat_id: this.context.chat_id,
+            message_thread_id: this.context.message_thread_id || undefined,
             media,
         };
+        if (this.context.reply_to_message_id) {
+            params.reply_parameters = {
+                message_id: this.context.reply_to_message_id,
+                chat_id: this.context.chat_id,
+                allow_sending_without_reply: this.context.allow_sending_without_reply || undefined,
+            };
+        }
 
         const resp = this.api.sendMediaGroup(params);
         return checkIsNeedTagIds(this.context, resp, 'chat');
@@ -204,6 +214,7 @@ export class MessageSender {
         }
         const params: Telegram.SendDocumentParams = {
             chat_id: this.context.chat_id,
+            message_thread_id: this.context.message_thread_id || undefined,
             document,
             caption,
             parse_mode,
@@ -216,6 +227,26 @@ export class MessageSender {
             };
         }
         return this.api.sendDocument(params);
+    }
+
+    editMessageMedia(media: Telegram.InputMedia, caption?: string, parse_mode?: Telegram.ParseMode): Promise<Response> {
+        if (!this.context) {
+            throw new Error('Message context not set');
+        }
+        if (!this.context.message_id) {
+            throw new Error('Message id is null');
+        }
+        const params: Telegram.EditMessageMediaParams = {
+            chat_id: this.context.chat_id,
+            message_id: this.context.message_id,
+            media: {
+                ...media,
+                ...(caption ? { caption: parse_mode ? renderMessage(parse_mode, caption) : caption } : {}),
+                parse_mode,
+            },
+        };
+        const resp = this.api.editMessageMedia(params);
+        return checkIsNeedTagIds(this.context, resp, 'chat');
     }
 }
 

@@ -1,5 +1,5 @@
 import type { WorkerContext } from '../config/context';
-import type { ChatAgent, HistoryItem, HistoryModifier, ImageResult, LLMChatParams, LLMChatRequestParams } from './types';
+import type { ChatAgent, ChatStreamTextHandler, HistoryItem, HistoryModifier, ImageResult, LLMChatParams, LLMChatRequestParams } from './types';
 import { ENV } from '../config/env';
 
 /**
@@ -78,9 +78,7 @@ export async function loadHistory(key: string): Promise<HistoryItem[]> {
     return history;
 }
 
-export type StreamResultHandler = (text: string) => Promise<any>;
-
-export async function requestCompletionsFromLLM(params: LLMChatRequestParams | null, context: WorkerContext, agent: ChatAgent, modifier: HistoryModifier | null, onStream: StreamResultHandler | null): Promise<string> {
+export async function requestCompletionsFromLLM(params: LLMChatRequestParams | null, context: WorkerContext, agent: ChatAgent, modifier: HistoryModifier | null, onStream: ChatStreamTextHandler | null): Promise<string> {
     let history = context.MIDDEL_CONTEXT.history;
     const historyDisable = ENV.AUTO_TRIM_HISTORY && ENV.MAX_HISTORY_LENGTH <= 0;
     // const historyKey = context.SHARE_CONTEXT.chatHistoryKey;

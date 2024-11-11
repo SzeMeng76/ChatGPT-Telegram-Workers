@@ -11,10 +11,10 @@ import { getLogSingleton } from '../extra/log/logDecortor';
 import { log } from '../extra/log/logger';
 import { OpenAI } from './openai';
 
-export function AIMiddleware({ config, _models, activeTools, onStream, toolChoice }: { config: AgentUserConfig; _models: Record<string, LanguageModelV1>; activeTools: string[]; onStream: ChatStreamTextHandler | null; toolChoice: CoreToolChoice<any>[] | [] }): LanguageModelV1Middleware & { onChunk: (data: any) => boolean; onStepFinish: (data: StepResult<any>, context: AgentUserConfig) => void } {
+export function AIMiddleware({ config, _models, activeTools, onStream, toolChoice, messageReferencer }: { config: AgentUserConfig; _models: Record<string, LanguageModelV1>; activeTools: string[]; onStream: ChatStreamTextHandler | null; toolChoice: CoreToolChoice<any>[] | []; messageReferencer: string[] }): LanguageModelV1Middleware & { onChunk: (data: any) => boolean; onStepFinish: (data: StepResult<any>, context: AgentUserConfig) => void } {
     let startTime: number | undefined;
     let sendToolCall = false;
-    let toolChoiceIndex = 0;
+    let step = 0;
     return {
         wrapGenerate: async ({ doGenerate, params, model }) => {
             log.info('doGenerate called');
@@ -53,10 +53,9 @@ export function AIMiddleware({ config, _models, activeTools, onStream, toolChoic
                     });
                 }
             }
-            if (toolChoice.length > 0 && toolChoiceIndex < toolChoice.length && params.mode.type === 'regular') {
-                params.mode.toolChoice = toolChoice[toolChoiceIndex] as any;
-                log.info(`toolChoice changed: ${JSON.stringify(toolChoice[toolChoiceIndex])}`);
-                toolChoiceIndex++;
+            if (toolChoice.length > 0 && step < toolChoice.length && params.mode.type === 'regular') {
+                params.mode.toolChoice = toolChoice[step] as any;
+                log.info(`toolChoice changed: ${JSON.stringify(toolChoice[step])}`);
             }
             return params;
         },
@@ -64,6 +63,7 @@ export function AIMiddleware({ config, _models, activeTools, onStream, toolChoic
         onChunk: (data: any) => {
             const { chunk } = data;
             if (chunk.type === 'tool-call' && !sendToolCall) {
+                onStream?.send(`${messageReferencer.join('')}...\n` + `tool call will start: ${chunk.toolName}`);
                 sendToolCall = true;
                 log.info(`will start tool: ${chunk.toolName}`);
             }
@@ -97,7 +97,7 @@ export function AIMiddleware({ config, _models, activeTools, onStream, toolChoic
                 logs.functions.push(...func_logs);
                 logs.tool.time.push((+time - maxFuncTime).toFixed(1));
                 log.info(`finish ${[...new Set(toolResults.map(i => i.toolName))]}`);
-                // onStream?.(`finish ${[...new Set(toolResults.map(i => i.toolName))]}`);
+                onStream?.send(`${messageReferencer.join('')}...\n` + `finish ${[...new Set(toolResults.map(i => i.toolName))]}`);
             } else if (text === '') {
                 throw new Error('None text');
             } else {
@@ -112,6 +112,8 @@ export function AIMiddleware({ config, _models, activeTools, onStream, toolChoic
             }
             logs.ongoingFunctions = logs.ongoingFunctions.filter(i => i.startTime !== startTime);
             sendToolCall = false;
+            step++;
+            onStream?.send(`${messageReferencer.join('')}...\n` + `step ${step} finished`);
         },
     };
 }
