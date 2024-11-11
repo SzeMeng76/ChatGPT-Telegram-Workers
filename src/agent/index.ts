@@ -1,19 +1,20 @@
 /* eslint-disable no-case-declarations */
-import type { CoreMessage, LanguageModelV1 } from 'ai';
+import type { CoreMessage, CoreToolChoice, CoreUserMessage, LanguageModelV1 } from 'ai';
 import type { AudioAgent, ChatAgent, ImageAgent } from './types';
 import { createAnthropic } from '@ai-sdk/anthropic';
 import { createCohere } from '@ai-sdk/cohere';
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { createOpenAI } from '@ai-sdk/openai';
 import { type AgentUserConfig, ENV } from '../config/env';
+import { log } from '../extra/log/logger';
 import { vaildTools } from '../extra/tools';
 import { isCfWorker } from '../telegram/utils/utils';
 import { Anthropic } from './anthropic';
 import { AzureChatAI, AzureImageAI } from './azure';
 import { Cohere } from './cohere';
 import { Google } from './google';
-import { Mistral } from './mistralai';
 
+import { Mistral } from './mistralai';
 import { Dalle, OpenAI, Transcription } from './openai';
 import { OpenAILike, OpenAILikeImage } from './openailike';
 import { Vertex } from './vertex';
@@ -119,7 +120,7 @@ export async function warpLLMParams(params: { messages: CoreMessage[]; model: La
     const env_perfix = 'TOOL_ENV_';
     Object.keys(context).forEach(i => i.startsWith(env_perfix) && (tool_envs[i.substring(env_perfix.length - 1)] = context[i]));
 
-    const messages = params.messages.at(-1) as CoreMessage;
+    const messages = params.messages.at(-1) as CoreUserMessage;
     let tool = typeof messages.content === 'string'
         ? vaildTools(context.USE_TOOLS, tool_envs)
         : undefined;
@@ -140,6 +141,13 @@ export async function warpLLMParams(params: { messages: CoreMessage[]; model: La
     if (params.messages[0].role === 'system' && activeTools) {
         params.messages[0].content += (tool?.tools_prompt || '');
     }
+    let toolChoice;
+    if (activeTools) {
+        const userMessageIsString = typeof messages.content === 'string';
+        const choiceResult = wrapToolChoice(activeTools, userMessageIsString ? messages.content as string : '');
+        userMessageIsString && (messages.content = choiceResult.message);
+        toolChoice = choiceResult.toolChoices;
+    }
 
     return {
         model: params.model,
@@ -147,6 +155,7 @@ export async function warpLLMParams(params: { messages: CoreMessage[]; model: La
         messages: params.messages,
         tools: tool?.tools,
         activeTools,
+        toolChoice: toolChoice as CoreToolChoice<any>[],
         context,
     };
 }
@@ -279,3 +288,29 @@ export async function createLlmModel(model: string, context: AgentUserConfig) {
 //     }
 //     return createProviderRegistry(providers);
 // }
+
+function wrapToolChoice(activeTools: string[], message: string): {
+    message: string;
+    toolChoices: ({ type: string } | { type: 'tool'; toolName: string })[];
+} {
+    const tool_perfix = '/t-';
+    let text = message.trim();
+    const choices = ['auto', 'none', 'required', ...activeTools];
+    const toolChoices: ({ type: string } | { type: 'tool'; toolName: string })[] = [];
+    do {
+        const tool = choices.find(t => text.startsWith(`${tool_perfix}${t}`)) || '';
+        if (tool) {
+            text = text.substring(tool_perfix.length + tool.length).trim();
+            toolChoices.push(['auto', 'none', 'required'].includes(tool) ? { type: tool } : { type: 'tool', toolName: tool });
+        } else {
+            break;
+        }
+    } while (true);
+
+    log.info(`All toolChoices: ${JSON.stringify(toolChoices)}`);
+
+    return {
+        message,
+        toolChoices,
+    };
+}

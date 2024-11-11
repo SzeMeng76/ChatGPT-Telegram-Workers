@@ -151,7 +151,7 @@ class EnvironmentConfig {
   GROUP_CHAT_BOT_ENABLE = true;
   GROUP_CHAT_BOT_SHARE_MODE = true;
   AUTO_TRIM_HISTORY = true;
-  MAX_HISTORY_LENGTH = 20;
+  MAX_HISTORY_LENGTH = 12;
   MAX_TOKEN_LENGTH = -1;
   HISTORY_IMAGE_PLACEHOLDER = "[A IMAGE]";
   HIDE_COMMAND_BUTTONS = [];
@@ -194,6 +194,8 @@ class EnvironmentConfig {
   QSTASH_PUBLISH_URL = "";
   QSTASH_TRIGGER_PREFIX = "";
   QSTASH_TIMEOUT = "15m";
+  MAX_STEPS = 3;
+  MAX_RETRIES = 0;
 }
 class AgentShareConfig {
   AI_PROVIDER = "openai";
@@ -304,6 +306,10 @@ class ExtraUserConfig {
   KLINGAI_COOKIE = [];
   KLINGAI_IMAGE_COUNT = 4;
   KLINGAI_IMAGE_RATIO = "1:1";
+  CHAT_TEMPERATURE = 1;
+  FUNCTION_CALL_TEMPERATURE = 0.1;
+  CHAT_MAX_TOKENS = 8192;
+  FUNCTION_CALL_MAX_TOKENS = 1024;
 }
 class ConfigMerger {
   static parseArray(raw) {
@@ -401,8 +407,8 @@ const ENV_KEY_MAPPER = {
   WORKERS_AI_MODEL: "WORKERS_CHAT_MODEL"
 };
 class Environment extends EnvironmentConfig {
-  BUILD_TIMESTAMP = 1731258080;
-  BUILD_VERSION = "2e19c70";
+  BUILD_TIMESTAMP = 1731306073;
+  BUILD_VERSION = "8d67994";
   I18N = loadI18n();
   PLUGINS_ENV = {};
   USER_CONFIG = createAgentUserConfig();
@@ -4280,33 +4286,33 @@ ZodUnion.create = (types, params) => {
     ...processCreateParams(params)
   });
 };
-const getDiscriminator = (type) => {
-  if (type instanceof ZodLazy) {
-    return getDiscriminator(type.schema);
-  } else if (type instanceof ZodEffects) {
-    return getDiscriminator(type.innerType());
-  } else if (type instanceof ZodLiteral) {
-    return [type.value];
-  } else if (type instanceof ZodEnum) {
-    return type.options;
-  } else if (type instanceof ZodNativeEnum) {
-    return util.objectValues(type.enum);
-  } else if (type instanceof ZodDefault) {
-    return getDiscriminator(type._def.innerType);
-  } else if (type instanceof ZodUndefined) {
+const getDiscriminator = (type2) => {
+  if (type2 instanceof ZodLazy) {
+    return getDiscriminator(type2.schema);
+  } else if (type2 instanceof ZodEffects) {
+    return getDiscriminator(type2.innerType());
+  } else if (type2 instanceof ZodLiteral) {
+    return [type2.value];
+  } else if (type2 instanceof ZodEnum) {
+    return type2.options;
+  } else if (type2 instanceof ZodNativeEnum) {
+    return util.objectValues(type2.enum);
+  } else if (type2 instanceof ZodDefault) {
+    return getDiscriminator(type2._def.innerType);
+  } else if (type2 instanceof ZodUndefined) {
     return [void 0];
-  } else if (type instanceof ZodNull) {
+  } else if (type2 instanceof ZodNull) {
     return [null];
-  } else if (type instanceof ZodOptional) {
-    return [void 0, ...getDiscriminator(type.unwrap())];
-  } else if (type instanceof ZodNullable) {
-    return [null, ...getDiscriminator(type.unwrap())];
-  } else if (type instanceof ZodBranded) {
-    return getDiscriminator(type.unwrap());
-  } else if (type instanceof ZodReadonly) {
-    return getDiscriminator(type.unwrap());
-  } else if (type instanceof ZodCatch) {
-    return getDiscriminator(type._def.innerType);
+  } else if (type2 instanceof ZodOptional) {
+    return [void 0, ...getDiscriminator(type2.unwrap())];
+  } else if (type2 instanceof ZodNullable) {
+    return [null, ...getDiscriminator(type2.unwrap())];
+  } else if (type2 instanceof ZodBranded) {
+    return getDiscriminator(type2.unwrap());
+  } else if (type2 instanceof ZodReadonly) {
+    return getDiscriminator(type2.unwrap());
+  } else if (type2 instanceof ZodCatch) {
+    return getDiscriminator(type2._def.innerType);
   } else {
     return [];
   }
@@ -4366,8 +4372,8 @@ class ZodDiscriminatedUnion extends ZodType {
    */
   static create(discriminator, options2, params) {
     const optionsMap = /* @__PURE__ */ new Map();
-    for (const type of options2) {
-      const discriminatorValues = getDiscriminator(type.shape[discriminator]);
+    for (const type2 of options2) {
+      const discriminatorValues = getDiscriminator(type2.shape[discriminator]);
       if (!discriminatorValues.length) {
         throw new Error(`A discriminator value for key \`${discriminator}\` could not be extracted from all schema options`);
       }
@@ -4375,7 +4381,7 @@ class ZodDiscriminatedUnion extends ZodType {
         if (optionsMap.has(value)) {
           throw new Error(`Discriminator property ${String(discriminator)} has duplicate value ${String(value)}`);
         }
-        optionsMap.set(value, type);
+        optionsMap.set(value, type2);
       }
     }
     return new ZodDiscriminatedUnion({
@@ -5203,9 +5209,9 @@ class ZodOptional extends ZodType {
     return this._def.innerType;
   }
 }
-ZodOptional.create = (type, params) => {
+ZodOptional.create = (type2, params) => {
   return new ZodOptional({
-    innerType: type,
+    innerType: type2,
     typeName: ZodFirstPartyTypeKind.ZodOptional,
     ...processCreateParams(params)
   });
@@ -5222,9 +5228,9 @@ class ZodNullable extends ZodType {
     return this._def.innerType;
   }
 }
-ZodNullable.create = (type, params) => {
+ZodNullable.create = (type2, params) => {
   return new ZodNullable({
-    innerType: type,
+    innerType: type2,
     typeName: ZodFirstPartyTypeKind.ZodNullable,
     ...processCreateParams(params)
   });
@@ -5246,9 +5252,9 @@ class ZodDefault extends ZodType {
     return this._def.innerType;
   }
 }
-ZodDefault.create = (type, params) => {
+ZodDefault.create = (type2, params) => {
   return new ZodDefault({
-    innerType: type,
+    innerType: type2,
     typeName: ZodFirstPartyTypeKind.ZodDefault,
     defaultValue: typeof params.default === "function" ? params.default : () => params.default,
     ...processCreateParams(params)
@@ -5299,9 +5305,9 @@ class ZodCatch extends ZodType {
     return this._def.innerType;
   }
 }
-ZodCatch.create = (type, params) => {
+ZodCatch.create = (type2, params) => {
   return new ZodCatch({
-    innerType: type,
+    innerType: type2,
     typeName: ZodFirstPartyTypeKind.ZodCatch,
     catchValue: typeof params.catch === "function" ? params.catch : () => params.catch,
     ...processCreateParams(params)
@@ -5413,9 +5419,9 @@ class ZodReadonly extends ZodType {
     return this._def.innerType;
   }
 }
-ZodReadonly.create = (type, params) => {
+ZodReadonly.create = (type2, params) => {
   return new ZodReadonly({
-    innerType: type,
+    innerType: type2,
     typeName: ZodFirstPartyTypeKind.ZodReadonly,
     ...processCreateParams(params)
   });
@@ -5792,10 +5798,10 @@ function parseEnumDef(def) {
     enum: def.values
   };
 }
-const isJsonSchema7AllOfType = (type) => {
-  if ("type" in type && type.type === "string")
+const isJsonSchema7AllOfType = (type2) => {
+  if ("type" in type2 && type2.type === "string")
     return false;
-  return "allOf" in type;
+  return "allOf" in type2;
 };
 function parseIntersectionDef(def, refs) {
   const allOf = [
@@ -6136,7 +6142,7 @@ function parseRecordDef(def, refs) {
     return schema2;
   }
   if (def.keyType?._def.typeName === ZodFirstPartyTypeKind.ZodString && def.keyType._def.checks?.length) {
-    const { type, ...keyType } = parseStringDef(def.keyType._def, refs);
+    const { type: type2, ...keyType } = parseStringDef(def.keyType._def, refs);
     return {
       ...schema2,
       propertyNames: keyType
@@ -6149,7 +6155,7 @@ function parseRecordDef(def, refs) {
       }
     };
   } else if (def.keyType?._def.typeName === ZodFirstPartyTypeKind.ZodBranded && def.keyType._def.type._def.typeName === ZodFirstPartyTypeKind.ZodString && def.keyType._def.type._def.checks?.length) {
-    const { type, ...keyType } = parseBrandedDef(def.keyType._def, refs);
+    const { type: type2, ...keyType } = parseBrandedDef(def.keyType._def, refs);
     return {
       ...schema2,
       propertyNames: keyType
@@ -6218,20 +6224,20 @@ function parseUnionDef(def, refs) {
   const options2 = def.options instanceof Map ? Array.from(def.options.values()) : def.options;
   if (options2.every((x) => x._def.typeName in primitiveMappings && (!x._def.checks || !x._def.checks.length))) {
     const types = options2.reduce((types2, x) => {
-      const type = primitiveMappings[x._def.typeName];
-      return type && !types2.includes(type) ? [...types2, type] : types2;
+      const type2 = primitiveMappings[x._def.typeName];
+      return type2 && !types2.includes(type2) ? [...types2, type2] : types2;
     }, []);
     return {
       type: types.length > 1 ? types : types[0]
     };
   } else if (options2.every((x) => x._def.typeName === "ZodLiteral" && !x.description)) {
     const types = options2.reduce((acc, x) => {
-      const type = typeof x._def.value;
-      switch (type) {
+      const type2 = typeof x._def.value;
+      switch (type2) {
         case "string":
         case "number":
         case "boolean":
-          return [...acc, type];
+          return [...acc, type2];
         case "bigint":
           return [...acc, "integer"];
         case "object":
@@ -6924,10 +6930,10 @@ var streamParts = [
   [finishStepStreamPart.name]: finishStepStreamPart.code
 });
 streamParts.map((part) => part.code);
-function formatStreamPart(type, value) {
-  const streamPart = streamParts.find((part) => part.name === type);
+function formatStreamPart(type2, value) {
+  const streamPart = streamParts.find((part) => part.name === type2);
   if (!streamPart) {
-    throw new Error(`Invalid stream part type: ${type}`);
+    throw new Error(`Invalid stream part type: ${type2}`);
   }
   return `${streamPart.code}:${JSON.stringify(value)}
 `;
@@ -7033,7 +7039,7 @@ var isCompatible = _makeCompatibilityCheck(VERSION);
 var major = VERSION.split(".")[0];
 var GLOBAL_OPENTELEMETRY_API_KEY = Symbol.for("opentelemetry.js.api." + major);
 var _global = _globalThis;
-function registerGlobal(type, instance, diag, allowOverride) {
+function registerGlobal(type2, instance, diag, allowOverride) {
   var _a15;
   if (allowOverride === void 0) {
     allowOverride = false;
@@ -7041,33 +7047,33 @@ function registerGlobal(type, instance, diag, allowOverride) {
   var api = _global[GLOBAL_OPENTELEMETRY_API_KEY] = (_a15 = _global[GLOBAL_OPENTELEMETRY_API_KEY]) !== null && _a15 !== void 0 ? _a15 : {
     version: VERSION
   };
-  if (!allowOverride && api[type]) {
-    var err = new Error("@opentelemetry/api: Attempted duplicate registration of API: " + type);
+  if (!allowOverride && api[type2]) {
+    var err = new Error("@opentelemetry/api: Attempted duplicate registration of API: " + type2);
     diag.error(err.stack || err.message);
     return false;
   }
   if (api.version !== VERSION) {
-    var err = new Error("@opentelemetry/api: Registration of version v" + api.version + " for " + type + " does not match previously registered API v" + VERSION);
+    var err = new Error("@opentelemetry/api: Registration of version v" + api.version + " for " + type2 + " does not match previously registered API v" + VERSION);
     diag.error(err.stack || err.message);
     return false;
   }
-  api[type] = instance;
-  diag.debug("@opentelemetry/api: Registered a global for " + type + " v" + VERSION + ".");
+  api[type2] = instance;
+  diag.debug("@opentelemetry/api: Registered a global for " + type2 + " v" + VERSION + ".");
   return true;
 }
-function getGlobal(type) {
+function getGlobal(type2) {
   var _a15, _b2;
   var globalVersion = (_a15 = _global[GLOBAL_OPENTELEMETRY_API_KEY]) === null || _a15 === void 0 ? void 0 : _a15.version;
   if (!globalVersion || !isCompatible(globalVersion)) {
     return;
   }
-  return (_b2 = _global[GLOBAL_OPENTELEMETRY_API_KEY]) === null || _b2 === void 0 ? void 0 : _b2[type];
+  return (_b2 = _global[GLOBAL_OPENTELEMETRY_API_KEY]) === null || _b2 === void 0 ? void 0 : _b2[type2];
 }
-function unregisterGlobal(type, diag) {
-  diag.debug("@opentelemetry/api: Unregistering a global for " + type + " v" + VERSION + ".");
+function unregisterGlobal(type2, diag) {
+  diag.debug("@opentelemetry/api: Unregistering a global for " + type2 + " v" + VERSION + ".");
   var api = _global[GLOBAL_OPENTELEMETRY_API_KEY];
   if (api) {
-    delete api[type];
+    delete api[type2];
   }
 }
 var __read$3 = function(o, n) {
@@ -8249,8 +8255,8 @@ function convertPartToLanguageModelPart(part, downloadedAssets) {
   let data;
   let content;
   let normalizedData;
-  const type = part.type;
-  switch (type) {
+  const type2 = part.type;
+  switch (type2) {
     case "image":
       data = part.image;
       break;
@@ -8258,7 +8264,7 @@ function convertPartToLanguageModelPart(part, downloadedAssets) {
       data = part.data;
       break;
     default:
-      throw new Error(`Unsupported part type: ${type}`);
+      throw new Error(`Unsupported part type: ${type2}`);
   }
   try {
     content = typeof data === "string" ? new URL(data) : data;
@@ -8271,7 +8277,7 @@ function convertPartToLanguageModelPart(part, downloadedAssets) {
         content.toString()
       );
       if (dataUrlMimeType == null || base64Content == null) {
-        throw new Error(`Invalid data URL format in part ${type}`);
+        throw new Error(`Invalid data URL format in part ${type2}`);
       }
       mimeType = dataUrlMimeType;
       normalizedData = convertDataContentToUint8Array(base64Content);
@@ -8287,7 +8293,7 @@ function convertPartToLanguageModelPart(part, downloadedAssets) {
   } else {
     normalizedData = convertDataContentToUint8Array(content);
   }
-  switch (type) {
+  switch (type2) {
     case "image":
       if (mimeType == null && normalizedData instanceof Uint8Array) {
         mimeType = detectImageMimeType(normalizedData);
@@ -10711,9 +10717,9 @@ var experimental_wrapLanguageModel = ({
 }) => {
   async function doTransform({
     params,
-    type
+    type: type2
   }) {
-    return transformParams ? await transformParams({ params, type }) : params;
+    return transformParams ? await transformParams({ params, type: type2 }) : params;
   }
   return {
     specificationVersion: "v1",
@@ -10963,6 +10969,7 @@ const payload = {
   }
 };
 const handler = "content => content";
+const type = "reader";
 const required = [
   "JINA_API_KEY"
 ];
@@ -10970,6 +10977,7 @@ const jina_reader = {
   schema,
   payload,
   handler,
+  type,
   required
 };
 const tools = { jina_reader };
@@ -10982,7 +10990,9 @@ Object.entries(tools).forEach(([k, v]) => {
       required: v.required
     },
     prompt: v.prompt,
-    hander: v.hander
+    hander: v.hander,
+    name: v.schema.name,
+    type: v.type
   };
 });
 async function getJS(query, signal2) {
@@ -11278,7 +11288,13 @@ function executeTool(payload, required, envs, hander) {
     return { result, time: ((Date.now() - startTime) / 1e3).toFixed(1) };
   };
 }
-const toolsName = ["duckduckgo", ...Object.keys(tools)];
+const toolTypes = {
+  duckduckgo: "search",
+  ...Object.values(tools).reduce((acc, { name: name14, type: type2 }) => {
+    acc[name14] = type2;
+    return acc;
+  }, {})
+};
 function vaildTools(tools_config, tool_envs) {
   const tools$1 = {
     duckduckgo: tool({
@@ -11305,7 +11321,7 @@ You can consider using the following tools:
 
 ### ${name14}
 - desc: ${(tools[name14] || tools$1.duckduckgo).description} 
-The requirements are as follows: ${(tools[name14] || tools$1.duckduckgo).prompt || ""}`
+${(tools[name14] || tools$1.duckduckgo).prompt || ""}`
     ).join("")}`;
   }
   return {
@@ -11427,8 +11443,8 @@ async function executeRequest(template, data) {
     headers,
     body
   });
-  const renderOutput = async (type, temple, response2) => {
-    switch (type) {
+  const renderOutput = async (type2, temple, response2) => {
+    switch (type2) {
       case "text":
         return interpolate(temple, await response2.text());
       case "json":
@@ -11452,12 +11468,12 @@ async function executeRequest(template, data) {
     content
   };
 }
-function formatInput(input, type) {
-  if (type === "json") {
+function formatInput(input, type2) {
+  if (type2 === "json") {
     return JSON.parse(input);
-  } else if (type === "space-separated") {
+  } else if (type2 === "space-separated") {
     return input.split(/\s+/);
-  } else if (type === "comma-separated") {
+  } else if (type2 === "comma-separated") {
     return input.split(/\s*,\s*/);
   } else {
     return input;
@@ -11599,13 +11615,13 @@ ${formattedEntries}LOGEND
 function clearLog(context) {
   logSingleton.delete(context);
 }
-function handleLlmLog(logs, result2, time, type) {
-  if (type === "tool") {
+function handleLlmLog(logs, result2, time, type2) {
+  if (type2 === "tool") {
     logs.tool.time.push(time);
   } else {
     logs.chat.time.push(time);
   }
-  if (type === "tool" && result2.tool_calls && result2.tool_calls.length > 0) {
+  if (type2 === "tool" && result2.tool_calls && result2.tool_calls.length > 0) {
     logs.functions.push(
       ...result2.tool_calls.map((tool2) => ({
         name: tool2.function.name,
@@ -11833,12 +11849,12 @@ function escape(text) {
   const regexp = /^LOGSTART\s(.*?)LOGEND/s;
   return result2.join("\n").replace(regexp, "**$1||").replace(new RegExp(Object.values(escapedChars).join("|"), "g"), (match) => escapedCharsReverseMap.get(match) ?? match);
 }
-function handleEscape(text, type = "text") {
+function handleEscape(text, type2 = "text") {
   if (!text.trim()) {
     return text;
   }
   text = text.replace(/\\[*_~|`\\()[\]{}>#+\-=.!]/g, (match) => escapedChars[match]);
-  if (type === "text") {
+  if (type2 === "text") {
     text = text.replace(escapeChars, "\\$1").replace(/\\\*\\\*(\S|\S.*?\S)\\\*\\\*/g, "*$1*").replace(/\\_\\_(\S|\S.*?\S)\\_\\_/g, "__$1__").replace(/\\_(\S|\S.*?\S)\\_/g, "_$1_").replace(/\\~(\S|\S.*?\S)\\~/g, "~$1~").replace(/\\\|\\\|(\S|\S.*?\S)\\\|\\\|/g, "||$1||").replace(/\\\[([^\]]+)\\\]\\\((.+?)\\\)/g, "[$1]($2)").replace(/\\`(.*?)\\`/g, "`$1`").replace(/^\s*\\>\s*(.+)$/gm, ">$1").replace(/^(>?\s*)\\(-|\*)\s+(.+)$/gm, "$1• $3").replace(/^((\\#){1,3}\s)(.+)/gm, "$1*$3*");
   } else {
     const codeBlank = text.length - text.trimStart().length;
@@ -11967,7 +11983,7 @@ class MessageSender {
     }
     return lastMessageResponse;
   }
-  sendRichText(message, parseMode = ENV.DEFAULT_PARSE_MODE, type = "chat") {
+  sendRichText(message, parseMode = ENV.DEFAULT_PARSE_MODE, type2 = "chat") {
     if (!this.context) {
       throw new Error("Message context not set");
     }
@@ -11975,9 +11991,9 @@ class MessageSender {
       ...this.context,
       parse_mode: parseMode
     });
-    return checkIsNeedTagIds(this.context, resp, type);
+    return checkIsNeedTagIds(this.context, resp, type2);
   }
-  sendPlainText(message, type = "tip") {
+  sendPlainText(message, type2 = "tip") {
     if (!this.context) {
       throw new Error("Message context not set");
     }
@@ -11985,7 +12001,7 @@ class MessageSender {
       ...this.context,
       parse_mode: null
     });
-    return checkIsNeedTagIds(this.context, resp, type);
+    return checkIsNeedTagIds(this.context, resp, type2);
   }
   sendPhoto(photo, caption, parse_mode) {
     if (!this.context) {
@@ -12167,7 +12183,7 @@ class ChosenInlineSender {
   static from(token, result2) {
     return new ChosenInlineSender(token, new ChosenInlineContext(result2));
   }
-  sendRichText(text, parseMode = ENV.DEFAULT_PARSE_MODE, type = "chat") {
+  sendRichText(text, parseMode = ENV.DEFAULT_PARSE_MODE, type2 = "chat") {
     return this.editMessageText(text, parseMode);
   }
   sendPlainText(text) {
@@ -12183,11 +12199,11 @@ class ChosenInlineSender {
       }
     });
   }
-  editMessageMedia(media, type, caption, parse_mode) {
+  editMessageMedia(media, type2, caption, parse_mode) {
     return this.api.editMessageMedia({
       inline_message_id: this.context.inline_message_id,
       media: {
-        type,
+        type: type2,
         media,
         ...caption ? { caption: renderMessage(parse_mode || null, caption) } : {}
       }
@@ -12265,8 +12281,8 @@ function convertToAnthropicMessagesPrompt({
   for (let i = 0; i < blocks.length; i++) {
     const block = blocks[i];
     const isLastBlock = i === blocks.length - 1;
-    const type = block.type;
-    switch (type) {
+    const type2 = block.type;
+    switch (type2) {
       case "system": {
         if (system != null) {
           throw new UnsupportedFunctionalityError({
@@ -12429,7 +12445,7 @@ function convertToAnthropicMessagesPrompt({
         break;
       }
       default: {
-        const _exhaustiveCheck = type;
+        const _exhaustiveCheck = type2;
         throw new Error(`Unsupported type: ${_exhaustiveCheck}`);
       }
     }
@@ -12559,8 +12575,8 @@ function prepareTools$5(mode) {
       betas
     };
   }
-  const type = toolChoice.type;
-  switch (type) {
+  const type2 = toolChoice.type;
+  switch (type2) {
     case "auto":
       return {
         tools: anthropicTools2,
@@ -12585,7 +12601,7 @@ function prepareTools$5(mode) {
         betas
       };
     default: {
-      const _exhaustiveCheck = type;
+      const _exhaustiveCheck = type2;
       throw new UnsupportedFunctionalityError({
         functionality: `Unsupported tool choice type: ${_exhaustiveCheck}`
       });
@@ -12618,7 +12634,7 @@ var AnthropicMessagesLanguageModel = class {
     seed
   }) {
     var _a15;
-    const type = mode.type;
+    const type2 = mode.type;
     const warnings = [];
     if (frequencyPenalty != null) {
       warnings.push({
@@ -12664,7 +12680,7 @@ var AnthropicMessagesLanguageModel = class {
       system: messagesPrompt.system,
       messages: messagesPrompt.messages
     };
-    switch (type) {
+    switch (type2) {
       case "regular": {
         const {
           tools: tools2,
@@ -12696,7 +12712,7 @@ var AnthropicMessagesLanguageModel = class {
         };
       }
       default: {
-        const _exhaustiveCheck = type;
+        const _exhaustiveCheck = type2;
         throw new Error(`Unsupported type: ${_exhaustiveCheck}`);
       }
     }
@@ -13254,19 +13270,19 @@ function prepareTools$4(mode) {
   if (toolChoice == null) {
     return { tools: cohereTools, tool_choice: void 0, toolWarnings };
   }
-  const type = toolChoice.type;
-  switch (type) {
+  const type2 = toolChoice.type;
+  switch (type2) {
     case "auto":
-      return { tools: cohereTools, tool_choice: type, toolWarnings };
+      return { tools: cohereTools, tool_choice: type2, toolWarnings };
     case "none":
       return { tools: void 0, tool_choice: "any", toolWarnings };
     case "required":
     case "tool":
       throw new UnsupportedFunctionalityError({
-        functionality: `Unsupported tool choice type: ${type}`
+        functionality: `Unsupported tool choice type: ${type2}`
       });
     default: {
-      const _exhaustiveCheck = type;
+      const _exhaustiveCheck = type2;
       throw new UnsupportedFunctionalityError({
         functionality: `Unsupported tool choice type: ${_exhaustiveCheck}`
       });
@@ -13297,7 +13313,7 @@ var CohereChatLanguageModel = class {
     responseFormat,
     seed
   }) {
-    const type = mode.type;
+    const type2 = mode.type;
     const chatPrompt = convertToCohereChatPrompt(prompt2);
     const baseArgs = {
       // model id:
@@ -13318,7 +13334,7 @@ var CohereChatLanguageModel = class {
       // messages:
       messages: chatPrompt
     };
-    switch (type) {
+    switch (type2) {
       case "regular": {
         const { tools: tools2, tool_choice, toolWarnings } = prepareTools$4(mode);
         return {
@@ -13338,7 +13354,7 @@ var CohereChatLanguageModel = class {
         });
       }
       default: {
-        const _exhaustiveCheck = type;
+        const _exhaustiveCheck = type2;
         throw new UnsupportedFunctionalityError({
           functionality: `Unsupported mode: ${_exhaustiveCheck}`
         });
@@ -13450,8 +13466,8 @@ var CohereChatLanguageModel = class {
               return;
             }
             const value = chunk.value;
-            const type = value.type;
-            switch (type) {
+            const type2 = value.type;
+            switch (type2) {
               case "content-delta": {
                 controller.enqueue({
                   type: "text-delta",
@@ -13767,7 +13783,7 @@ function convertJSONSchemaToOpenAPISchema(jsonSchema2) {
     return { type: "boolean", properties: {} };
   }
   const {
-    type,
+    type: type2,
     description,
     required: required2,
     properties,
@@ -13789,18 +13805,18 @@ function convertJSONSchemaToOpenAPISchema(jsonSchema2) {
   if (constValue !== void 0) {
     result2.enum = [constValue];
   }
-  if (type) {
-    if (Array.isArray(type)) {
-      if (type.includes("null")) {
-        result2.type = type.filter((t) => t !== "null")[0];
+  if (type2) {
+    if (Array.isArray(type2)) {
+      if (type2.includes("null")) {
+        result2.type = type2.filter((t) => t !== "null")[0];
         result2.nullable = true;
       } else {
-        result2.type = type;
+        result2.type = type2;
       }
-    } else if (type === "null") {
+    } else if (type2 === "null") {
       result2.type = "null";
     } else {
-      result2.type = type;
+      result2.type = type2;
     }
   }
   if (properties != null) {
@@ -13988,8 +14004,8 @@ function prepareTools$3(mode) {
       toolWarnings
     };
   }
-  const type = toolChoice.type;
-  switch (type) {
+  const type2 = toolChoice.type;
+  switch (type2) {
     case "auto":
       return {
         tools: { functionDeclarations },
@@ -14020,7 +14036,7 @@ function prepareTools$3(mode) {
         toolWarnings
       };
     default: {
-      const _exhaustiveCheck = type;
+      const _exhaustiveCheck = type2;
       throw new UnsupportedFunctionalityError({
         functionality: `Unsupported tool choice type: ${_exhaustiveCheck}`
       });
@@ -14075,7 +14091,7 @@ var GoogleGenerativeAILanguageModel = class {
     seed
   }) {
     var _a15;
-    const type = mode.type;
+    const type2 = mode.type;
     const warnings = [];
     if (seed != null) {
       warnings.push({
@@ -14099,7 +14115,7 @@ var GoogleGenerativeAILanguageModel = class {
       this.supportsObjectGeneration ? convertJSONSchemaToOpenAPISchema(responseFormat.schema) : void 0
     };
     const { contents, systemInstruction } = convertToGoogleGenerativeAIMessages(prompt2);
-    switch (type) {
+    switch (type2) {
       case "regular": {
         const { tools: tools2, toolConfig, toolWarnings } = prepareTools$3(mode);
         return {
@@ -14157,7 +14173,7 @@ var GoogleGenerativeAILanguageModel = class {
         };
       }
       default: {
-        const _exhaustiveCheck = type;
+        const _exhaustiveCheck = type2;
         throw new Error(`Unsupported type: ${_exhaustiveCheck}`);
       }
     }
@@ -14679,8 +14695,8 @@ function prepareTools$2({
         toolWarnings
       };
     }
-    const type2 = toolChoice.type;
-    switch (type2) {
+    const type22 = toolChoice.type;
+    switch (type22) {
       case "auto":
       case "none":
       case void 0:
@@ -14720,12 +14736,12 @@ function prepareTools$2({
   if (toolChoice == null) {
     return { tools: openaiTools, tool_choice: void 0, toolWarnings };
   }
-  const type = toolChoice.type;
-  switch (type) {
+  const type2 = toolChoice.type;
+  switch (type2) {
     case "auto":
     case "none":
     case "required":
-      return { tools: openaiTools, tool_choice: type, toolWarnings };
+      return { tools: openaiTools, tool_choice: type2, toolWarnings };
     case "tool":
       return {
         tools: openaiTools,
@@ -14738,7 +14754,7 @@ function prepareTools$2({
         toolWarnings
       };
     default: {
-      const _exhaustiveCheck = type;
+      const _exhaustiveCheck = type2;
       throw new UnsupportedFunctionalityError({
         functionality: `Unsupported tool choice type: ${_exhaustiveCheck}`
       });
@@ -14782,7 +14798,7 @@ var OpenAIChatLanguageModel$1 = class OpenAIChatLanguageModel2 {
     providerMetadata
   }) {
     var _a15, _b2, _c2, _d, _e, _f, _g, _h, _i;
-    const type = mode.type;
+    const type2 = mode.type;
     const warnings = [];
     if (topK != null) {
       warnings.push({
@@ -14844,7 +14860,7 @@ var OpenAIChatLanguageModel$1 = class OpenAIChatLanguageModel2 {
       baseArgs.frequency_penalty = void 0;
       baseArgs.presence_penalty = void 0;
     }
-    switch (type) {
+    switch (type2) {
       case "regular": {
         const { tools: tools2, tool_choice, functions, function_call, toolWarnings } = prepareTools$2({
           mode,
@@ -14915,7 +14931,7 @@ var OpenAIChatLanguageModel$1 = class OpenAIChatLanguageModel2 {
         };
       }
       default: {
-        const _exhaustiveCheck = type;
+        const _exhaustiveCheck = type2;
         throw new Error(`Unsupported type: ${_exhaustiveCheck}`);
       }
     }
@@ -15440,7 +15456,7 @@ var OpenAICompletionLanguageModel$1 = class OpenAICompletionLanguageModel2 {
     seed
   }) {
     var _a15;
-    const type = mode.type;
+    const type2 = mode.type;
     const warnings = [];
     if (topK != null) {
       warnings.push({
@@ -15478,7 +15494,7 @@ var OpenAICompletionLanguageModel$1 = class OpenAICompletionLanguageModel2 {
       // stop sequences:
       stop: stop.length > 0 ? stop : void 0
     };
-    switch (type) {
+    switch (type2) {
       case "regular": {
         if ((_a15 = mode.tools) == null ? void 0 : _a15.length) {
           throw new UnsupportedFunctionalityError({
@@ -15503,7 +15519,7 @@ var OpenAICompletionLanguageModel$1 = class OpenAICompletionLanguageModel2 {
         });
       }
       default: {
-        const _exhaustiveCheck = type;
+        const _exhaustiveCheck = type2;
         throw new Error(`Unsupported type: ${_exhaustiveCheck}`);
       }
     }
@@ -16082,12 +16098,12 @@ class ChatHandler {
     context.MIDDEL_CONTEXT.history = await loadHistory(historyKey);
   }
   async processOriginalMessage(message, context) {
-    const { type, id, text } = context.MIDDEL_CONTEXT.originalMessage;
+    const { type: type2, id, text } = context.MIDDEL_CONTEXT.originalMessage;
     const params = {
       role: "user",
       content: text || ""
     };
-    if ((type === "image" || type === "audio") && id) {
+    if ((type2 === "image" || type2 === "audio") && id) {
       const api = createTelegramBotAPI(context.SHARE_CONTEXT.botToken);
       const files = await Promise.all(id.map((i) => api.getFileWithReturns({ file_id: i })));
       const paths = files.map((f2) => f2.result.file_path).filter(Boolean);
@@ -16102,14 +16118,14 @@ ${urls.join("\n")}`);
             text
           });
         }
-        if (type === "image") {
+        if (type2 === "image") {
           for (const url of urls) {
             params.content.push({
               type: "image",
               image: ENV.TELEGRAM_IMAGE_TRANSFER_MODE === "url" ? url : renderBase64DataURI(await imageToBase64String(url))
             });
           }
-        } else if (type === "audio") {
+        } else if (type2 === "audio") {
           params.content.push({
             type: "file",
             data: urls[0],
@@ -16282,19 +16298,19 @@ function injectHistory(context, result2, nextType = "text") {
     return;
   context.MIDDEL_CONTEXT.history.push({ role: "user", content: result2.text || "", ...result2.url && result2.url.length > 0 && { images: result2.url } });
 }
-function isTelegramChatTypeGroup(type) {
-  return type === "group" || type === "supergroup";
+function isTelegramChatTypeGroup(type2) {
+  return type2 === "group" || type2 === "supergroup";
 }
 function extractMessage(message, currentBotId) {
   const acceptMsgType = ENV.ENABLE_FILE ? ["document", "photo", "voice", "audio", "text"] : ["text"];
   const messageData = extractTypeFromMessage(message, acceptMsgType);
   if (messageData && messageData.type === "text" && isNeedGetReplyMessage(message, currentBotId)) {
     const {
-      type,
+      type: type2,
       id
     } = extractTypeFromMessage(message.reply_to_message, acceptMsgType) || {};
-    if (type && type !== "text")
-      messageData.type = type;
+    if (type2 && type2 !== "text")
+      messageData.type = type2;
     if (id && id.length > 0)
       messageData.id = id;
   }
@@ -16325,11 +16341,11 @@ function extractTypeFromMessage(message, supportType) {
     case "audio":
     case "voice": {
       if (msgType === "document") {
-        const type = message.document?.mime_type?.match(/(audio|image)/)?.[1];
-        if (!type) {
+        const type2 = message.document?.mime_type?.match(/(audio|image)/)?.[1];
+        if (!type2) {
           return null;
         }
-        msgType = type;
+        msgType = type2;
       }
       const id = message[msgType]?.file_id;
       return {
@@ -16533,9 +16549,10 @@ class Transcription extends (_b = OpenAIBase, _request_dec2 = [Log], _b) {
 _init2 = __decoratorStart(_b);
 __decorateElement(_init2, 5, "request", _request_dec2, Transcription);
 __decoratorMetadata(_init2, Transcription);
-function AIMiddleware({ config, _models, activeTools, onStream }) {
+function AIMiddleware({ config, _models, activeTools, onStream, toolChoice }) {
   let startTime2;
   let sendToolCall = false;
+  let toolChoiceIndex = 0;
   return {
     wrapGenerate: async ({ doGenerate, params, model }) => {
       log.info("doGenerate called");
@@ -16559,8 +16576,8 @@ function AIMiddleware({ config, _models, activeTools, onStream }) {
       }
       return doStream();
     },
-    transformParams: async ({ type, params }) => {
-      log.info(`start ${type} call`);
+    transformParams: async ({ type: type2, params }) => {
+      log.info(`start ${type2} call`);
       startTime2 = Date.now();
       const logs = getLogSingleton(config);
       logs.ongoingFunctions.push({ name: "chat_start", startTime: startTime2 });
@@ -16571,6 +16588,11 @@ function AIMiddleware({ config, _models, activeTools, onStream }) {
             delete i.result.time;
           });
         }
+      }
+      if (toolChoice.length > 0 && toolChoiceIndex < toolChoice.length && params.mode.type === "regular") {
+        params.mode.toolChoice = toolChoice[toolChoiceIndex];
+        log.info(`toolChoice changed: ${JSON.stringify(toolChoice[toolChoiceIndex])}`);
+        toolChoiceIndex++;
       }
       return params;
     },
@@ -16862,8 +16884,8 @@ function isJsonResponse(resp) {
 function isEventStreamResponse(resp) {
   const types = ["application/stream+json", "text/event-stream"];
   const content = resp.headers.get("content-type") || "";
-  for (const type of types) {
-    if (content.includes(type)) {
+  for (const type2 of types) {
+    if (content.includes(type2)) {
       return true;
     }
   }
@@ -16961,7 +16983,8 @@ async function requestChatCompletionsV2(params, onStream, onResult = null) {
       config: params.context,
       _models: {},
       activeTools: params.activeTools || [],
-      onStream
+      onStream,
+      toolChoice: params.toolChoice || []
     });
     const hander_params = {
       model: experimental_wrapLanguageModel({
@@ -16969,9 +16992,9 @@ async function requestChatCompletionsV2(params, onStream, onResult = null) {
         middleware
       }),
       messages: params.messages,
-      maxSteps: 3,
-      maxRetries: 0,
-      temperature: (params.activeTools?.length || 0) > 0 ? 0.1 : 1,
+      maxSteps: ENV.MAX_STEPS,
+      maxRetries: ENV.MAX_RETRIES,
+      temperature: (params.activeTools?.length || 0) > 0 ? params.context.FUNCTION_CALL_TEMPERATURE : params.context.CHAT_TEMPERATURE,
       tools: params.tools,
       activeTools: params.activeTools,
       onStepFinish: middleware.onStepFinish
@@ -17243,8 +17266,8 @@ function prepareTools$1({
         toolWarnings
       };
     }
-    const type2 = toolChoice.type;
-    switch (type2) {
+    const type22 = toolChoice.type;
+    switch (type22) {
       case "auto":
       case "none":
       case void 0:
@@ -17284,12 +17307,12 @@ function prepareTools$1({
   if (toolChoice == null) {
     return { tools: openaiTools, tool_choice: void 0, toolWarnings };
   }
-  const type = toolChoice.type;
-  switch (type) {
+  const type2 = toolChoice.type;
+  switch (type2) {
     case "auto":
     case "none":
     case "required":
-      return { tools: openaiTools, tool_choice: type, toolWarnings };
+      return { tools: openaiTools, tool_choice: type2, toolWarnings };
     case "tool":
       return {
         tools: openaiTools,
@@ -17302,7 +17325,7 @@ function prepareTools$1({
         toolWarnings
       };
     default: {
-      const _exhaustiveCheck = type;
+      const _exhaustiveCheck = type2;
       throw new UnsupportedFunctionalityError({
         functionality: `Unsupported tool choice type: ${_exhaustiveCheck}`
       });
@@ -17346,7 +17369,7 @@ var OpenAIChatLanguageModel = class {
     providerMetadata
   }) {
     var _a15, _b2, _c2, _d, _e, _f, _g, _h, _i;
-    const type = mode.type;
+    const type2 = mode.type;
     const warnings = [];
     if (topK != null) {
       warnings.push({
@@ -17408,7 +17431,7 @@ var OpenAIChatLanguageModel = class {
       baseArgs.frequency_penalty = void 0;
       baseArgs.presence_penalty = void 0;
     }
-    switch (type) {
+    switch (type2) {
       case "regular": {
         const { tools: tools2, tool_choice, functions, function_call, toolWarnings } = prepareTools$1({
           mode,
@@ -17479,7 +17502,7 @@ var OpenAIChatLanguageModel = class {
         };
       }
       default: {
-        const _exhaustiveCheck = type;
+        const _exhaustiveCheck = type2;
         throw new Error(`Unsupported type: ${_exhaustiveCheck}`);
       }
     }
@@ -18004,7 +18027,7 @@ var OpenAICompletionLanguageModel = class {
     seed
   }) {
     var _a15;
-    const type = mode.type;
+    const type2 = mode.type;
     const warnings = [];
     if (topK != null) {
       warnings.push({
@@ -18042,7 +18065,7 @@ var OpenAICompletionLanguageModel = class {
       // stop sequences:
       stop: stop.length > 0 ? stop : void 0
     };
-    switch (type) {
+    switch (type2) {
       case "regular": {
         if ((_a15 = mode.tools) == null ? void 0 : _a15.length) {
           throw new UnsupportedFunctionalityError({
@@ -18067,7 +18090,7 @@ var OpenAICompletionLanguageModel = class {
         });
       }
       default: {
-        const _exhaustiveCheck = type;
+        const _exhaustiveCheck = type2;
         throw new Error(`Unsupported type: ${_exhaustiveCheck}`);
       }
     }
@@ -18454,7 +18477,10 @@ class Google {
   request = async (params, context, onStream) => {
     const provider = createGoogleGenerativeAI({
       baseURL: context.GOOGLE_API_BASE,
-      apiKey: context.GOOGLE_API_KEY || void 0
+      apiKey: context.GOOGLE_API_KEY || void 0,
+      fetch: async (url, options2) => {
+        return fetch(url, options2);
+      }
     });
     const languageModelV1 = provider.languageModel(this.model(context), void 0);
     return requestChatCompletionsV2(await warpLLMParams({
@@ -18612,11 +18638,11 @@ function prepareTools(mode) {
   if (toolChoice == null) {
     return { tools: mistralTools, tool_choice: void 0, toolWarnings };
   }
-  const type = toolChoice.type;
-  switch (type) {
+  const type2 = toolChoice.type;
+  switch (type2) {
     case "auto":
     case "none":
-      return { tools: mistralTools, tool_choice: type, toolWarnings };
+      return { tools: mistralTools, tool_choice: type2, toolWarnings };
     case "required":
       return { tools: mistralTools, tool_choice: "any", toolWarnings };
     case "tool":
@@ -18628,7 +18654,7 @@ function prepareTools(mode) {
         toolWarnings
       };
     default: {
-      const _exhaustiveCheck = type;
+      const _exhaustiveCheck = type2;
       throw new Error(`Unsupported tool choice type: ${_exhaustiveCheck}`);
     }
   }
@@ -18658,7 +18684,7 @@ var MistralChatLanguageModel = class {
     responseFormat,
     seed
   }) {
-    const type = mode.type;
+    const type2 = mode.type;
     const warnings = [];
     if (topK != null) {
       warnings.push({
@@ -18706,7 +18732,7 @@ var MistralChatLanguageModel = class {
       // messages:
       messages: convertToMistralChatMessages(prompt2)
     };
-    switch (type) {
+    switch (type2) {
       case "regular": {
         const { tools: tools2, tool_choice, toolWarnings } = prepareTools(mode);
         return {
@@ -18734,7 +18760,7 @@ var MistralChatLanguageModel = class {
         };
       }
       default: {
-        const _exhaustiveCheck = type;
+        const _exhaustiveCheck = type2;
         throw new Error(`Unsupported type: ${_exhaustiveCheck}`);
       }
     }
@@ -19320,12 +19346,20 @@ async function warpLLMParams(params, context) {
   if (params.messages[0].role === "system" && activeTools) {
     params.messages[0].content += tool2?.tools_prompt || "";
   }
+  let toolChoice;
+  if (activeTools) {
+    const userMessageIsString = typeof messages.content === "string";
+    const choiceResult = wrapToolChoice(activeTools, userMessageIsString ? messages.content : "");
+    userMessageIsString && (messages.content = choiceResult.message);
+    toolChoice = choiceResult.toolChoices;
+  }
   return {
     model: params.model,
     toolModel,
     messages: params.messages,
     tools: tool2?.tools,
     activeTools,
+    toolChoice,
     context
   };
 }
@@ -19392,6 +19426,26 @@ async function createLlmModel(model, context) {
         apiKey: context.OPENAILIKE_API_KEY || void 0
       }).languageModel(model_id, void 0);
   }
+}
+function wrapToolChoice(activeTools, message) {
+  const tool_perfix = "/t-";
+  let text = message.trim();
+  const choices = ["auto", "none", "required", ...activeTools];
+  const toolChoices = [];
+  do {
+    const tool2 = choices.find((t) => text.startsWith(`${tool_perfix}${t}`)) || "";
+    if (tool2) {
+      text = text.substring(tool_perfix.length + tool2.length).trim();
+      toolChoices.push(["auto", "none", "required"].includes(tool2) ? { type: tool2 } : { type: "tool", toolName: tool2 });
+    } else {
+      break;
+    }
+  } while (true);
+  log.info(`All toolChoices: ${JSON.stringify(toolChoices)}`);
+  return {
+    message,
+    toolChoices
+  };
 }
 class AsyncIter {
   queue = [];
@@ -19938,6 +19992,7 @@ ${detailSet}
       }
       return new Response("success");
     } catch (e) {
+      log.error(`/set error: ${e.message}`);
       return sender.sendPlainText(`ERROR: ${e.message}`);
     }
   };
@@ -19964,20 +20019,21 @@ ${detailSet}
     return { keys, values };
   }
   tokenizeSubcommand(subcommand) {
-    const regex = /(-\w+)\s+(".*?"|\S+)/g;
+    const regex = /^\s*(-\w+)\s+(".*?"|'.*?'|\S+|$)/;
     const flags = [];
-    let lastIndex = 0;
+    let text = subcommand;
     let match;
-    while ((match = regex.exec(subcommand)) !== null) {
+    while ((match = regex.exec(text)) !== null) {
       const flag = match[1];
       let value = match[2];
-      if (value.startsWith('"') && value.endsWith('"')) {
+      if (value.startsWith('"') && value.endsWith('"') || value.startsWith("'") && value.endsWith("'")) {
         value = value.slice(1, -1);
       }
       flags.push({ flag, value });
-      lastIndex = regex.lastIndex;
+      text = text.slice(match[0].length);
     }
-    const remainingText = subcommand.slice(lastIndex).trim();
+    const remainingText = text.trim();
+    log.info(`/set flags: ${JSON.stringify(flags, null, 2)}, remainingText: ${remainingText}`);
     return { flags, remainingText };
   }
   async processSubcommand(flag, value, keys, values, context, sender) {
@@ -19985,7 +20041,7 @@ ${detailSet}
     let key = keys[flag];
     let mappedValue = values[value] ?? value;
     if (!key) {
-      return sender.sendPlainText(`Mapping Key ${flag} not found`);
+      throw new Error(`Mapping Key ${flag} not found`);
     }
     if (ENV.LOCK_USER_CONFIG_KEYS.includes(key) && sender) {
       return sender.sendPlainText(`Key ${key} is locked`);
@@ -20006,7 +20062,7 @@ ${detailSet}
         break;
       case "USE_TOOLS":
         if (value === "on") {
-          mappedValue = toolsName;
+          mappedValue = Object.keys(toolTypes);
         } else if (value === "off") {
           mappedValue = [];
         }
@@ -20367,16 +20423,16 @@ async function handlePluginCommand(message, command, raw, template, context) {
       throw new Error("Missing required input");
     }
     const DATA = formatInput(subcommand, template.input?.type);
-    const { type, content } = await executeRequest(template, {
+    const { type: type2, content } = await executeRequest(template, {
       DATA,
       ENV: ENV.PLUGINS_ENV
     });
-    if (type === "image") {
+    if (type2 === "image") {
       sendAction(context.SHARE_CONTEXT.botToken, message.chat.id, "upload_photo");
       return sender.sendPhoto(content);
     }
     sendAction(context.SHARE_CONTEXT.botToken, message.chat.id, "typing");
-    switch (type) {
+    switch (type2) {
       case "html":
         return sender.sendRichText(content, "HTML");
       case "markdown":
@@ -20690,6 +20746,7 @@ function SubstituteWords(message) {
       break;
     }
   } while (true);
+  log.info(`replacedString: ${replacedString}, text: ${text}`);
   message.text ? message.text = replacedString + text : message.caption = replacedString + text;
   return true;
 }
@@ -21004,8 +21061,8 @@ class HandlerCallbackQuery {
   }
   async updateConfig(context, api, configKey, newValue) {
     const oldValue = context.USER_CONFIG[configKey];
-    const type = Array.isArray(oldValue) ? "array" : typeof oldValue;
-    switch (type) {
+    const type2 = Array.isArray(oldValue) ? "array" : typeof oldValue;
+    switch (type2) {
       case "string":
       case "boolean":
         if (oldValue === newValue) {

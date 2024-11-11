@@ -13,7 +13,7 @@ import { ENV, ENV_KEY_MAPPER } from '../../config/env';
 import { ConfigMerger } from '../../config/merger';
 import { getLogSingleton } from '../../extra/log/logDecortor';
 import { log } from '../../extra/log/logger';
-import { toolsName } from '../../extra/tools';
+import { toolTypes } from '../../extra/tools';
 import { createTelegramBotAPI } from '../api';
 import { chatWithLLM, OnStreamHander, sendImages } from '../handler/chat';
 import { escape } from '../utils/md2tgmd';
@@ -417,6 +417,7 @@ export class SetCommandHandler implements CommandHandler {
 
             return new Response('success');
         } catch (e) {
+            log.error(`/set error: ${(e as Error).message}`);
             return sender.sendPlainText(`ERROR: ${(e as Error).message}`);
         }
     };
@@ -447,24 +448,23 @@ export class SetCommandHandler implements CommandHandler {
     }
 
     private tokenizeSubcommand(subcommand: string): { flags: { flag: string; value: string }[]; remainingText: string } {
-        const regex = /(-\w+)\s+(".*?"|\S+)/g;
+        const regex = /^\s*(-\w+)\s+(".*?"|'.*?'|\S+|$)/;
         const flags: { flag: string; value: string }[] = [];
-        let lastIndex = 0;
+        let text = subcommand;
         let match: RegExpExecArray | null;
 
-        while ((match = regex.exec(subcommand)) !== null) {
+        while ((match = regex.exec(text)) !== null) {
             const flag = match[1];
             let value = match[2];
-            // 去除引号
-            if (value.startsWith('"') && value.endsWith('"')) {
+            if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith('\'') && value.endsWith('\''))) {
                 value = value.slice(1, -1);
             }
             flags.push({ flag, value });
-            lastIndex = regex.lastIndex;
+            text = text.slice(match[0].length);
         }
 
-        const remainingText = subcommand.slice(lastIndex).trim();
-
+        const remainingText = text.trim();
+        log.info(`/set flags: ${JSON.stringify(flags, null, 2)}, remainingText: ${remainingText}`);
         return { flags, remainingText };
     }
 
@@ -482,7 +482,7 @@ export class SetCommandHandler implements CommandHandler {
         let mappedValue = values[value] ?? value;
 
         if (!key) {
-            return sender.sendPlainText(`Mapping Key ${flag} not found`);
+            throw new Error(`Mapping Key ${flag} not found`);
         }
 
         if (ENV.LOCK_USER_CONFIG_KEYS.includes(key) && sender) {
@@ -507,7 +507,7 @@ export class SetCommandHandler implements CommandHandler {
                 break;
             case 'USE_TOOLS':
                 if (value === 'on') {
-                    mappedValue = toolsName;
+                    mappedValue = Object.keys(toolTypes);
                 } else if (value === 'off') {
                     mappedValue = [];
                 }

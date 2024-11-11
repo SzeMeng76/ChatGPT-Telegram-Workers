@@ -13,6 +13,8 @@ Object.entries(tools).forEach(([k, v]) => {
         },
         prompt: v.prompt,
         hander: v.hander,
+        name: v.schema.name,
+        type: v.type,
     };
 });
 

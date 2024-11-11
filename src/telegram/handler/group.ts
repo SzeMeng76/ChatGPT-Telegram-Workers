@@ -4,6 +4,7 @@ import type { MessageHandler } from './types';
 import { ENV } from '../../config/env';
 import { createTelegramBotAPI } from '../api';
 import { isTelegramChatTypeGroup } from '../utils/utils';
+import { log } from '../../extra/log/logger';
 
 function checkMention(content: string, entities: Telegram.MessageEntity[], botName: string, botId: number): {
     isMention: boolean;
@@ -84,6 +85,7 @@ export function SubstituteWords(message: Telegram.Message): boolean {
             break;
         }
     } while (true);
+    log.info(`replacedString: ${replacedString}, text: ${text}`);
     message.text ? (message.text = replacedString + text) : (message.caption = replacedString + text);
     return true;
 }

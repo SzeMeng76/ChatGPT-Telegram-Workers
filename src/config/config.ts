@@ -60,7 +60,7 @@ export class EnvironmentConfig {
     // 为了避免4096字符限制，将消息删减
     AUTO_TRIM_HISTORY = true;
     // 最大历史记录长度
-    MAX_HISTORY_LENGTH = 20;
+    MAX_HISTORY_LENGTH = 12;
     // 最大消息长度
     MAX_TOKEN_LENGTH = -1;
     // Image占位符: 当此环境变量存在时，则历史记录中的图片将被替换为此占位符
@@ -167,6 +167,10 @@ export class EnvironmentConfig {
     // qstash timeout
     // free account max timeout 15m
     QSTASH_TIMEOUT = '15m';
+    // chat agent max steps
+    MAX_STEPS = 3;
+    // chat agent max retries
+    MAX_RETRIES = 0;
 }
 
 // -- 通用配置 --
@@ -373,4 +377,13 @@ export class ExtraUserConfig {
     KLINGAI_IMAGE_COUNT = 4;
     // KlingAI Image Ratio
     KLINGAI_IMAGE_RATIO = '1:1';
+
+    // chat agent temperature
+    CHAT_TEMPERATURE = 1;
+    // function call temperature
+    FUNCTION_CALL_TEMPERATURE = 0.1;
+    // chat agent max tokens
+    CHAT_MAX_TOKENS = 8192;
+    // function call max tokens
+    FUNCTION_CALL_MAX_TOKENS = 1024;
 }

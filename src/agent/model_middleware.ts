@@ -1,5 +1,6 @@
 /* eslint-disable unused-imports/no-unused-vars */
 import type {
+    CoreToolChoice,
     LanguageModelV1,
     Experimental_LanguageModelV1Middleware as LanguageModelV1Middleware,
     StepResult,
@@ -10,9 +11,10 @@ import { getLogSingleton } from '../extra/log/logDecortor';
 import { log } from '../extra/log/logger';
 import { OpenAI } from './openai';
 
-export function AIMiddleware({ config, _models, activeTools, onStream }: { config: AgentUserConfig; _models: Record<string, LanguageModelV1>; activeTools: string[]; onStream: ChatStreamTextHandler | null }): LanguageModelV1Middleware & { onChunk: (data: any) => boolean; onStepFinish: (data: StepResult<any>, context: AgentUserConfig) => void } {
+export function AIMiddleware({ config, _models, activeTools, onStream, toolChoice }: { config: AgentUserConfig; _models: Record<string, LanguageModelV1>; activeTools: string[]; onStream: ChatStreamTextHandler | null; toolChoice: CoreToolChoice<any>[] | [] }): LanguageModelV1Middleware & { onChunk: (data: any) => boolean; onStepFinish: (data: StepResult<any>, context: AgentUserConfig) => void } {
     let startTime: number | undefined;
     let sendToolCall = false;
+    let toolChoiceIndex = 0;
     return {
         wrapGenerate: async ({ doGenerate, params, model }) => {
             log.info('doGenerate called');
@@ -51,7 +53,11 @@ export function AIMiddleware({ config, _models, activeTools, onStream }: { confi
                     });
                 }
             }
-
+            if (toolChoice.length > 0 && toolChoiceIndex < toolChoice.length && params.mode.type === 'regular') {
+                params.mode.toolChoice = toolChoice[toolChoiceIndex] as any;
+                log.info(`toolChoice changed: ${JSON.stringify(toolChoice[toolChoiceIndex])}`);
+                toolChoiceIndex++;
+            }
             return params;
         },
 
@@ -97,7 +103,7 @@ export function AIMiddleware({ config, _models, activeTools, onStream }: { confi
             } else {
                 activeTools.length > 0 ? logs.tool.time.push(time) : logs.chat.time.push(time);
             }
-            
+
             if (usage && !Number.isNaN(usage.promptTokens) && !Number.isNaN(usage.completionTokens)) {
                 logs.tokens.push(`${usage.promptTokens},${usage.completionTokens}`);
                 log.info(`tokens: ${JSON.stringify(usage)}`);

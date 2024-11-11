@@ -1,4 +1,4 @@
-import type { CoreMessage, LanguageModelV1, StepResult } from 'ai';
+import type { CoreMessage, CoreToolChoice, LanguageModelV1, StepResult } from 'ai';
 import type { AgentUserConfig } from '../config/env';
 import type { ChatStreamTextHandler, OpenAIFuncCallData, ResponseMessage } from './types';
 import { generateText, streamText, experimental_wrapLanguageModel as wrapLanguageModel } from 'ai';
@@ -178,13 +178,14 @@ export async function streamHandler(stream: AsyncIterable<any>, contentExtractor
     await msgPromise;
     return contentFull;
 }
-export async function requestChatCompletionsV2(params: { model: LanguageModelV1; toolModel?: LanguageModelV1; prompt?: string; messages: CoreMessage[]; tools?: any; activeTools?: string[]; context: AgentUserConfig }, onStream: ChatStreamTextHandler | null, onResult: ChatStreamTextHandler | null = null): Promise<{ messages: ResponseMessage[]; content: string }> {
+export async function requestChatCompletionsV2(params: { model: LanguageModelV1; toolModel?: LanguageModelV1; prompt?: string; messages: CoreMessage[]; tools?: any; activeTools?: string[]; toolChoice?: CoreToolChoice<any>[]; context: AgentUserConfig }, onStream: ChatStreamTextHandler | null, onResult: ChatStreamTextHandler | null = null): Promise<{ messages: ResponseMessage[]; content: string }> {
     try {
         const middleware = AIMiddleware({
             config: params.context,
             _models: {},
             activeTools: params.activeTools || [],
             onStream,
+            toolChoice: params.toolChoice || [],
         });
         const hander_params = {
             model: wrapLanguageModel({
@@ -192,9 +193,9 @@ export async function requestChatCompletionsV2(params: { model: LanguageModelV1;
                 middleware,
             }),
             messages: params.messages,
-            maxSteps: 3,
-            maxRetries: 0,
-            temperature: (params.activeTools?.length || 0) > 0 ? 0.1 : 1,
+            maxSteps: ENV.MAX_STEPS,
+            maxRetries: ENV.MAX_RETRIES,
+            temperature: (params.activeTools?.length || 0) > 0 ? params.context.FUNCTION_CALL_TEMPERATURE : params.context.CHAT_TEMPERATURE,
             tools: params.tools,
             activeTools: params.activeTools,
             onStepFinish: middleware.onStepFinish as (data: StepResult<any>) => void,

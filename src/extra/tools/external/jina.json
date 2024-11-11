@@ -26,5 +26,6 @@
         }
     },
     "handler": "content => content",
+    "type": "reader",
     "required": ["JINA_API_KEY"]
 }

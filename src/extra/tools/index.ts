@@ -1,6 +1,5 @@
 /* eslint-disable no-eval */
 import { jsonSchema, tool } from 'ai';
-
 import { log } from '../log/logger';
 import externalTools from './external';
 import { duckduckgo } from './internal/duckduckgo';
@@ -42,7 +41,13 @@ function executeTool(payload: Record<string, any>, required?: string[], envs?: R
     };
 }
 
-export const toolsName = ['duckduckgo', ...Object.keys(externalTools)];
+export const toolTypes = {
+    duckduckgo: 'search',
+    ...Object.values(externalTools).reduce((acc, { name, type }) => {
+        acc[name] = type;
+        return acc;
+    }, {}),
+};
 
 export function vaildTools(tools_config: string[], tool_envs: Record<string, any>) {
     const tools: Record<string, any> = {
@@ -63,7 +68,7 @@ export function vaildTools(tools_config: string[], tool_envs: Record<string, any
     let tools_prompt = '';
     if (activeTools.length > 0) {
         tools_prompt = `\n\nYou can consider using the following tools:\n##TOOLS${activeTools.map(name =>
-            `\n\n### ${name}\n- desc: ${(externalTools[name] || tools.duckduckgo).description} \nThe requirements are as follows: ${(externalTools[name] || tools.duckduckgo).prompt || ''}`,
+            `\n\n### ${name}\n- desc: ${(externalTools[name] || tools.duckduckgo).description} \n${(externalTools[name] || tools.duckduckgo).prompt || ''}`,
         ).join('')}`;
     }
     return {
