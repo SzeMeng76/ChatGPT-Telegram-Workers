@@ -154,7 +154,9 @@ export class EnvironmentConfig {
     DEBUG_MODE = false;
     // 开发模式
     DEV_MODE = false;
-    // 是否发送初始化消息
+    /**
+     * @deprecated 是否发送初始化消息
+     */
     SEND_INIT_MESSAGE = true;
 
     QSTASH_URL = 'https://qstash.upstash.io';

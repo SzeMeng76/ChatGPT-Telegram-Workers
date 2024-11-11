@@ -163,7 +163,7 @@ export async function streamHandler(stream: AsyncIterable<any>, contentExtractor
 
                 lengthDelta = 0;
                 updateStep += 20;
-                onStream.send(`${contentFull}●`);
+                onStream.sentPromise = onStream.send(`${contentFull}●`);
             }
         }
         contentFull += lastChunk;

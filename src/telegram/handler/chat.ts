@@ -162,7 +162,7 @@ export function OnStreamHander(sender: MessageSender | ChosenInlineSender, conte
         send: null as ((text: string, isEnd: boolean, sendType?: 'chat' | 'telegraph') => Promise<any>) | null,
         end: null as ((text: string) => Promise<any>) | null,
     };
-    streamSender.send = async (text: string, isEnd: boolean = false): Promise<any> => {
+    streamSender.send = async (text: string): Promise<any> => {
         try {
             if (sender instanceof MessageSender
                 && isTelegramChatTypeGroup(sender.context.chatType)
@@ -172,7 +172,7 @@ export function OnStreamHander(sender: MessageSender | ChosenInlineSender, conte
                 return;
             }
             // 判断是否需要等待
-            if (!isEnd && (streamSender.nextEnableTime || 0) > Date.now()) {
+            if ((streamSender.nextEnableTime || 0) > Date.now()) {
                 log.info(`Need await: ${(streamSender.nextEnableTime || 0) - Date.now()}ms`);
                 return;
             }
@@ -183,7 +183,6 @@ export function OnStreamHander(sender: MessageSender | ChosenInlineSender, conte
             }
 
             const data = context ? `${getLog(context.USER_CONFIG)}\n${text}` : text;
-            log.info(`send ${isEnd ? 'end' : 'stream'} message`);
             const resp = await sender.sendRichText(data, ENV.DEFAULT_PARSE_MODE as Telegram.ParseMode, 'chat');
             // 判断429
             if (resp.status === 429) {
@@ -212,6 +211,7 @@ export function OnStreamHander(sender: MessageSender | ChosenInlineSender, conte
     };
 
     streamSender.end = async (text: string): Promise<any> => {
+        await streamSender.sentPromise;
         await waitUntil((streamSender.nextEnableTime || 0) + 10);
         if (sender instanceof MessageSender
             && isTelegramChatTypeGroup(sender.context.chatType)

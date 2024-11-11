@@ -407,8 +407,8 @@ const ENV_KEY_MAPPER = {
   WORKERS_AI_MODEL: "WORKERS_CHAT_MODEL"
 };
 class Environment extends EnvironmentConfig {
-  BUILD_TIMESTAMP = 1731341135;
-  BUILD_VERSION = "a2cb7b4";
+  BUILD_TIMESTAMP = 1731348734;
+  BUILD_VERSION = "954d016";
   I18N = loadI18n();
   PLUGINS_ENV = {};
   USER_CONFIG = createAgentUserConfig();
@@ -11609,8 +11609,7 @@ function getLog(context, returnModel = false) {
   }
   const formattedEntries = logList.filter(Boolean).map((entry) => `>\`${entry}\``).join("\n");
   return `LOGSTART
-${formattedEntries}
-LOGEND
+${formattedEntries}LOGEND
 `;
 }
 function clearLog(context) {
@@ -11847,7 +11846,7 @@ function escape(text) {
 \`\`\``;
     result2.push(handleEscape(last, "code"));
   }
-  const regexp = /^\s*LOGSTART\n(.*?)\s*LOGEND/s;
+  const regexp = /^LOGSTART(.*?)LOGEND/s;
   return result2.join("\n").replace(regexp, "**$1||").replace(new RegExp(Object.values(escapedChars).join("|"), "g"), (match) => escapedCharsReverseMap.get(match) ?? match);
 }
 function handleEscape(text, type2 = "text") {
@@ -11888,7 +11887,7 @@ class MessageContext {
         this.reply_to_message_id = message.message_id;
       }
       this.allow_sending_without_reply = true;
-      if (message.message_thread_id) {
+      if (message.message_thread_id && message.is_topic_message) {
         this.message_thread_id = message.message_thread_id;
       }
     } else {
@@ -16163,12 +16162,12 @@ function OnStreamHander(sender, context, question) {
     send: null,
     end: null
   };
-  streamSender.send = async (text, isEnd = false) => {
+  streamSender.send = async (text) => {
     try {
       if (sender instanceof MessageSender && isTelegramChatTypeGroup(sender.context.chatType) && ENV.TELEGRAPH_NUM_LIMIT > 0 && text.length > ENV.TELEGRAPH_NUM_LIMIT && context) {
         return;
       }
-      if (!isEnd && (streamSender.nextEnableTime || 0) > Date.now()) {
+      if ((streamSender.nextEnableTime || 0) > Date.now()) {
         log.info(`Need await: ${(streamSender.nextEnableTime || 0) - Date.now()}ms`);
         return;
       }
@@ -16177,7 +16176,6 @@ function OnStreamHander(sender, context, question) {
       }
       const data = context ? `${getLog(context.USER_CONFIG)}
 ${text}` : text;
-      log.info(`send ${isEnd ? "end" : "stream"} message`);
       const resp = await sender.sendRichText(data, ENV.DEFAULT_PARSE_MODE, "chat");
       if (resp.status === 429) {
         const retryAfter = Number.parseInt(resp.headers.get("Retry-After") || "");
@@ -16202,6 +16200,7 @@ ${text}` : text;
     }
   };
   streamSender.end = async (text) => {
+    await streamSender.sentPromise;
     await waitUntil((streamSender.nextEnableTime || 0) + 10);
     if (sender instanceof MessageSender && isTelegramChatTypeGroup(sender.context.chatType) && ENV.TELEGRAPH_NUM_LIMIT > 0 && text.length > ENV.TELEGRAPH_NUM_LIMIT && context) {
       return sendTelegraph(context, sender, question || "Redo Question", text);
@@ -17007,7 +17006,7 @@ async function streamHandler(stream, contentExtractor, onStream, messageReferenc
         }
         lengthDelta = 0;
         updateStep += 20;
-        onStream.send(`${contentFull}●`);
+        onStream.sentPromise = onStream.send(`${contentFull}●`);
       }
     }
     contentFull += lastChunk;
