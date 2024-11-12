@@ -19,6 +19,7 @@ export type ScopeType = typeof scopeTypes[number];
 export interface CommandHandler {
     command: string;
     scopes?: ScopeType[];
+    relaxAuth?: boolean;
     handle: (message: Telegram.Message, subcommand: string, context: WorkerContext, sender: MessageSender) => Promise<Response | UnionData | null>;
     needAuth?: (chatType: string) => string[] | null;
 }

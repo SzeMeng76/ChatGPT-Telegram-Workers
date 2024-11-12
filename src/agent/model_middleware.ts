@@ -1,6 +1,9 @@
 /* eslint-disable unused-imports/no-unused-vars */
 import type {
+    CoreMessage,
+    CoreSystemMessage,
     CoreToolChoice,
+    CoreUserMessage,
     LanguageModelV1,
     Experimental_LanguageModelV1Middleware as LanguageModelV1Middleware,
     StepResult,
@@ -11,7 +14,9 @@ import { getLogSingleton } from '../extra/log/logDecortor';
 import { log } from '../extra/log/logger';
 import { OpenAI } from './openai';
 
-export function AIMiddleware({ config, _models, activeTools, onStream, toolChoice, messageReferencer }: { config: AgentUserConfig; _models: Record<string, LanguageModelV1>; activeTools: string[]; onStream: ChatStreamTextHandler | null; toolChoice: CoreToolChoice<any>[] | []; messageReferencer: string[] }): LanguageModelV1Middleware & { onChunk: (data: any) => boolean; onStepFinish: (data: StepResult<any>, context: AgentUserConfig) => void } {
+// type Writeable<T> = { -readonly [P in keyof T]: T[P] };
+
+export function AIMiddleware({ config, models, tools, activeTools, onStream, toolChoice, messageReferencer }: { config: AgentUserConfig; models: Record<string, LanguageModelV1>; tools: Record<string, any>; activeTools: string[]; onStream: ChatStreamTextHandler | null; toolChoice: CoreToolChoice<any>[] | []; messageReferencer: string[] }): LanguageModelV1Middleware & { onChunk: (data: any) => boolean; onStepFinish: (data: StepResult<any>, context: AgentUserConfig) => void } {
     let startTime: number | undefined;
     let sendToolCall = false;
     let step = 0;
@@ -37,6 +42,9 @@ export function AIMiddleware({ config, _models, activeTools, onStream, toolChoic
             } else {
                 logs.chat.model.push(modelId);
             }
+
+            // const modifyModel = model as { modelId: any };
+            // modifyModel.modelId = 'test';
             return doStream();
         },
 
@@ -45,19 +53,12 @@ export function AIMiddleware({ config, _models, activeTools, onStream, toolChoic
             startTime = Date.now();
             const logs = getLogSingleton(config);
             logs.ongoingFunctions.push({ name: 'chat_start', startTime });
-            if (params.prompt.at(-1)?.role === 'tool') {
-                const content = params.prompt.at(-1)!.content;
-                if (Array.isArray(content) && content.length > 0) {
-                    content.forEach((i: any) => {
-                        delete i.result.time;
-                    });
-                }
-            }
             if (toolChoice.length > 0 && step < toolChoice.length && params.mode.type === 'regular') {
                 params.mode.toolChoice = toolChoice[step] as any;
                 log.info(`toolChoice changed: ${JSON.stringify(toolChoice[step])}`);
             }
-            log.info(`warp params result: ${JSON.stringify(params)}`);
+            warpMessages(params.prompt, tools, activeTools);
+            log.debug(`warp params result: ${JSON.stringify(params)}`);
             return params;
         },
 
@@ -114,7 +115,23 @@ export function AIMiddleware({ config, _models, activeTools, onStream, toolChoic
             logs.ongoingFunctions = logs.ongoingFunctions.filter(i => i.startTime !== startTime);
             sendToolCall = false;
             step++;
-            onStream?.send(`${messageReferencer.join('')}...\n` + `step ${step} finished`);
+            // onStream?.send(`${messageReferencer.join('')}...\n` + `step ${step} finished`);
         },
     };
+}
+
+function warpMessages(messages: CoreMessage[], tools: Record<string, any>, activeTools: string[]) {
+    if (messages.at(-1)?.role === 'tool') {
+        const content = messages.at(-1)!.content;
+        if (Array.isArray(content) && content.length > 0) {
+            content.forEach((i: any) => {
+                delete i.result.time;
+            });
+        }
+    }
+    if (activeTools.length > 0 && messages[0].role === 'system') {
+        messages[0].content += `\n\nYou can consider using the following tools:\n##TOOLS${activeTools.map(name =>
+            `\n\n### ${name}\n- desc: ${(tools[name] || tools.duckduckgo).description} \n${(tools[name] || tools.duckduckgo).prompt || ''}`,
+        ).join('')}`;
+    }
 }

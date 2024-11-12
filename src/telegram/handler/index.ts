@@ -96,15 +96,6 @@ async function handleMessage(token: string, message: Telegram.Message, isForward
     } catch (e) {
         return catchError(e as Error);
     }
-    // finally {
-    //     clearMessageIdsAndLog(message, context as WorkerContext);
-    // }
-
-    // function clearMessageIdsAndLog(message: Telegram.Message, context: WorkerContext) {
-    //     log.info(`[END] Clear Message Set and Log`);
-    //     sentMessageIds.delete(message);
-    //     clearLog(context.USER_CONFIG);
-    // }
 
     return null;
 }

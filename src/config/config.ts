@@ -173,6 +173,8 @@ export class EnvironmentConfig {
     MAX_STEPS = 3;
     // chat agent max retries
     MAX_RETRIES = 0;
+    // Only relax /set command temporarily modifies permissions
+    RELAX_AUTH_KEYS: string[] = [];
 }
 
 // -- 通用配置 --

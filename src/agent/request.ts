@@ -184,7 +184,8 @@ export async function requestChatCompletionsV2(params: { model: LanguageModelV1;
     try {
         const middleware = AIMiddleware({
             config: params.context,
-            _models: {},
+            models: {},
+            tools: params.tools || {},
             activeTools: params.activeTools || [],
             onStream,
             toolChoice: params.toolChoice || [],
@@ -223,7 +224,7 @@ export async function requestChatCompletionsV2(params: { model: LanguageModelV1;
             };
         }
     } catch (error) {
-        console.error((error as Error).message, (error as Error).stack);
+        log.error((error as Error).message, (error as Error).stack);
         throw error;
     }
 }

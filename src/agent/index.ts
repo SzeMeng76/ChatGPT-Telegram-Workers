@@ -138,9 +138,7 @@ export async function warpLLMParams(params: { messages: CoreMessage[]; model: La
         // only use first system message and last user message
         params.messages = [params.messages.find(p => p.role === 'system')!, params.messages.findLast(p => p.role === 'user')!];
     }
-    if (params.messages[0].role === 'system' && activeTools) {
-        params.messages[0].content += (tool?.tools_prompt || '');
-    }
+
     let toolChoice;
     if (activeTools) {
         const userMessageIsString = typeof messages.content === 'string';
@@ -310,7 +308,7 @@ function wrapToolChoice(activeTools: string[], message: string): {
     log.info(`All toolChoices: ${JSON.stringify(toolChoices)}`);
 
     return {
-        message,
+        message: text,
         toolChoices,
     };
 }

@@ -65,15 +65,15 @@ export function vaildTools(tools_config: string[], tool_envs: Record<string, any
         });
     });
     const activeTools = Object.keys(tools).filter(name => tools_config.includes(name));
-    let tools_prompt = '';
-    if (activeTools.length > 0) {
-        tools_prompt = `\n\nYou can consider using the following tools:\n##TOOLS${activeTools.map(name =>
-            `\n\n### ${name}\n- desc: ${(externalTools[name] || tools.duckduckgo).description} \n${(externalTools[name] || tools.duckduckgo).prompt || ''}`,
-        ).join('')}`;
-    }
+    // let tools_prompt = '';
+    // if (activeTools.length > 0) {
+    //     tools_prompt = `\n\nYou can consider using the following tools:\n##TOOLS${activeTools.map(name =>
+    //         `\n\n### ${name}\n- desc: ${(externalTools[name] || tools.duckduckgo).description} \n${(externalTools[name] || tools.duckduckgo).prompt || ''}`,
+    //     ).join('')}`;
+    // }
     return {
         tools,
         activeTools,
-        tools_prompt,
+        // tools_prompt,
     };
 }

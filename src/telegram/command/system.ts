@@ -7,6 +7,7 @@ import type { WorkerContext } from '../../config/context';
 import type { AgentUserConfig } from '../../config/env';
 import type { UnionData } from '../utils/utils';
 import type { CommandHandler, InlineItem, ScopeType } from './types';
+import { authChecker } from '.';
 import { customInfo, loadChatLLM, loadImageGen } from '../../agent';
 import { WssRequest } from '../../agent/wsrequest';
 import { ENV, ENV_KEY_MAPPER } from '../../config/env';
@@ -368,6 +369,7 @@ export class SetCommandHandler implements CommandHandler {
     command = '/set';
     needAuth = COMMAND_AUTH_CHECKER.shareModeGroup;
     scopes: ScopeType[] = ['all_private_chats', 'all_chat_administrators'];
+    relaxAuth = true;
     handle = async (
         message: Telegram.Message,
         subcommand: string,
@@ -376,16 +378,15 @@ export class SetCommandHandler implements CommandHandler {
     ): Promise<Response | null> => {
         try {
             if (!subcommand) {
-                const detailSet = ENV.I18N.command?.detail?.set || 'Default detailed information';
+                const detailSet = ENV.I18N.command?.detail?.set || 'Have no detailed information in the language';
                 return sender.sendRichText(`\`\`\`plaintext\n${detailSet}\n\`\`\``, 'MarkdownV2');
             }
 
             const { keys, values } = this.parseMappings(context);
-
             const { flags, remainingText } = this.tokenizeSubcommand(subcommand);
-            const needUpdate = !remainingText;
+            const needUpdate = remainingText.trim() === '';
             let msg = '';
-            let hasKey = false;
+            const updatedKeys: string[] = [];
 
             if (context.USER_CONFIG.AI_PROVIDER === 'auto') {
                 context.USER_CONFIG.AI_PROVIDER = 'openai';
@@ -396,12 +397,10 @@ export class SetCommandHandler implements CommandHandler {
                 if (result instanceof Response) {
                     return result;
                 }
-                if (!hasKey && result) {
-                    hasKey = true;
-                }
+                updatedKeys.push(result);
             }
-
-            if (needUpdate && hasKey && context.SHARE_CONTEXT?.configStoreKey) {
+            await this.RelaxAuthCheck(message, context, updatedKeys, needUpdate);
+            if (needUpdate && updatedKeys.length > 0 && context.SHARE_CONTEXT?.configStoreKey) {
                 context.USER_CONFIG.DEFINE_KEYS = Array.from(new Set(context.USER_CONFIG.DEFINE_KEYS));
                 await ENV.DATABASE.put(
                     context.SHARE_CONTEXT.configStoreKey,
@@ -480,9 +479,7 @@ export class SetCommandHandler implements CommandHandler {
         values: Record<string, any>,
         context: WorkerContext,
         sender: MessageSender,
-    ): Promise<boolean | Response> {
-        let hasKey = false;
-
+    ): Promise<string | Response> {
         let key = keys[flag];
         let mappedValue = values[value] ?? value;
 
@@ -534,8 +531,18 @@ export class SetCommandHandler implements CommandHandler {
             context.USER_CONFIG.DEFINE_KEYS.push(key);
         }
         log.info(`/set ${key} ${(JSON.stringify(mappedValue) || value).substring(0, 100)}...`);
-        hasKey = true;
-        return hasKey;
+        return key;
+    }
+
+    private async RelaxAuthCheck(message: Telegram.Message, context: WorkerContext, keys: string[], needUpdate: boolean) {
+        if (!this.relaxAuth && ENV.RELAX_AUTH_KEYS.length === 0) {
+            return;
+        }
+        if (needUpdate) {
+            await authChecker(this, message, context);
+        } else if (keys.length > 0 && keys.some(key => !ENV.RELAX_AUTH_KEYS.includes(key))) {
+            await authChecker(this, message, context);
+        }
     }
 }
 

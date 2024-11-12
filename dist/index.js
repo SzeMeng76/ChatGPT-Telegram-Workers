@@ -196,6 +196,7 @@ class EnvironmentConfig {
   QSTASH_TIMEOUT = "15m";
   MAX_STEPS = 3;
   MAX_RETRIES = 0;
+  RELAX_AUTH_KEYS = [];
 }
 class AgentShareConfig {
   AI_PROVIDER = "openai";
@@ -407,8 +408,8 @@ const ENV_KEY_MAPPER = {
   WORKERS_AI_MODEL: "WORKERS_CHAT_MODEL"
 };
 class Environment extends EnvironmentConfig {
-  BUILD_TIMESTAMP = 1731403008;
-  BUILD_VERSION = "c9726d1";
+  BUILD_TIMESTAMP = 1731424537;
+  BUILD_VERSION = "c01651e";
   I18N = loadI18n();
   PLUGINS_ENV = {};
   USER_CONFIG = createAgentUserConfig();
@@ -11311,23 +11312,9 @@ function vaildTools(tools_config, tool_envs) {
     });
   });
   const activeTools = Object.keys(tools$1).filter((name14) => tools_config.includes(name14));
-  let tools_prompt = "";
-  if (activeTools.length > 0) {
-    tools_prompt = `
-
-You can consider using the following tools:
-##TOOLS${activeTools.map(
-      (name14) => `
-
-### ${name14}
-- desc: ${(tools[name14] || tools$1.duckduckgo).description} 
-${(tools[name14] || tools$1.duckduckgo).prompt || ""}`
-    ).join("")}`;
-  }
   return {
     tools: tools$1,
-    activeTools,
-    tools_prompt
+    activeTools
   };
 }
 const INTERPOLATE_LOOP_REGEXP = /\{\{#each(?::(\w+))?\s+(\w+)\s+in\s+([\w.[\]]+)\}\}([\s\S]*?)\{\{\/each(?::\1)?\}\}/g;
@@ -16065,7 +16052,7 @@ async function chatWithLLM(message, params, context, modifier) {
     const answer = await requestCompletionsFromLLM(params, context, agent, modifier, ENV.STREAM_MODE ? streamSender : null);
     log.info(`chat with LLM done`);
     if (answer === "") {
-      return sender.sendPlainText("No response");
+      return streamSender.end?.("No response");
     }
     return streamSender.end?.(answer);
   } catch (e) {
@@ -16171,6 +16158,7 @@ function OnStreamHander(sender, context, question) {
       }
       const data = context ? `${getLog(context.USER_CONFIG)}
 ${text}` : text;
+      log.info(`send message id: ${sender instanceof MessageSender ? sender.context.message_id : ""}`);
       sentPromise = sender.sendRichText(data, ENV.DEFAULT_PARSE_MODE, "chat");
       const resp = await sentPromise;
       if (resp.status === 429) {
@@ -16189,7 +16177,7 @@ ${text}` : text;
         sentMessageIds2.push(respJson.result.message_id);
       } else if (!resp.ok) {
         log.error(`send message failed: ${resp.status} ${resp.statusText}`);
-        return sender.sendPlainText(text);
+        return sentPromise = sender.sendPlainText(text);
       }
     } catch (e) {
       console.error(e);
@@ -16203,6 +16191,7 @@ ${text}` : text;
     }
     const data = context ? `${getLog(context.USER_CONFIG)}
 ${text}` : text;
+    log.info(`send message id: ${sender instanceof MessageSender ? sender.context.message_id : ""}`);
     return sender.sendRichText(data, ENV.DEFAULT_PARSE_MODE, "chat");
   };
   return streamSender;
@@ -16585,7 +16574,7 @@ class Transcription extends (_b = OpenAIBase, _request_dec2 = [Log], _b) {
 _init2 = __decoratorStart(_b);
 __decorateElement(_init2, 5, "request", _request_dec2, Transcription);
 __decoratorMetadata(_init2, Transcription);
-function AIMiddleware({ config, _models, activeTools, onStream, toolChoice, messageReferencer }) {
+function AIMiddleware({ config, models, tools: tools2, activeTools, onStream, toolChoice, messageReferencer }) {
   let startTime2;
   let sendToolCall = false;
   let step = 0;
@@ -16617,18 +16606,12 @@ function AIMiddleware({ config, _models, activeTools, onStream, toolChoice, mess
       startTime2 = Date.now();
       const logs = getLogSingleton(config);
       logs.ongoingFunctions.push({ name: "chat_start", startTime: startTime2 });
-      if (params.prompt.at(-1)?.role === "tool") {
-        const content = params.prompt.at(-1).content;
-        if (Array.isArray(content) && content.length > 0) {
-          content.forEach((i) => {
-            delete i.result.time;
-          });
-        }
-      }
       if (toolChoice.length > 0 && step < toolChoice.length && params.mode.type === "regular") {
         params.mode.toolChoice = toolChoice[step];
         log.info(`toolChoice changed: ${JSON.stringify(toolChoice[step])}`);
       }
+      warpMessages(params.prompt, tools2, activeTools);
+      log.debug(`warp params result: ${JSON.stringify(params)}`);
       return params;
     },
     onChunk: (data) => {
@@ -16647,7 +16630,6 @@ tool call will start: ${chunk.toolName}`);
       log.info("llm request end");
       log.info(finishReason);
       log.info("step text:", text);
-      log.debug("step raw request:", request);
       log.debug("step raw response:", response);
       const time = ((Date.now() - startTime2) / 1e3).toFixed(1);
       if (toolResults.length > 0) {
@@ -16683,10 +16665,30 @@ finish ${[...new Set(toolResults.map((i) => i.toolName))]}`);
       logs.ongoingFunctions = logs.ongoingFunctions.filter((i) => i.startTime !== startTime2);
       sendToolCall = false;
       step++;
-      onStream?.send(`${messageReferencer.join("")}...
-step ${step} finished`);
     }
   };
+}
+function warpMessages(messages, tools2, activeTools) {
+  if (messages.at(-1)?.role === "tool") {
+    const content = messages.at(-1).content;
+    if (Array.isArray(content) && content.length > 0) {
+      content.forEach((i) => {
+        delete i.result.time;
+      });
+    }
+  }
+  if (activeTools.length > 0 && messages[0].role === "system") {
+    messages[0].content += `
+
+You can consider using the following tools:
+##TOOLS${activeTools.map(
+      (name14) => `
+
+### ${name14}
+- desc: ${(tools2[name14] || tools2.duckduckgo).description} 
+${(tools2[name14] || tools2.duckduckgo).prompt || ""}`
+    ).join("")}`;
+  }
 }
 class Stream {
   response;
@@ -17023,7 +17025,8 @@ async function requestChatCompletionsV2(params, onStream, onResult = null) {
   try {
     const middleware = AIMiddleware({
       config: params.context,
-      _models: {},
+      models: {},
+      tools: params.tools || {},
       activeTools: params.activeTools || [],
       onStream,
       toolChoice: params.toolChoice || [],
@@ -17062,7 +17065,7 @@ async function requestChatCompletionsV2(params, onStream, onResult = null) {
       };
     }
   } catch (error) {
-    console.error(error.message, error.stack);
+    log.error(error.message, error.stack);
     throw error;
   }
 }
@@ -19383,9 +19386,6 @@ async function warpLLMParams(params, context) {
     tool2 = void 0;
     params.messages = [params.messages.find((p) => p.role === "system"), params.messages.findLast((p) => p.role === "user")];
   }
-  if (params.messages[0].role === "system" && activeTools) {
-    params.messages[0].content += tool2?.tools_prompt || "";
-  }
   let toolChoice;
   if (activeTools) {
     const userMessageIsString = typeof messages.content === "string";
@@ -19483,7 +19483,7 @@ function wrapToolChoice(activeTools, message) {
   } while (true);
   log.info(`All toolChoices: ${JSON.stringify(toolChoices)}`);
   return {
-    message,
+    message: text,
     toolChoices
   };
 }
@@ -19994,19 +19994,20 @@ class SetCommandHandler {
   command = "/set";
   needAuth = COMMAND_AUTH_CHECKER.shareModeGroup;
   scopes = ["all_private_chats", "all_chat_administrators"];
+  relaxAuth = true;
   handle = async (message, subcommand, context, sender) => {
     try {
       if (!subcommand) {
-        const detailSet = ENV.I18N.command?.detail?.set || "Default detailed information";
+        const detailSet = ENV.I18N.command?.detail?.set || "Have no detailed information in the language";
         return sender.sendRichText(`\`\`\`plaintext
 ${detailSet}
 \`\`\``, "MarkdownV2");
       }
       const { keys, values } = this.parseMappings(context);
       const { flags, remainingText } = this.tokenizeSubcommand(subcommand);
-      const needUpdate = !remainingText;
+      const needUpdate = remainingText.trim() === "";
       let msg = "";
-      let hasKey = false;
+      const updatedKeys = [];
       if (context.USER_CONFIG.AI_PROVIDER === "auto") {
         context.USER_CONFIG.AI_PROVIDER = "openai";
       }
@@ -20015,11 +20016,10 @@ ${detailSet}
         if (result2 instanceof Response) {
           return result2;
         }
-        if (!hasKey && result2) {
-          hasKey = true;
-        }
+        updatedKeys.push(result2);
       }
-      if (needUpdate && hasKey && context.SHARE_CONTEXT?.configStoreKey) {
+      await this.RelaxAuthCheck(message, context, updatedKeys, needUpdate);
+      if (needUpdate && updatedKeys.length > 0 && context.SHARE_CONTEXT?.configStoreKey) {
         context.USER_CONFIG.DEFINE_KEYS = Array.from(new Set(context.USER_CONFIG.DEFINE_KEYS));
         await ENV.DATABASE.put(
           context.SHARE_CONTEXT.configStoreKey,
@@ -20082,7 +20082,6 @@ ${detailSet}
     return { flags, remainingText };
   }
   async processSubcommand(flag, value, keys, values, context, sender) {
-    let hasKey = false;
     let key = keys[flag];
     let mappedValue = values[value] ?? value;
     if (!key) {
@@ -20124,8 +20123,17 @@ ${detailSet}
       context.USER_CONFIG.DEFINE_KEYS.push(key);
     }
     log.info(`/set ${key} ${(JSON.stringify(mappedValue) || value).substring(0, 100)}...`);
-    hasKey = true;
-    return hasKey;
+    return key;
+  }
+  async RelaxAuthCheck(message, context, keys, needUpdate) {
+    if (!this.relaxAuth && ENV.RELAX_AUTH_KEYS.length === 0) {
+      return;
+    }
+    if (needUpdate) {
+      await authChecker(this, message, context);
+    } else if (keys.length > 0 && keys.some((key) => !ENV.RELAX_AUTH_KEYS.includes(key))) {
+      await authChecker(this, message, context);
+    }
   }
 }
 class PerplexityCommandHandler {
@@ -20434,24 +20442,15 @@ const SYSTEM_COMMANDS = [
 async function handleSystemCommand(message, raw, command, context) {
   const sender = MessageSender.from(context.SHARE_CONTEXT.botToken, message);
   try {
-    if (command.needAuth) {
-      const roleList = command.needAuth(message.chat.type);
-      if (roleList) {
-        const chatRole = await loadChatRoleWithContext(message, context);
-        if (chatRole === null) {
-          return sender.sendPlainText("ERROR: Get chat role failed");
-        }
-        if (!roleList.includes(chatRole)) {
-          return sender.sendPlainText(`ERROR: Permission denied, need ${roleList.join(" or ")}`);
-        }
-      }
+    if (command.needAuth && !command.relaxAuth) {
+      await authChecker(command, message, context);
     }
   } catch (e) {
     return sender.sendPlainText(`ERROR: ${e.message}`);
   }
   const subcommand = raw.substring(command.command.length).trim();
   try {
-    return await command.handle(message, subcommand, context, sender);
+    return command.handle(message, subcommand, context, sender);
   } catch (e) {
     return sender.sendPlainText(`ERROR: ${e.message}`);
   }
@@ -20573,6 +20572,18 @@ function commandsDocument() {
       description: ENV.I18N.command.help[command.command.substring(1)] || ""
     };
   }).filter((item) => item.description !== "");
+}
+async function authChecker(command, message, context) {
+  const roleList = command.needAuth(message.chat.type);
+  if (roleList) {
+    const chatRole = await loadChatRoleWithContext(message, context);
+    if (chatRole === null) {
+      throw new Error("Get chat role failed");
+    }
+    if (!roleList.includes(chatRole)) {
+      throw new Error(`Permission denied, need ${roleList.join(" or ")}`);
+    }
+  }
 }
 class ShareContext {
   botId;

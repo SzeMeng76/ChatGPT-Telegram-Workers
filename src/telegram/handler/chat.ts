@@ -50,7 +50,7 @@ export async function chatWithLLM(
         const answer = await requestCompletionsFromLLM(params, context, agent, modifier, ENV.STREAM_MODE ? streamSender : null);
         log.info(`chat with LLM done`);
         if (answer === '') {
-            return sender.sendPlainText('No response');
+            return streamSender.end?.('No response');
         }
         return streamSender.end?.(answer);
     } catch (e) {
@@ -179,6 +179,7 @@ export function OnStreamHander(sender: MessageSender | ChosenInlineSender, conte
             }
 
             const data = context ? `${getLog(context.USER_CONFIG)}\n${text}` : text;
+            log.info(`send message id: ${sender instanceof MessageSender ? sender.context.message_id : ''}`);
             sentPromise = sender.sendRichText(data, ENV.DEFAULT_PARSE_MODE as Telegram.ParseMode, 'chat');
             const resp = await sentPromise;
             // 判断429
@@ -200,7 +201,7 @@ export function OnStreamHander(sender: MessageSender | ChosenInlineSender, conte
                 sentMessageIds.push(respJson.result.message_id);
             } else if (!resp.ok) {
                 log.error(`send message failed: ${resp.status} ${resp.statusText}`);
-                return sender.sendPlainText(text);
+                return sentPromise = sender.sendPlainText(text);
             }
         } catch (e) {
             console.error(e);
@@ -218,6 +219,7 @@ export function OnStreamHander(sender: MessageSender | ChosenInlineSender, conte
             return sendTelegraph(context, sender, question || 'Redo Question', text);
         }
         const data = context ? `${getLog(context.USER_CONFIG)}\n${text}` : text;
+        log.info(`send message id: ${sender instanceof MessageSender ? sender.context.message_id : ''}`);
         return sender.sendRichText(data, ENV.DEFAULT_PARSE_MODE as Telegram.ParseMode, 'chat');
     };
 

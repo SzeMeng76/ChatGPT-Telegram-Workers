@@ -69,25 +69,15 @@ async function handleSystemCommand(message: Telegram.Message, raw: string, comma
     const sender = MessageSender.from(context.SHARE_CONTEXT.botToken, message);
     try {
         // 如果存在权限条件
-        if (command.needAuth) {
-            const roleList = command.needAuth(message.chat.type);
-            if (roleList) {
-                // 获取身份并判断
-                const chatRole = await loadChatRoleWithContext(message, context);
-                if (chatRole === null) {
-                    return sender.sendPlainText('ERROR: Get chat role failed');
-                }
-                if (!roleList.includes(chatRole)) {
-                    return sender.sendPlainText(`ERROR: Permission denied, need ${roleList.join(' or ')}`);
-                }
-            }
+        if (command.needAuth && !command.relaxAuth) {
+            await authChecker(command, message, context);
         }
     } catch (e) {
         return sender.sendPlainText(`ERROR: ${(e as Error).message}`);
     }
     const subcommand = raw.substring(command.command.length).trim();
     try {
-        return await command.handle(message, subcommand, context, sender);
+        return command.handle(message, subcommand, context, sender);
     } catch (e) {
         return sender.sendPlainText(`ERROR: ${(e as Error).message}`);
     }
@@ -224,4 +214,18 @@ export function commandsDocument(): { description: string; command: string }[] {
             description: ENV.I18N.command.help[command.command.substring(1)] || '',
         };
     }).filter(item => item.description !== '');
+}
+
+export async function authChecker(command: CommandHandler, message: Telegram.Message, context: WorkerContext) {
+    const roleList = command.needAuth!(message.chat.type);
+    if (roleList) {
+        // 获取身份并判断
+        const chatRole = await loadChatRoleWithContext(message, context);
+        if (chatRole === null) {
+            throw new Error('Get chat role failed');
+        }
+        if (!roleList.includes(chatRole)) {
+            throw new Error(`Permission denied, need ${roleList.join(' or ')}`);
+        }
+    }
 }
