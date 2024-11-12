@@ -140,6 +140,7 @@ export async function streamHandler(stream: AsyncIterable<any>, contentExtractor
     let lastChunk = '';
 
     const immediatePromise = Promise.resolve('[PROMISE DONE]');
+    let sendPromise: Promise<any> | null = null;
 
     try {
         for await (const part of stream) {
@@ -157,13 +158,13 @@ export async function streamHandler(stream: AsyncIterable<any>, contentExtractor
 
             if (lastChunk && lengthDelta > updateStep) {
                 // 已发送过消息且消息未发送完成
-                if (onStream.sentPromise && (await Promise.race([onStream.sentPromise, immediatePromise]) === '[PROMISE DONE]')) {
+                if (sendPromise && (await Promise.race([sendPromise, immediatePromise]) === '[PROMISE DONE]')) {
                     continue;
                 }
 
                 lengthDelta = 0;
                 updateStep += 20;
-                onStream.sentPromise = onStream.send(`${contentFull}●`);
+                sendPromise = onStream.send(`${contentFull}●`);
             }
         }
         contentFull += lastChunk;
@@ -175,7 +176,7 @@ export async function streamHandler(stream: AsyncIterable<any>, contentExtractor
         contentFull += `\nERROR: ${(e as Error).message}`;
     }
 
-    await onStream.sentPromise;
+    await sendPromise;
     return contentFull;
 }
 export async function requestChatCompletionsV2(params: { model: LanguageModelV1; toolModel?: LanguageModelV1; prompt?: string; messages: CoreMessage[]; tools?: any; activeTools?: string[]; toolChoice?: CoreToolChoice<any>[]; context: AgentUserConfig }, onStream: ChatStreamTextHandler | null, onResult: OnResult | null = null): Promise<{ messages: ResponseMessage[]; content: string }> {

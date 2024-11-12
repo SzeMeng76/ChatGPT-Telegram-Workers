@@ -57,6 +57,7 @@ export function AIMiddleware({ config, _models, activeTools, onStream, toolChoic
                 params.mode.toolChoice = toolChoice[step] as any;
                 log.info(`toolChoice changed: ${JSON.stringify(toolChoice[step])}`);
             }
+            log.info(`warp params result: ${JSON.stringify(params)}`);
             return params;
         },
 
@@ -76,7 +77,7 @@ export function AIMiddleware({ config, _models, activeTools, onStream, toolChoic
             log.info('llm request end');
             log.info(finishReason);
             log.info('step text:', text);
-            log.debug('step raw request:', request);
+            // log.debug('step raw request:', request);
             log.debug('step raw response:', response);
 
             const time = ((Date.now() - startTime!) / 1e3).toFixed(1);

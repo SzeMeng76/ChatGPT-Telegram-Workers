@@ -15,7 +15,7 @@ import { createTelegramBotAPI } from '../api';
 import { MessageSender, sendAction, TelegraphSender } from '../utils/send';
 import { isTelegramChatTypeGroup, type UnionData, waitUntil } from '../utils/utils';
 
-async function messageInitialize(sender: MessageSender): Promise<void> {
+async function messageInitialize(sender: MessageSender, streamSender: ChatStreamTextHandler): Promise<void> {
     if (!sender.context.message_id) {
         try {
             setTimeout(() => sendAction(sender.api.token, sender.context.chat_id, 'typing'), 0);
@@ -23,12 +23,7 @@ async function messageInitialize(sender: MessageSender): Promise<void> {
                 return;
             }
             log.info(`send init message`);
-            const response = await sender.sendPlainText('...', 'chat');
-            const msg = await response.json() as Telegram.ResponseWithMessage;
-            log.info(`send init message done`);
-            sender.update({
-                message_id: msg.result.message_id,
-            });
+            streamSender.send('...', 'chat');
         } catch (e) {
             console.error('Failed to initialize message:', e);
         }
@@ -43,7 +38,7 @@ export async function chatWithLLM(
 ): Promise<UnionData | Response> {
     const sender = MessageSender.from(context.SHARE_CONTEXT.botToken, message);
     const streamSender = OnStreamHander(sender, context, message.text || '');
-    streamSender.sentPromise = messageInitialize(sender);
+    messageInitialize(sender, streamSender);
 
     const agent = loadChatLLM(context.USER_CONFIG);
     if (!agent) {
@@ -155,10 +150,11 @@ export class ChatHandler implements MessageHandler<WorkerContext> {
 }
 
 export function OnStreamHander(sender: MessageSender | ChosenInlineSender, context?: WorkerContext, question?: string): ChatStreamTextHandler {
+    let sentPromise = null as Promise<Response> | null;
+    let nextEnableTime = Date.now();
+    const sentMessageIds = sender instanceof MessageSender && sender.context.message_id ? [sender.context.message_id] : [];
+
     const streamSender = {
-        nextEnableTime: Date.now(),
-        sentMessageIds: sender instanceof MessageSender && sender.context.message_id ? [sender.context.message_id] : [],
-        sentPromise: null as Promise<Response> | null,
         send: null as ((text: string, isEnd: boolean, sendType?: 'chat' | 'telegraph') => Promise<any>) | null,
         end: null as ((text: string) => Promise<any>) | null,
     };
@@ -172,25 +168,26 @@ export function OnStreamHander(sender: MessageSender | ChosenInlineSender, conte
                 return;
             }
             // 判断是否需要等待
-            if ((streamSender.nextEnableTime || 0) > Date.now()) {
-                log.info(`Need await: ${(streamSender.nextEnableTime || 0) - Date.now()}ms`);
+            if ((nextEnableTime || 0) > Date.now()) {
+                log.info(`Need await: ${(nextEnableTime || 0) - Date.now()}ms`);
                 return;
             }
 
             // 设置最小流间隔
             if (ENV.TELEGRAM_MIN_STREAM_INTERVAL > 0) {
-                streamSender.nextEnableTime = Date.now() + ENV.TELEGRAM_MIN_STREAM_INTERVAL;
+                nextEnableTime = Date.now() + ENV.TELEGRAM_MIN_STREAM_INTERVAL;
             }
 
             const data = context ? `${getLog(context.USER_CONFIG)}\n${text}` : text;
-            const resp = await sender.sendRichText(data, ENV.DEFAULT_PARSE_MODE as Telegram.ParseMode, 'chat');
+            sentPromise = sender.sendRichText(data, ENV.DEFAULT_PARSE_MODE as Telegram.ParseMode, 'chat');
+            const resp = await sentPromise;
             // 判断429
             if (resp.status === 429) {
                 // 获取重试时间
                 const retryAfter = Number.parseInt(resp.headers.get('Retry-After') || '');
                 if (retryAfter) {
-                    streamSender.nextEnableTime = Date.now() + retryAfter * 1000;
-                    log.info(`Status 429, need wait: ${streamSender.nextEnableTime - Date.now()}ms`);
+                    nextEnableTime = Date.now() + retryAfter * 1000;
+                    log.info(`Status 429, need wait: ${nextEnableTime - Date.now()}ms`);
                     return;
                 }
             }
@@ -200,7 +197,7 @@ export function OnStreamHander(sender: MessageSender | ChosenInlineSender, conte
                 sender.update({
                     message_id: respJson.result.message_id,
                 });
-                streamSender.sentMessageIds.push(respJson.result.message_id);
+                sentMessageIds.push(respJson.result.message_id);
             } else if (!resp.ok) {
                 log.error(`send message failed: ${resp.status} ${resp.statusText}`);
                 return sender.sendPlainText(text);
@@ -211,8 +208,8 @@ export function OnStreamHander(sender: MessageSender | ChosenInlineSender, conte
     };
 
     streamSender.end = async (text: string): Promise<any> => {
-        await streamSender.sentPromise;
-        await waitUntil((streamSender.nextEnableTime || 0) + 10);
+        await sentPromise;
+        await waitUntil((nextEnableTime || 0) + 10);
         if (sender instanceof MessageSender
             && isTelegramChatTypeGroup(sender.context.chatType)
             && ENV.TELEGRAPH_NUM_LIMIT > 0

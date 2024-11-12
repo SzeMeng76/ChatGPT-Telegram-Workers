@@ -407,8 +407,8 @@ const ENV_KEY_MAPPER = {
   WORKERS_AI_MODEL: "WORKERS_CHAT_MODEL"
 };
 class Environment extends EnvironmentConfig {
-  BUILD_TIMESTAMP = 1731348734;
-  BUILD_VERSION = "954d016";
+  BUILD_TIMESTAMP = 1731403008;
+  BUILD_VERSION = "c9726d1";
   I18N = loadI18n();
   PLUGINS_ENV = {};
   USER_CONFIG = createAgentUserConfig();
@@ -16038,7 +16038,7 @@ async function imageToBase64String(url) {
 function renderBase64DataURI(params) {
   return `data:${params.format};base64,${params.data}`;
 }
-async function messageInitialize(sender) {
+async function messageInitialize(sender, streamSender) {
   if (!sender.context.message_id) {
     try {
       setTimeout(() => sendAction(sender.api.token, sender.context.chat_id, "typing"), 0);
@@ -16046,12 +16046,7 @@ async function messageInitialize(sender) {
         return;
       }
       log.info(`send init message`);
-      const response = await sender.sendPlainText("...", "chat");
-      const msg = await response.json();
-      log.info(`send init message done`);
-      sender.update({
-        message_id: msg.result.message_id
-      });
+      streamSender.send("...", "chat");
     } catch (e) {
       console.error("Failed to initialize message:", e);
     }
@@ -16060,7 +16055,7 @@ async function messageInitialize(sender) {
 async function chatWithLLM(message, params, context, modifier) {
   const sender = MessageSender.from(context.SHARE_CONTEXT.botToken, message);
   const streamSender = OnStreamHander(sender, context, message.text || "");
-  streamSender.sentPromise = messageInitialize(sender);
+  messageInitialize(sender, streamSender);
   const agent = loadChatLLM(context.USER_CONFIG);
   if (!agent) {
     return streamSender.end?.("LLM is not enabled");
@@ -16155,10 +16150,10 @@ ${urls.join("\n")}`);
   }
 }
 function OnStreamHander(sender, context, question) {
+  let sentPromise = null;
+  let nextEnableTime = Date.now();
+  const sentMessageIds2 = sender instanceof MessageSender && sender.context.message_id ? [sender.context.message_id] : [];
   const streamSender = {
-    nextEnableTime: Date.now(),
-    sentMessageIds: sender instanceof MessageSender && sender.context.message_id ? [sender.context.message_id] : [],
-    sentPromise: null,
     send: null,
     end: null
   };
@@ -16167,21 +16162,22 @@ function OnStreamHander(sender, context, question) {
       if (sender instanceof MessageSender && isTelegramChatTypeGroup(sender.context.chatType) && ENV.TELEGRAPH_NUM_LIMIT > 0 && text.length > ENV.TELEGRAPH_NUM_LIMIT && context) {
         return;
       }
-      if ((streamSender.nextEnableTime || 0) > Date.now()) {
-        log.info(`Need await: ${(streamSender.nextEnableTime || 0) - Date.now()}ms`);
+      if ((nextEnableTime || 0) > Date.now()) {
+        log.info(`Need await: ${(nextEnableTime || 0) - Date.now()}ms`);
         return;
       }
       if (ENV.TELEGRAM_MIN_STREAM_INTERVAL > 0) {
-        streamSender.nextEnableTime = Date.now() + ENV.TELEGRAM_MIN_STREAM_INTERVAL;
+        nextEnableTime = Date.now() + ENV.TELEGRAM_MIN_STREAM_INTERVAL;
       }
       const data = context ? `${getLog(context.USER_CONFIG)}
 ${text}` : text;
-      const resp = await sender.sendRichText(data, ENV.DEFAULT_PARSE_MODE, "chat");
+      sentPromise = sender.sendRichText(data, ENV.DEFAULT_PARSE_MODE, "chat");
+      const resp = await sentPromise;
       if (resp.status === 429) {
         const retryAfter = Number.parseInt(resp.headers.get("Retry-After") || "");
         if (retryAfter) {
-          streamSender.nextEnableTime = Date.now() + retryAfter * 1e3;
-          log.info(`Status 429, need wait: ${streamSender.nextEnableTime - Date.now()}ms`);
+          nextEnableTime = Date.now() + retryAfter * 1e3;
+          log.info(`Status 429, need wait: ${nextEnableTime - Date.now()}ms`);
           return;
         }
       }
@@ -16190,7 +16186,7 @@ ${text}` : text;
         sender.update({
           message_id: respJson.result.message_id
         });
-        streamSender.sentMessageIds.push(respJson.result.message_id);
+        sentMessageIds2.push(respJson.result.message_id);
       } else if (!resp.ok) {
         log.error(`send message failed: ${resp.status} ${resp.statusText}`);
         return sender.sendPlainText(text);
@@ -16200,8 +16196,8 @@ ${text}` : text;
     }
   };
   streamSender.end = async (text) => {
-    await streamSender.sentPromise;
-    await waitUntil((streamSender.nextEnableTime || 0) + 10);
+    await sentPromise;
+    await waitUntil((nextEnableTime || 0) + 10);
     if (sender instanceof MessageSender && isTelegramChatTypeGroup(sender.context.chatType) && ENV.TELEGRAPH_NUM_LIMIT > 0 && text.length > ENV.TELEGRAPH_NUM_LIMIT && context) {
       return sendTelegraph(context, sender, question || "Redo Question", text);
     }
@@ -16990,6 +16986,7 @@ async function streamHandler(stream, contentExtractor, onStream, messageReferenc
   let updateStep = 5;
   let lastChunk = "";
   const immediatePromise = Promise.resolve("[PROMISE DONE]");
+  let sendPromise = null;
   try {
     for await (const part of stream) {
       const textPart = contentExtractor(part);
@@ -17001,12 +16998,12 @@ async function streamHandler(stream, contentExtractor, onStream, messageReferenc
       messageReferencer?.push(lastChunk);
       lastChunk = textPart;
       if (lastChunk && lengthDelta > updateStep) {
-        if (onStream.sentPromise && await Promise.race([onStream.sentPromise, immediatePromise]) === "[PROMISE DONE]") {
+        if (sendPromise && await Promise.race([sendPromise, immediatePromise]) === "[PROMISE DONE]") {
           continue;
         }
         lengthDelta = 0;
         updateStep += 20;
-        onStream.sentPromise = onStream.send(`${contentFull}●`);
+        sendPromise = onStream.send(`${contentFull}●`);
       }
     }
     contentFull += lastChunk;
@@ -17018,7 +17015,7 @@ async function streamHandler(stream, contentExtractor, onStream, messageReferenc
     contentFull += `
 ERROR: ${e.message}`;
   }
-  await onStream.sentPromise;
+  await sendPromise;
   return contentFull;
 }
 async function requestChatCompletionsV2(params, onStream, onResult = null) {
@@ -20188,7 +20185,6 @@ class PerplexityCommandHandler {
     const startTime2 = Date.now();
     const result2 = await WssRequest(perplexityWsUrl, null, perplexityWsOptions, perplexityMessage, { onStream }).catch(console.error);
     logs.chat.time.push(((Date.now() - startTime2) / 1e3).toFixed(1));
-    await waitUntil(onStream.nextEnableTime || 0);
     await onStream.end?.(result2);
     return new Response("success");
   };

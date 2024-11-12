@@ -599,7 +599,6 @@ export class PerplexityCommandHandler implements CommandHandler {
         const startTime = Date.now();
         const result = await WssRequest(perplexityWsUrl, null, perplexityWsOptions, perplexityMessage, { onStream }).catch(console.error);
         logs.chat.time.push(((Date.now() - startTime) / 1e3).toFixed(1));
-        await waitUntil(onStream.nextEnableTime || 0);
         await onStream.end?.(result);
         return new Response('success');
     };

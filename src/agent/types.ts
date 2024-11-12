@@ -43,11 +43,8 @@ export type MessageTool = MessageBase & {
 };
 
 export interface ChatStreamTextHandler {
-    send: (text: string, isEnd?: boolean, sendType?: 'chat' | 'telegraph') => Promise<any>;
+    send: (text: string, sendType?: 'chat' | 'telegraph') => Promise<any>;
     end?: (text: string) => Promise<any>;
-    nextEnableTime?: number;
-    sentMessageIds?: number[];
-    sentPromise?: Promise<any> | null;
 }
 
 export type ImageAgentRequest = (prompt: string, context: AgentUserConfig) => Promise<ImageResult>;
