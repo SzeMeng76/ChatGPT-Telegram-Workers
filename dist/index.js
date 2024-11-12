@@ -168,6 +168,7 @@ class EnvironmentConfig {
   CALL_INFO = true;
   CON_EXEC_FUN_NUM = 1;
   TELEGRAPH_NUM_LIMIT = -1;
+  TELEGRAPH_SCOPE = ["group", "supergroup"];
   TELEGRAPH_AUTHOR_URL = "";
   DISABLE_WEB_PREVIEW = false;
   EXPIRED_TIME = -1;
@@ -197,6 +198,8 @@ class EnvironmentConfig {
   MAX_STEPS = 3;
   MAX_RETRIES = 0;
   RELAX_AUTH_KEYS = [];
+  INLINE_QUERY_SEND_INTERVAL = 2e3;
+  INLINE_QUERY_SHOW_INFO = false;
 }
 class AgentShareConfig {
   AI_PROVIDER = "openai";
@@ -408,8 +411,8 @@ const ENV_KEY_MAPPER = {
   WORKERS_AI_MODEL: "WORKERS_CHAT_MODEL"
 };
 class Environment extends EnvironmentConfig {
-  BUILD_TIMESTAMP = 1731424537;
-  BUILD_VERSION = "c01651e";
+  BUILD_TIMESTAMP = 1731434644;
+  BUILD_VERSION = "d5c70ce";
   I18N = loadI18n();
   PLUGINS_ENV = {};
   USER_CONFIG = createAgentUserConfig();
@@ -12072,7 +12075,6 @@ class MessageSender {
   }
 }
 class TelegraphSender {
-  context;
   telegraphAccessTokenKey;
   telegraphAccessToken;
   teleph_path;
@@ -12081,8 +12083,7 @@ class TelegraphSender {
     author_name: "A Cat",
     author_url: ENV.TELEGRAPH_AUTHOR_URL
   };
-  constructor(context, botName, telegraphAccessTokenKey) {
-    this.context = context;
+  constructor(botName, telegraphAccessTokenKey) {
     this.telegraphAccessTokenKey = telegraphAccessTokenKey;
     if (botName) {
       this.author = {
@@ -12179,15 +12180,17 @@ async function checkIsNeedTagIds(context, resp, msgType) {
 }
 class ChosenInlineContext {
   result_id;
-  from;
   inline_message_id;
   query;
   parse_mode = null;
+  telegraphAccessTokenKey;
   constructor(result2) {
     this.result_id = result2.result_id;
-    this.from = result2.from;
     this.inline_message_id = result2.inline_message_id;
     this.query = result2.query;
+    if (ENV.TELEGRAPH_NUM_LIMIT > 0) {
+      this.telegraphAccessTokenKey = `telegraph_access_token:${result2.from.id}`;
+    }
   }
 }
 class ChosenInlineSender {
@@ -16139,26 +16142,31 @@ ${urls.join("\n")}`);
 function OnStreamHander(sender, context, question) {
   let sentPromise = null;
   let nextEnableTime = Date.now();
-  const sentMessageIds2 = sender instanceof MessageSender && sender.context.message_id ? [sender.context.message_id] : [];
+  const isMessageSender = sender instanceof MessageSender;
+  const sendInterval = isMessageSender ? ENV.TELEGRAM_MIN_STREAM_INTERVAL : ENV.INLINE_QUERY_SEND_INTERVAL;
+  const sentMessageIds2 = isMessageSender && sender.context.message_id ? [sender.context.message_id] : [];
+  const isSendTelegraph = (text) => {
+    return isMessageSender ? ENV.TELEGRAPH_SCOPE.includes(sender.context.chatType) && ENV.TELEGRAPH_NUM_LIMIT > 0 && text.length > ENV.TELEGRAPH_NUM_LIMIT : sender.context.inline_message_id && text.length > 4096;
+  };
   const streamSender = {
     send: null,
     end: null
   };
   streamSender.send = async (text) => {
     try {
-      if (sender instanceof MessageSender && isTelegramChatTypeGroup(sender.context.chatType) && ENV.TELEGRAPH_NUM_LIMIT > 0 && text.length > ENV.TELEGRAPH_NUM_LIMIT && context) {
+      if (isSendTelegraph(text)) {
         return;
       }
       if ((nextEnableTime || 0) > Date.now()) {
         log.info(`Need await: ${(nextEnableTime || 0) - Date.now()}ms`);
         return;
       }
-      if (ENV.TELEGRAM_MIN_STREAM_INTERVAL > 0) {
-        nextEnableTime = Date.now() + ENV.TELEGRAM_MIN_STREAM_INTERVAL;
+      if (sendInterval > 0) {
+        nextEnableTime = Date.now() + sendInterval;
       }
       const data = context ? `${getLog(context.USER_CONFIG)}
 ${text}` : text;
-      log.info(`send message id: ${sender instanceof MessageSender ? sender.context.message_id : ""}`);
+      log.info(`send message id: ${isMessageSender ? sender.context.message_id : sender.context.inline_message_id}`);
       sentPromise = sender.sendRichText(data, ENV.DEFAULT_PARSE_MODE, "chat");
       const resp = await sentPromise;
       if (resp.status === 429) {
@@ -16186,12 +16194,12 @@ ${text}` : text;
   streamSender.end = async (text) => {
     await sentPromise;
     await waitUntil((nextEnableTime || 0) + 10);
-    if (sender instanceof MessageSender && isTelegramChatTypeGroup(sender.context.chatType) && ENV.TELEGRAPH_NUM_LIMIT > 0 && text.length > ENV.TELEGRAPH_NUM_LIMIT && context) {
+    if (isSendTelegraph(text)) {
       return sendTelegraph(context, sender, question || "Redo Question", text);
     }
     const data = context ? `${getLog(context.USER_CONFIG)}
 ${text}` : text;
-    log.info(`send message id: ${sender instanceof MessageSender ? sender.context.message_id : ""}`);
+    log.info(`send message id: ${sender instanceof MessageSender ? sender.context.message_id : sender.context.inline_message_id}`);
     return sender.sendRichText(data, ENV.DEFAULT_PARSE_MODE, "chat");
   };
   return streamSender;
@@ -16206,7 +16214,9 @@ async function sendTelegraph(context, sender, question, text) {
 ${question}
 \`\`\`
 ---`;
-  const botName = context.SHARE_CONTEXT.botName;
+  const botName = context.SHARE_CONTEXT?.botName || "AI";
+  log.info(logSingleton);
+  log.info(getLog(context.USER_CONFIG));
   const telegraph_prefix = `${prefix}
 #Answer
 🤖 **${getLog(context.USER_CONFIG, true)}**
@@ -16218,7 +16228,7 @@ ${getLog(context.USER_CONFIG)}`.replace("LOGSTART", "").replace("LOGEND", "").re
 \`\`\`
 ${debug_info}
 \`\`\``;
-  const telegraphSender = new TelegraphSender(sender.context, botName, context.SHARE_CONTEXT.telegraphAccessTokenKey);
+  const telegraphSender = new TelegraphSender(botName, context.SHARE_CONTEXT.telegraphAccessTokenKey);
   const resp = await telegraphSender.send(
     "Daily Q&A",
     telegraph_prefix + text + telegraph_suffix
@@ -16685,8 +16695,8 @@ You can consider using the following tools:
       (name14) => `
 
 ### ${name14}
-- desc: ${(tools2[name14] || tools2.duckduckgo).description} 
-${(tools2[name14] || tools2.duckduckgo).prompt || ""}`
+- desc: ${tools2[name14].description} 
+${tools2[name14].prompt || ""}`
     ).join("")}`;
   }
 }
@@ -20574,7 +20584,7 @@ function commandsDocument() {
   }).filter((item) => item.description !== "");
 }
 async function authChecker(command, message, context) {
-  const roleList = command.needAuth(message.chat.type);
+  const roleList = command.needAuth(message.chat?.type ?? "private");
   if (roleList) {
     const chatRole = await loadChatRoleWithContext(message, context);
     if (chatRole === null) {
@@ -20711,11 +20721,16 @@ class ChosenInlineWorkerContext {
   USER_CONFIG;
   botToken;
   MIDDEL_CONTEXT;
-  constructor(token, USER_CONFIG) {
+  SHARE_CONTEXT;
+  constructor(chosenInline, token, USER_CONFIG) {
     this.USER_CONFIG = USER_CONFIG;
     this.botToken = token;
     this.MIDDEL_CONTEXT = {
       originalMessage: { type: "text" }
+    };
+    this.SHARE_CONTEXT = {
+      botName: "AI",
+      telegraphAccessTokenKey: `telegraph_access_token:${chosenInline.from.id}`
     };
   }
   static async from(token, chosenInline) {
@@ -20723,16 +20738,17 @@ class ChosenInlineWorkerContext {
     let userConfigKey = `user_config:${chosenInline.from.id}`;
     const botId = Number.parseInt(token.split(":")[0]);
     if (botId) {
-      userConfigKey += `:{botId}`;
+      userConfigKey += `:${botId}`;
     }
     try {
       const userConfig = JSON.parse(await ENV.DATABASE.get(userConfigKey));
       ConfigMerger.merge(USER_CONFIG, ConfigMerger.trim(userConfig, ENV.LOCK_USER_CONFIG_KEYS) || {});
-      USER_CONFIG.ENABLE_SHOWINFO = false;
+      USER_CONFIG.ENABLE_SHOWINFO = ENV.INLINE_QUERY_SHOW_INFO;
+      ENV.TELEGRAM_MIN_STREAM_INTERVAL = ENV.INLINE_QUERY_SEND_INTERVAL;
     } catch (e) {
       console.warn(e);
     }
-    return new ChosenInlineWorkerContext(token, USER_CONFIG);
+    return new ChosenInlineWorkerContext(chosenInline, token, USER_CONFIG);
   }
 }
 function checkMention(content, entities, botName, botId) {
@@ -20858,7 +20874,7 @@ class AnswerChatInlineQuery {
     }
     const agent = new OpenAI();
     const isStream = chosenInline.result_id === ":c stream";
-    const OnStream = OnStreamHander(sender, context);
+    const OnStream = OnStreamHander(sender, context, question);
     const messages = [{ role: "user", content: question }];
     if (context.USER_CONFIG.SYSTEM_INIT_MESSAGE) {
       messages.unshift({ role: "system", content: context.USER_CONFIG.SYSTEM_INIT_MESSAGE });
@@ -20869,11 +20885,11 @@ class AnswerChatInlineQuery {
       }, context.USER_CONFIG, isStream ? OnStream : null);
       const { content: answer } = resp;
       if (answer === "") {
-        return sender.sendPlainText("No response");
+        return OnStream.end?.("No response");
       }
-      return sender.sendRichText(answer);
+      return OnStream.end?.(answer);
     } catch (error) {
-      return sender.sendPlainText(`Error: ${error.message.substring(0, 4e3)}`);
+      return OnStream.end?.(`Error: ${error.message.substring(0, 4e3)}`);
     }
   };
   handlerQuestion = async (chosenInline, context, sender) => {

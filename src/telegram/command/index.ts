@@ -217,7 +217,7 @@ export function commandsDocument(): { description: string; command: string }[] {
 }
 
 export async function authChecker(command: CommandHandler, message: Telegram.Message, context: WorkerContext) {
-    const roleList = command.needAuth!(message.chat.type);
+    const roleList = command.needAuth!(message.chat?.type ?? 'private');
     if (roleList) {
         // 获取身份并判断
         const chatRole = await loadChatRoleWithContext(message, context);

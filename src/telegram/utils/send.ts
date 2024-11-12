@@ -266,7 +266,6 @@ interface CreateOrEditPageResponse {
 };
 
 export class TelegraphSender {
-    context: MessageContext;
     readonly telegraphAccessTokenKey: string;
     telegraphAccessToken?: string;
     teleph_path?: string;
@@ -276,8 +275,7 @@ export class TelegraphSender {
         author_url: ENV.TELEGRAPH_AUTHOR_URL,
     };
 
-    constructor(context: MessageContext, botName: string | null, telegraphAccessTokenKey: string) {
-        this.context = context;
+    constructor(botName: string | null, telegraphAccessTokenKey: string) {
         this.telegraphAccessTokenKey = telegraphAccessTokenKey;
         if (botName) {
             this.author = {
@@ -451,15 +449,17 @@ class InlineQuerySender {
 
 class ChosenInlineContext {
     result_id: string;
-    from: Telegram.User;
     inline_message_id?: string;
     query: string;
     parse_mode: Telegram.ParseMode | null = null;
+    telegraphAccessTokenKey?: string;
     constructor(result: Telegram.ChosenInlineResult) {
         this.result_id = result.result_id;
-        this.from = result.from;
         this.inline_message_id = result.inline_message_id;
         this.query = result.query;
+        if (ENV.TELEGRAPH_NUM_LIMIT > 0) {
+            this.telegraphAccessTokenKey = `telegraph_access_token:${result.from.id}`;
+        }
     }
 }
 

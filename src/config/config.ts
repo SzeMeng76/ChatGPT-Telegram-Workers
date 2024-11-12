@@ -17,7 +17,7 @@ export class EnvironmentConfig {
     TELEGRAM_AVAILABLE_TOKENS: string[] = [];
     // 默认消息模式
     DEFAULT_PARSE_MODE = 'MarkdownV2';
-    // 最小stream模式消息间隔，小于等于0则不限制
+    // 最小stream模式消息间隔，小于等于0则不限制 单位：ms
     TELEGRAM_MIN_STREAM_INTERVAL = 0;
     // 图片尺寸偏移 0为第一位，-1为最后一位, 越靠后的图片越大。PS: 图片过大可能导致token消耗过多，或者workers超时或内存不足
     // 默认选择次高质量的图片
@@ -102,6 +102,8 @@ export class EnvironmentConfig {
     CON_EXEC_FUN_NUM = 1;
     // When the length reaches the set value, the group will send a telegraph article. If less than 0, it will not be sent
     TELEGRAPH_NUM_LIMIT = -1;
+    // Telegraph scope
+    TELEGRAPH_SCOPE: string[] = ['group', 'supergroup'];
     // Telegraph author link; The author of the article is currently the robot ID, and if not set, it is anonymous
     TELEGRAPH_AUTHOR_URL = '';
     // Disable link preview
@@ -175,6 +177,10 @@ export class EnvironmentConfig {
     MAX_RETRIES = 0;
     // Only relax /set command temporarily modifies permissions
     RELAX_AUTH_KEYS: string[] = [];
+    // inline query send interval
+    INLINE_QUERY_SEND_INTERVAL = 2000;
+    // inline query show info
+    INLINE_QUERY_SHOW_INFO = false;
 }
 
 // -- 通用配置 --

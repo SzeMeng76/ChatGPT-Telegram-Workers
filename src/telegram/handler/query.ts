@@ -24,7 +24,7 @@ export class AnswerChatInlineQuery implements answerInlineQuery {
         }
         const agent = new OpenAI();
         const isStream = chosenInline.result_id === ':c stream';
-        const OnStream = OnStreamHander(sender as unknown as MessageSender, context as unknown as WorkerContext);
+        const OnStream = OnStreamHander(sender as unknown as MessageSender, context as unknown as WorkerContext, question);
         const messages = [{ role: 'user', content: question }];
         if (context.USER_CONFIG.SYSTEM_INIT_MESSAGE) {
             messages.unshift({ role: 'system', content: context.USER_CONFIG.SYSTEM_INIT_MESSAGE });
@@ -35,11 +35,11 @@ export class AnswerChatInlineQuery implements answerInlineQuery {
             }, context.USER_CONFIG, isStream ? OnStream : null);
             const { content: answer } = resp;
             if (answer === '') {
-                return sender.sendPlainText('No response');
+                return OnStream.end?.('No response');
             }
-            return sender.sendRichText(answer);
+            return OnStream.end?.(answer);
         } catch (error) {
-            return sender.sendPlainText(`Error: ${(error as Error).message.substring(0, 4000)}`);
+            return OnStream.end?.(`Error: ${(error as Error).message.substring(0, 4000)}`);
         }
     };
 

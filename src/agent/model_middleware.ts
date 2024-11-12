@@ -131,7 +131,7 @@ function warpMessages(messages: CoreMessage[], tools: Record<string, any>, activ
     }
     if (activeTools.length > 0 && messages[0].role === 'system') {
         messages[0].content += `\n\nYou can consider using the following tools:\n##TOOLS${activeTools.map(name =>
-            `\n\n### ${name}\n- desc: ${(tools[name] || tools.duckduckgo).description} \n${(tools[name] || tools.duckduckgo).prompt || ''}`,
+            `\n\n### ${name}\n- desc: ${tools[name].description} \n${tools[name].prompt || ''}`,
         ).join('')}`;
     }
 }

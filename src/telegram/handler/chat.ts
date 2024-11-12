@@ -8,7 +8,7 @@ import type { MessageHandler } from './types';
 import { loadAudioLLM, loadChatLLM, loadImageGen } from '../../agent';
 import { loadHistory, requestCompletionsFromLLM } from '../../agent/chat';
 import { ENV } from '../../config/env';
-import { clearLog, getLog } from '../../extra/log/logDecortor';
+import { clearLog, getLog, logSingleton } from '../../extra/log/logDecortor';
 import { log } from '../../extra/log/logger';
 import { imageToBase64String, renderBase64DataURI } from '../../utils/image';
 import { createTelegramBotAPI } from '../api';
@@ -152,7 +152,14 @@ export class ChatHandler implements MessageHandler<WorkerContext> {
 export function OnStreamHander(sender: MessageSender | ChosenInlineSender, context?: WorkerContext, question?: string): ChatStreamTextHandler {
     let sentPromise = null as Promise<Response> | null;
     let nextEnableTime = Date.now();
-    const sentMessageIds = sender instanceof MessageSender && sender.context.message_id ? [sender.context.message_id] : [];
+    const isMessageSender = sender instanceof MessageSender;
+    const sendInterval = isMessageSender ? ENV.TELEGRAM_MIN_STREAM_INTERVAL : ENV.INLINE_QUERY_SEND_INTERVAL;
+    const sentMessageIds = isMessageSender && sender.context.message_id ? [sender.context.message_id] : [];
+    const isSendTelegraph = (text: string) => {
+        return isMessageSender
+            ? ENV.TELEGRAPH_SCOPE.includes(sender.context.chatType) && ENV.TELEGRAPH_NUM_LIMIT > 0 && text.length > ENV.TELEGRAPH_NUM_LIMIT
+            : (sender as ChosenInlineSender).context.inline_message_id && text.length > 4096;
+    };
 
     const streamSender = {
         send: null as ((text: string, isEnd: boolean, sendType?: 'chat' | 'telegraph') => Promise<any>) | null,
@@ -160,11 +167,7 @@ export function OnStreamHander(sender: MessageSender | ChosenInlineSender, conte
     };
     streamSender.send = async (text: string): Promise<any> => {
         try {
-            if (sender instanceof MessageSender
-                && isTelegramChatTypeGroup(sender.context.chatType)
-                && ENV.TELEGRAPH_NUM_LIMIT > 0
-                && text.length > ENV.TELEGRAPH_NUM_LIMIT
-                && context) {
+            if (isSendTelegraph(text)) {
                 return;
             }
             // 判断是否需要等待
@@ -174,12 +177,12 @@ export function OnStreamHander(sender: MessageSender | ChosenInlineSender, conte
             }
 
             // 设置最小流间隔
-            if (ENV.TELEGRAM_MIN_STREAM_INTERVAL > 0) {
-                nextEnableTime = Date.now() + ENV.TELEGRAM_MIN_STREAM_INTERVAL;
+            if (sendInterval > 0) {
+                nextEnableTime = Date.now() + sendInterval;
             }
 
             const data = context ? `${getLog(context.USER_CONFIG)}\n${text}` : text;
-            log.info(`send message id: ${sender instanceof MessageSender ? sender.context.message_id : ''}`);
+            log.info(`send message id: ${isMessageSender ? sender.context.message_id : sender.context.inline_message_id}`);
             sentPromise = sender.sendRichText(data, ENV.DEFAULT_PARSE_MODE as Telegram.ParseMode, 'chat');
             const resp = await sentPromise;
             // 判断429
@@ -211,28 +214,27 @@ export function OnStreamHander(sender: MessageSender | ChosenInlineSender, conte
     streamSender.end = async (text: string): Promise<any> => {
         await sentPromise;
         await waitUntil((nextEnableTime || 0) + 10);
-        if (sender instanceof MessageSender
-            && isTelegramChatTypeGroup(sender.context.chatType)
-            && ENV.TELEGRAPH_NUM_LIMIT > 0
-            && text.length > ENV.TELEGRAPH_NUM_LIMIT
-            && context) {
-            return sendTelegraph(context, sender, question || 'Redo Question', text);
+        if (isSendTelegraph(text)) {
+            return sendTelegraph(context!, sender, question || 'Redo Question', text);
         }
         const data = context ? `${getLog(context.USER_CONFIG)}\n${text}` : text;
-        log.info(`send message id: ${sender instanceof MessageSender ? sender.context.message_id : ''}`);
+        log.info(`send message id: ${sender instanceof MessageSender ? sender.context.message_id : (sender as ChosenInlineSender).context.inline_message_id}`);
         return sender.sendRichText(data, ENV.DEFAULT_PARSE_MODE as Telegram.ParseMode, 'chat');
     };
 
     return streamSender as unknown as ChatStreamTextHandler;
 }
 
-async function sendTelegraph(context: WorkerContext, sender: MessageSender, question: string, text: string) {
+async function sendTelegraph(context: WorkerContext, sender: MessageSender | ChosenInlineSender, question: string, text: string) {
     log.info(`send telegraph`);
     if (question.length > 600) {
         question = `${question.slice(0, 300)}...${question.slice(-300)}`;
     }
     const prefix = `#Question\n\`\`\`\n${question}\n\`\`\`\n---`;
-    const botName = context.SHARE_CONTEXT.botName;
+    const botName = context.SHARE_CONTEXT?.botName || 'AI';
+
+    log.info(logSingleton);
+    log.info(getLog(context.USER_CONFIG));
 
     const telegraph_prefix = `${prefix}\n#Answer\n🤖 **${getLog(context.USER_CONFIG, true)}**\n`;
     const debug_info = `debug info:\n${getLog(context.USER_CONFIG) as string}`
@@ -241,7 +243,7 @@ async function sendTelegraph(context: WorkerContext, sender: MessageSender, ques
         .replace('`', '')
         .trim();
     const telegraph_suffix = `\n---\n\`\`\`\n${debug_info}\n\`\`\``;
-    const telegraphSender = new TelegraphSender(sender.context, botName, context.SHARE_CONTEXT.telegraphAccessTokenKey!);
+    const telegraphSender = new TelegraphSender(botName, context.SHARE_CONTEXT.telegraphAccessTokenKey!);
     const resp = await telegraphSender.send(
         'Daily Q&A',
         telegraph_prefix + text + telegraph_suffix,

@@ -202,12 +202,17 @@ export class ChosenInlineWorkerContext {
     USER_CONFIG: AgentUserConfig;
     botToken: string;
     MIDDEL_CONTEXT: Record<string, any>;
-    constructor(token: string, USER_CONFIG: AgentUserConfig) {
+    SHARE_CONTEXT: Record<string, any>;
+    constructor(chosenInline: Telegram.ChosenInlineResult, token: string, USER_CONFIG: AgentUserConfig) {
         this.USER_CONFIG = USER_CONFIG;
         this.botToken = token;
         // 模拟私聊消息
         this.MIDDEL_CONTEXT = {
             originalMessage: { type: 'text' },
+        };
+        this.SHARE_CONTEXT = {
+            botName: 'AI',
+            telegraphAccessTokenKey: `telegraph_access_token:${chosenInline.from.id}`,
         };
     }
 
@@ -217,15 +222,17 @@ export class ChosenInlineWorkerContext {
         let userConfigKey = `user_config:${chosenInline.from.id}`;
         const botId = Number.parseInt(token.split(':')[0]);
         if (botId) {
-            userConfigKey += `:{botId}`;
+            userConfigKey += `:${botId}`;
         }
         try {
             const userConfig: AgentUserConfig = JSON.parse(await ENV.DATABASE.get(userConfigKey));
             ConfigMerger.merge(USER_CONFIG, ConfigMerger.trim(userConfig, ENV.LOCK_USER_CONFIG_KEYS) || {});
-            USER_CONFIG.ENABLE_SHOWINFO = false;
+            USER_CONFIG.ENABLE_SHOWINFO = ENV.INLINE_QUERY_SHOW_INFO;
+            // 过于频繁的请求不会被Telegram接受
+            ENV.TELEGRAM_MIN_STREAM_INTERVAL = ENV.INLINE_QUERY_SEND_INTERVAL;
         } catch (e) {
             console.warn(e);
         }
-        return new ChosenInlineWorkerContext(token, USER_CONFIG);
+        return new ChosenInlineWorkerContext(chosenInline, token, USER_CONFIG);
     }
 }
