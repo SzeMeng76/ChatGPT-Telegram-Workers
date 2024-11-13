@@ -13,7 +13,7 @@ import { log } from '../../extra/log/logger';
 import { imageToBase64String, renderBase64DataURI } from '../../utils/image';
 import { createTelegramBotAPI } from '../api';
 import { MessageSender, sendAction, TelegraphSender } from '../utils/send';
-import { isTelegramChatTypeGroup, type UnionData, waitUntil } from '../utils/utils';
+import { type UnionData, waitUntil } from '../utils/utils';
 
 async function messageInitialize(sender: MessageSender, streamSender: ChatStreamTextHandler): Promise<void> {
     if (!sender.context.message_id) {
@@ -182,7 +182,7 @@ export function OnStreamHander(sender: MessageSender | ChosenInlineSender, conte
             }
 
             const data = context ? `${getLog(context.USER_CONFIG)}\n${text}` : text;
-            log.info(`sent message ids: ${isMessageSender ? sender.context.sentMessageIds : sender.context.inline_message_id}`);
+            log.info(`sent message ids: ${isMessageSender ? [...sender.context.sentMessageIds] : sender.context.inline_message_id}`);
             sentPromise = sender.sendRichText(data, ENV.DEFAULT_PARSE_MODE as Telegram.ParseMode, 'chat');
             const resp = await sentPromise;
             // 判断429
@@ -218,8 +218,13 @@ export function OnStreamHander(sender: MessageSender | ChosenInlineSender, conte
             return sendTelegraph(context!, sender, question || 'Redo Question', text);
         }
         const data = context ? `${getLog(context.USER_CONFIG)}\n${text}` : text;
-        log.info(`sent message ids: ${sender instanceof MessageSender ? [...sender.context.sentMessageIds] : (sender as ChosenInlineSender).context.inline_message_id}`);
-        return sender.sendRichText(data, ENV.DEFAULT_PARSE_MODE as Telegram.ParseMode, 'chat');
+        log.info(`sent message ids: ${isMessageSender ? [...sender.context.sentMessageIds] : sender.context.inline_message_id}`);
+        const finalResp = await sender.sendRichText(data, ENV.DEFAULT_PARSE_MODE as Telegram.ParseMode, 'chat');
+        if (!finalResp.ok) {
+            (sender as MessageSender).context.sentMessageIds.clear();
+            return sendTelegraph(context!, sender, question || 'Redo Question', text);
+        }
+        return finalResp;
     };
 
     return streamSender as unknown as ChatStreamTextHandler;
@@ -330,7 +335,6 @@ async function handleTextToImage(
     }
     sendAction(context.SHARE_CONTEXT.botToken, message.chat.id);
     await sender.sendPlainText('Please wait a moment...', 'tip').then(r => r.json());
-    // sender.update({ message_id });
     const result = await agent.request(eMsg.text, context.USER_CONFIG);
     log.info('imageresult', JSON.stringify(result));
     await sendImages(result, ENV.SEND_IMAGE_FILE, sender, context.USER_CONFIG);

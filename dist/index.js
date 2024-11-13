@@ -411,8 +411,8 @@ const ENV_KEY_MAPPER = {
   WORKERS_AI_MODEL: "WORKERS_CHAT_MODEL"
 };
 class Environment extends EnvironmentConfig {
-  BUILD_TIMESTAMP = 1731490895;
-  BUILD_VERSION = "cfde76e";
+  BUILD_TIMESTAMP = 1731493200;
+  BUILD_VERSION = "fc9ef67";
   I18N = loadI18n();
   PLUGINS_ENV = {};
   USER_CONFIG = createAgentUserConfig();
@@ -12008,13 +12008,17 @@ class MessageSender {
     let lastMessageResponse = null;
     let lastMessageRespJson = null;
     for (let i = 0; i < messages.length; i++) {
+      if (i > 0 && i < context.sentMessageIds.size - 1) {
+        continue;
+      }
       chatContext.message_id = [...context.sentMessageIds][i] ?? null;
       lastMessageResponse = await this.sendMessage(messages[i], chatContext);
       if (lastMessageResponse.status !== 200) {
         break;
       }
       lastMessageRespJson = await lastMessageResponse.clone().json();
-      context.sentMessageIds.add(lastMessageRespJson.result.message_id);
+      this.context.sentMessageIds.add(lastMessageRespJson.result.message_id);
+      this.context.message_id = lastMessageRespJson.result.message_id;
     }
     if (lastMessageResponse === null) {
       throw new Error("Send message failed");
@@ -16209,7 +16213,7 @@ function OnStreamHander(sender, context, question) {
       }
       const data = context ? `${getLog(context.USER_CONFIG)}
 ${text}` : text;
-      log.info(`sent message ids: ${isMessageSender ? sender.context.sentMessageIds : sender.context.inline_message_id}`);
+      log.info(`sent message ids: ${isMessageSender ? [...sender.context.sentMessageIds] : sender.context.inline_message_id}`);
       sentPromise = sender.sendRichText(data, ENV.DEFAULT_PARSE_MODE, "chat");
       const resp = await sentPromise;
       if (resp.status === 429) {
@@ -16237,8 +16241,13 @@ ${text}` : text;
     }
     const data = context ? `${getLog(context.USER_CONFIG)}
 ${text}` : text;
-    log.info(`sent message ids: ${sender instanceof MessageSender ? [...sender.context.sentMessageIds] : sender.context.inline_message_id}`);
-    return sender.sendRichText(data, ENV.DEFAULT_PARSE_MODE, "chat");
+    log.info(`sent message ids: ${isMessageSender ? [...sender.context.sentMessageIds] : sender.context.inline_message_id}`);
+    const finalResp = await sender.sendRichText(data, ENV.DEFAULT_PARSE_MODE, "chat");
+    if (!finalResp.ok) {
+      sender.context.sentMessageIds.clear();
+      return sendTelegraph(context, sender, question || "Redo Question", text);
+    }
+    return finalResp;
   };
   return streamSender;
 }
@@ -19737,7 +19746,7 @@ class ImgCommandHandler {
         return sender.sendPlainText("ERROR: Image generator not found");
       }
       sendAction(context.SHARE_CONTEXT.botToken, message.chat.id, "upload_photo");
-      const respJson = await sender.sendPlainText("Please wait a moment...").then((resp2) => resp2.json());
+      await sender.sendPlainText("Please wait a moment...");
       const img = await agent.request(subcommand, context.USER_CONFIG);
       log.info("img", img);
       const resp = await sendImages(img, ENV.SEND_IMAGE_FILE, sender, context.USER_CONFIG);

@@ -19,7 +19,7 @@ import { createTelegramBotAPI } from '../api';
 import { chatWithLLM, OnStreamHander, sendImages } from '../handler/chat';
 import { escape } from '../utils/md2tgmd';
 import { type MessageSender, sendAction } from '../utils/send';
-import { chunckArray, isCfWorker, isTelegramChatTypeGroup, UUIDv4, waitUntil } from '../utils/utils';
+import { chunckArray, isCfWorker, isTelegramChatTypeGroup, UUIDv4 } from '../utils/utils';
 
 export const COMMAND_AUTH_CHECKER = {
     default(chatType: string): string[] | null {
@@ -53,10 +53,7 @@ export class ImgCommandHandler implements CommandHandler {
                 return sender.sendPlainText('ERROR: Image generator not found');
             }
             sendAction(context.SHARE_CONTEXT.botToken, message.chat.id, 'upload_photo');
-            const respJson = await sender.sendPlainText('Please wait a moment...').then(resp => resp.json());
-            // sender.update({
-            //     message_id: respJson.result.message_id,
-            // });
+            await sender.sendPlainText('Please wait a moment...');
             const img = await agent.request(subcommand, context.USER_CONFIG);
             log.info('img', img);
             const resp = await sendImages(img, ENV.SEND_IMAGE_FILE, sender, context.USER_CONFIG);

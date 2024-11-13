@@ -1,9 +1,7 @@
 /* eslint-disable unused-imports/no-unused-vars */
 import type {
     CoreMessage,
-    CoreSystemMessage,
     CoreToolChoice,
-    CoreUserMessage,
     LanguageModelV1,
     Experimental_LanguageModelV1Middleware as LanguageModelV1Middleware,
     StepResult,

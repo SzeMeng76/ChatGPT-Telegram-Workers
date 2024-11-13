@@ -120,13 +120,19 @@ export class MessageSender {
         let lastMessageResponse = null;
         let lastMessageRespJson = null;
         for (let i = 0; i < messages.length; i++) {
+            // 不再发送中间片段
+            if (i > 0 && i < context.sentMessageIds.size - 1) {
+                continue;
+            }
             chatContext.message_id = [...context.sentMessageIds][i] ?? null;
             lastMessageResponse = await this.sendMessage(messages[i], chatContext);
             if (lastMessageResponse.status !== 200) {
                 break;
             }
             lastMessageRespJson = await lastMessageResponse.clone().json() as Telegram.ResponseWithMessage;
-            context.sentMessageIds.add(lastMessageRespJson.result.message_id);
+            this.context.sentMessageIds.add(lastMessageRespJson.result.message_id);
+            // 用于后续发送媒体编辑
+            this.context.message_id = lastMessageRespJson.result.message_id;
         }
         if (lastMessageResponse === null) {
             throw new Error('Send message failed');
