@@ -3,8 +3,8 @@
 import type * as Telegram from 'telegram-bot-api-types';
 import type { TelegramBotAPI } from '../api';
 import { ENV } from '../../config/env';
-import { tagMessageIds } from '../../extra/log/logDecortor';
-import { log } from '../../extra/log/logger';
+import { tagMessageIds } from '../../log/logDecortor';
+import { log } from '../../log/logger';
 import { createTelegramBotAPI } from '../api';
 import md2node from './md2node';
 import { chunkDocument, escape } from './md2tgmd';
@@ -367,6 +367,9 @@ async function checkIsNeedTagIds(context: MessageContext, resp: Promise<Response
             = (isGroup && ENV.SCHEDULE_GROUP_DELETE_TYPE.includes(msgType))
             || (!isGroup && ENV.SCHEDULE_PRIVATE_DELETE_TYPE.includes(msgType));
         if (isNeedTag) {
+            if (!tagMessageIds.has(context.message)) {
+                tagMessageIds.set(context.message, []);
+            }
             message_id.forEach(id => tagMessageIds.get(context.message)?.push(id));
         }
     } while (false);

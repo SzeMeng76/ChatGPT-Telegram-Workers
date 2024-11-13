@@ -1,4 +1,4 @@
-import type { FilePart } from 'ai';
+import type { FilePart, ToolResultPart } from 'ai';
 import type * as Telegram from 'telegram-bot-api-types';
 import type { ChatStreamTextHandler, HistoryModifier, ImageResult, LLMChatRequestParams } from '../../agent/types';
 import type { WorkerContext } from '../../config/context';
@@ -8,8 +8,9 @@ import type { MessageHandler } from './types';
 import { loadAudioLLM, loadChatLLM, loadImageGen } from '../../agent';
 import { loadHistory, requestCompletionsFromLLM } from '../../agent/chat';
 import { ENV } from '../../config/env';
-import { clearLog, getLog, logSingleton } from '../../extra/log/logDecortor';
-import { log } from '../../extra/log/logger';
+import { clearLog, getLog, logSingleton } from '../../log/logDecortor';
+import { log } from '../../log/logger';
+import { sendToolResult } from '../../tools';
 import { imageToBase64String, renderBase64DataURI } from '../../utils/image';
 import { createTelegramBotAPI } from '../api';
 import { MessageSender, sendAction, TelegraphSender } from '../utils/send';
@@ -49,10 +50,16 @@ export async function chatWithLLM(
         log.info(`start chat with LLM`);
         const answer = await requestCompletionsFromLLM(params, context, agent, modifier, ENV.STREAM_MODE ? streamSender : null);
         log.info(`chat with LLM done`);
-        if (answer === '') {
+        if (answer.messages.at(-1)?.role === 'tool') {
+            const result = await sendToolResult(answer.messages.at(-1)?.content as ToolResultPart[], sender, context.USER_CONFIG);
+            if (result instanceof Response) {
+                return result;
+            }
+        }
+        if (answer.content === '') {
             return streamSender.end?.('No response');
         }
-        return streamSender.end?.(answer);
+        return streamSender.end?.(answer.content);
     } catch (e) {
         let errMsg = `Error: `;
         if ((e as Error).name === 'AbortError') {

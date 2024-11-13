@@ -2,7 +2,7 @@ import type * as Telegram from 'telegram-bot-api-types';
 import type { WorkerContext } from '../../config/context';
 import type { ChosenInlineQueryHandler, InlineQueryHandler, MessageHandler } from './types';
 import { CallbackQueryContext, ChosenInlineWorkerContext, InlineQueryContext, WorkerContextBase } from '../../config/context';
-import { log } from '../../extra/log/logger';
+import { log } from '../../log/logger';
 import { ChatHandler } from './chat';
 import { GroupMention } from './group';
 import {

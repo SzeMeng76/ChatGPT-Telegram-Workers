@@ -1,9 +1,10 @@
-import type { CoreMessage, CoreToolChoice, LanguageModelV1, StepResult } from 'ai';
+import type { CoreAssistantMessage, CoreMessage, CoreToolChoice, LanguageModelV1, StepResult, ToolCallPart, ToolResultPart } from 'ai';
 import type { AgentUserConfig } from '../config/env';
 import type { ChatStreamTextHandler, OpenAIFuncCallData, ResponseMessage } from './types';
 import { generateText, streamText, experimental_wrapLanguageModel as wrapLanguageModel } from 'ai';
 import { ENV } from '../config/env';
-import { log } from '../extra/log/logger';
+import { log } from '../log/logger';
+import { executeTool, manualRequestTool, tools } from '../tools';
 import { AIMiddleware } from './model_middleware';
 import { Stream } from './stream';
 
@@ -179,6 +180,7 @@ export async function streamHandler(stream: AsyncIterable<any>, contentExtractor
     await sendPromise;
     return contentFull;
 }
+
 export async function requestChatCompletionsV2(params: { model: LanguageModelV1; toolModel?: LanguageModelV1; prompt?: string; messages: CoreMessage[]; tools?: any; activeTools?: string[]; toolChoice?: CoreToolChoice<any>[]; context: AgentUserConfig }, onStream: ChatStreamTextHandler | null, onResult: OnResult | null = null): Promise<{ messages: ResponseMessage[]; content: string }> {
     const messageReferencer = [] as string[];
     try {
@@ -211,6 +213,7 @@ export async function requestChatCompletionsV2(params: { model: LanguageModelV1;
             });
             const contentFull = await streamHandler(stream.textStream, t => t, onStream, messageReferencer);
             onResult?.(contentFull);
+            await manualRequestTool((await stream.response).messages, params.context);
             return {
                 messages: (await stream.response).messages,
                 content: contentFull,
@@ -218,6 +221,7 @@ export async function requestChatCompletionsV2(params: { model: LanguageModelV1;
         } else {
             const result = await generateText(hander_params);
             onResult?.(result.text);
+            await manualRequestTool(result.response.messages, params.context);
             return {
                 messages: result.response.messages,
                 content: result.text,

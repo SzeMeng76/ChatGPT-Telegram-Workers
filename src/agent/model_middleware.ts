@@ -8,8 +8,8 @@ import type {
 } from 'ai';
 import type { AgentUserConfig } from '../config/env';
 import type { ChatStreamTextHandler } from './types';
-import { getLogSingleton } from '../extra/log/logDecortor';
-import { log } from '../extra/log/logger';
+import { getLogSingleton } from '../log/logDecortor';
+import { log } from '../log/logger';
 import { OpenAI } from './openai';
 
 // type Writeable<T> = { -readonly [P in keyof T]: T[P] };
@@ -98,8 +98,6 @@ export function AIMiddleware({ config, models, tools, activeTools, onStream, too
                 logs.tool.time.push((+time - maxFuncTime).toFixed(1));
                 log.info(`finish ${[...new Set(toolResults.map(i => i.toolName))]}`);
                 onStream?.send(`${messageReferencer.join('')}...\n` + `finish ${[...new Set(toolResults.map(i => i.toolName))]}`);
-            } else if (text === '') {
-                throw new Error('None text');
             } else {
                 activeTools.length > 0 ? logs.tool.time.push(time) : logs.chat.time.push(time);
             }

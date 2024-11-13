@@ -12,9 +12,9 @@ import { customInfo, loadChatLLM, loadImageGen } from '../../agent';
 import { WssRequest } from '../../agent/wsrequest';
 import { ENV, ENV_KEY_MAPPER } from '../../config/env';
 import { ConfigMerger } from '../../config/merger';
-import { getLogSingleton } from '../../extra/log/logDecortor';
-import { log } from '../../extra/log/logger';
-import { toolTypes } from '../../extra/tools';
+import { getLogSingleton } from '../../log/logDecortor';
+import { log } from '../../log/logger';
+import { tools } from '../../tools';
 import { createTelegramBotAPI } from '../api';
 import { chatWithLLM, OnStreamHander, sendImages } from '../handler/chat';
 import { escape } from '../utils/md2tgmd';
@@ -506,7 +506,7 @@ export class SetCommandHandler implements CommandHandler {
                 break;
             case 'USE_TOOLS':
                 if (value === 'on') {
-                    mappedValue = Object.keys(toolTypes);
+                    mappedValue = Object.keys(tools);
                 } else if (value === 'off') {
                     mappedValue = [];
                 }

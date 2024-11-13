@@ -1,4 +1,4 @@
-import { log } from '../extra/log/logger';
+import { log } from '../log/logger';
 import { AsyncIter } from './readable';
 import { streamHandler } from './request';
 

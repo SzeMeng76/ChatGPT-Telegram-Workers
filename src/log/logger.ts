@@ -1,5 +1,5 @@
-import type { LogLevelType } from '../../config/types';
-import { ENV } from '../../config/env';
+import type { LogLevelType } from '../config/types';
+import { ENV } from '../config/env';
 
 const LOG_LEVEL_PRIORITY: Record<LogLevelType, number> = {
     debug: 1,

@@ -1,7 +1,7 @@
 import type { AgentUserConfig } from '../config/env';
 import type { SseChatCompatibleOptions } from './request';
 import type { ChatAgent, ChatStreamTextHandler, ImageAgent, ImageResult, LLMChatParams, ResponseMessage } from './types';
-import { Log } from '../extra/log/logDecortor';
+import { Log } from '../log/logDecortor';
 import { isJsonResponse, requestChatCompletions } from './request';
 
 class WorkerBase {

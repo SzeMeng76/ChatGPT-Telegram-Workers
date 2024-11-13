@@ -1,5 +1,5 @@
 import type { WorkerContext } from '../config/context';
-import type { ChatAgent, ChatStreamTextHandler, HistoryItem, HistoryModifier, ImageResult, LLMChatParams, LLMChatRequestParams } from './types';
+import type { ChatAgent, ChatStreamTextHandler, HistoryItem, HistoryModifier, ImageResult, LLMChatParams, LLMChatRequestParams, ResponseMessage } from './types';
 import { ENV } from '../config/env';
 
 /**
@@ -26,7 +26,7 @@ export async function loadHistory(key: string): Promise<HistoryItem[]> {
     const counter = tokensCounter();
 
     const trimHistory = (list: HistoryItem[], initLength: number, maxLength: number, maxToken: number) => {
-    // 历史记录超出长度需要裁剪, 小于0不裁剪
+        // 历史记录超出长度需要裁剪, 小于0不裁剪
         if (maxLength >= 0 && list.length > maxLength) {
             list = list.splice(list.length - maxLength);
         }
@@ -78,7 +78,7 @@ export async function loadHistory(key: string): Promise<HistoryItem[]> {
     return history;
 }
 
-export async function requestCompletionsFromLLM(params: LLMChatRequestParams | null, context: WorkerContext, agent: ChatAgent, modifier: HistoryModifier | null, onStream: ChatStreamTextHandler | null): Promise<string> {
+export async function requestCompletionsFromLLM(params: LLMChatRequestParams | null, context: WorkerContext, agent: ChatAgent, modifier: HistoryModifier | null, onStream: ChatStreamTextHandler | null): Promise<{ messages: ResponseMessage[]; content: string }> {
     let history = context.MIDDEL_CONTEXT.history;
     const historyDisable = ENV.AUTO_TRIM_HISTORY && ENV.MAX_HISTORY_LENGTH <= 0;
     // const historyKey = context.SHARE_CONTEXT.chatHistoryKey;
@@ -101,7 +101,7 @@ export async function requestCompletionsFromLLM(params: LLMChatRequestParams | n
         messages,
     };
     const answer = await agent.request(llmParams, context.USER_CONFIG, onStream);
-    const { messages: raw_messages, content } = answer;
+    const { messages: raw_messages } = answer;
 
     if (!historyDisable) {
         // only push valid chat history
@@ -110,7 +110,7 @@ export async function requestCompletionsFromLLM(params: LLMChatRequestParams | n
             history.push(...raw_messages);
         }
     }
-    return content;
+    return answer;
 }
 
 export async function requestText2Image(url: string, headers: Record<string, any>, body: any, render: (arg: Response) => Promise<ImageResult>) {

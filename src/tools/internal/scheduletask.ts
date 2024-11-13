@@ -1,6 +1,6 @@
 import { parseArray } from '../../config/merger';
+import { log } from '../../log/logger';
 import { createTelegramBotAPI } from '../../telegram/api';
-import { log } from '../log/logger';
 
 interface ScheduledData {
     // [bot_name: string]: Record<string, Message[]>;

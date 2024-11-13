@@ -1,7 +1,7 @@
 import type { Message } from 'telegram-bot-api-types';
-import type { CompletionData } from '../../agent/types';
-import type { WorkerContext } from '../../config/context';
-import type { AgentUserConfig } from '../../config/env';
+import type { CompletionData } from '../agent/types';
+import type { WorkerContext } from '../config/context';
+import type { AgentUserConfig } from '../config/env';
 
 export const logSingleton = new WeakMap<AgentUserConfig, Logs>();
 export const tagMessageIds = new WeakMap<Message, number[]>();
@@ -185,7 +185,7 @@ function handleLlmLog(logs: Logs, result: CompletionData, time: string, type: 't
 
     if (type === 'tool' && result.tool_calls && result.tool_calls.length > 0) {
         logs.functions.push(
-            ...result.tool_calls.map(tool => ({
+            ...result.tool_calls.map((tool: { function: { name: any; arguments: string } }) => ({
                 name: tool.function.name,
                 arguments: JSON.parse(tool.function.arguments),
             })),

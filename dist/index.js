@@ -411,8 +411,8 @@ const ENV_KEY_MAPPER = {
   WORKERS_AI_MODEL: "WORKERS_CHAT_MODEL"
 };
 class Environment extends EnvironmentConfig {
-  BUILD_TIMESTAMP = 1731493200;
-  BUILD_VERSION = "fc9ef67";
+  BUILD_TIMESTAMP = 1731517909;
+  BUILD_VERSION = "b7ccf80";
   I18N = loadI18n();
   PLUGINS_ENV = {};
   USER_CONFIG = createAgentUserConfig();
@@ -519,6 +519,1124 @@ class Environment extends EnvironmentConfig {
   }
 }
 const ENV = new Environment();
+class APIClientBase {
+  token;
+  baseURL = ENV.TELEGRAM_API_DOMAIN;
+  constructor(token, baseURL) {
+    this.token = token;
+    if (baseURL) {
+      this.baseURL = baseURL;
+    }
+    while (this.baseURL.endsWith("/")) {
+      this.baseURL = this.baseURL.slice(0, -1);
+    }
+    this.request = this.request.bind(this);
+    this.requestJSON = this.requestJSON.bind(this);
+  }
+  uri(method) {
+    return `${this.baseURL}/bot${this.token}/${method}`;
+  }
+  jsonRequest(method, params) {
+    return fetch(this.uri(method), {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(params)
+    });
+  }
+  formDataRequest(method, params) {
+    const formData = new FormData();
+    for (const key in params) {
+      const value = params[key];
+      if (value instanceof File) {
+        formData.append(key, value, value.name);
+      } else if (value instanceof Blob) {
+        formData.append(key, value, "blob");
+      } else if (typeof value === "string") {
+        formData.append(key, value);
+      } else {
+        formData.append(key, JSON.stringify(value));
+      }
+    }
+    return fetch(this.uri(method), {
+      method: "POST",
+      body: formData
+    });
+  }
+  request(method, params) {
+    for (const key in params) {
+      if (params[key] instanceof File || params[key] instanceof Blob) {
+        return this.formDataRequest(method, params);
+      }
+    }
+    return this.jsonRequest(method, params);
+  }
+  async requestJSON(method, params) {
+    return this.request(method, params).then((res) => res.json());
+  }
+}
+function createTelegramBotAPI(token) {
+  const client = new APIClientBase(token);
+  return new Proxy(client, {
+    get(target, prop, receiver) {
+      if (prop in target) {
+        return Reflect.get(target, prop, receiver);
+      }
+      return (...args2) => {
+        if (typeof prop === "string" && prop.endsWith("WithReturns")) {
+          const method = prop.slice(0, -11);
+          return Reflect.apply(target.requestJSON, target, [method, ...args2]);
+        }
+        return Reflect.apply(target.request, target, [prop, ...args2]);
+      };
+    }
+  });
+}
+const INTERPOLATE_LOOP_REGEXP = /\{\{#each(?::(\w+))?\s+(\w+)\s+in\s+([\w.[\]]+)\}\}([\s\S]*?)\{\{\/each(?::\1)?\}\}/g;
+const INTERPOLATE_CONDITION_REGEXP = /\{\{#if(?::(\w+))?\s+([\w.[\]]+)\}\}([\s\S]*?)(?:\{\{#else(?::\1)?\}\}([\s\S]*?))?\{\{\/if(?::\1)?\}\}/g;
+const INTERPOLATE_VARIABLE_REGEXP = /\{\{([\w.[\]]+)\}\}/g;
+function evaluateExpression(expr, localData) {
+  if (expr === ".") {
+    return localData["."] ?? localData;
+  }
+  try {
+    return expr.split(".").reduce((value, key) => {
+      if (key.includes("[") && key.includes("]")) {
+        const [arrayKey, indexStr] = key.split("[");
+        const indexExpr = indexStr.slice(0, -1);
+        let index2 = Number.parseInt(indexExpr, 10);
+        if (Number.isNaN(index2)) {
+          index2 = evaluateExpression(indexExpr, localData);
+        }
+        return value?.[arrayKey]?.[index2];
+      }
+      return value?.[key];
+    }, localData);
+  } catch (error) {
+    console.error(`Error evaluating expression: ${expr}`, error);
+    return void 0;
+  }
+}
+function interpolate(template, data, formatter = null) {
+  const processConditional = (condition, trueBlock, falseBlock, localData) => {
+    const result2 = evaluateExpression(condition, localData);
+    return result2 ? trueBlock : falseBlock || "";
+  };
+  const processLoop = (itemName, arrayExpr, loopContent, localData) => {
+    const array = evaluateExpression(arrayExpr, localData);
+    if (!Array.isArray(array)) {
+      console.warn(`Expression "${arrayExpr}" did not evaluate to an array`);
+      return "";
+    }
+    return array.map((item) => {
+      const itemData = { ...localData, [itemName]: item, ".": item };
+      return interpolate(loopContent, itemData);
+    }).join("");
+  };
+  const processTemplate = (tmpl, localData) => {
+    tmpl = tmpl.replace(INTERPOLATE_LOOP_REGEXP, (_, alias, itemName, arrayExpr, loopContent) => processLoop(itemName, arrayExpr, loopContent, localData));
+    tmpl = tmpl.replace(INTERPOLATE_CONDITION_REGEXP, (_, alias, condition, trueBlock, falseBlock) => processConditional(condition, trueBlock, falseBlock, localData));
+    return tmpl.replace(INTERPOLATE_VARIABLE_REGEXP, (_, expr) => {
+      const value = evaluateExpression(expr, localData);
+      if (value === void 0) {
+        return `{{${expr}}}`;
+      }
+      if (formatter) {
+        return formatter(value);
+      }
+      return String(value);
+    });
+  };
+  return processTemplate(template, data);
+}
+function interpolateObject(obj, data) {
+  if (obj === null || obj === void 0) {
+    return null;
+  }
+  if (typeof obj === "string") {
+    return interpolate(obj, data);
+  }
+  if (Array.isArray(obj)) {
+    return obj.map((item) => interpolateObject(item, data));
+  }
+  if (typeof obj === "object") {
+    const result2 = {};
+    for (const [key, value] of Object.entries(obj)) {
+      result2[key] = interpolateObject(value, data);
+    }
+    return result2;
+  }
+  return obj;
+}
+async function executeRequest(template, data) {
+  const urlRaw = interpolate(template.url, data, encodeURIComponent);
+  const url = new URL(urlRaw);
+  if (template.query) {
+    for (const [key, value] of Object.entries(template.query)) {
+      url.searchParams.append(key, interpolate(value, data));
+    }
+  }
+  const method = template.method;
+  const headers = Object.fromEntries(
+    Object.entries(template.headers || {}).map(([key, value]) => {
+      return [key, interpolate(value, data)];
+    })
+  );
+  for (const key of Object.keys(headers)) {
+    if (headers[key] === null) {
+      delete headers[key];
+    }
+  }
+  let body = null;
+  if (template.body) {
+    if (template.body.type === "json") {
+      body = JSON.stringify(interpolateObject(template.body.content, data));
+    } else if (template.body.type === "form") {
+      body = new URLSearchParams();
+      for (const [key, value] of Object.entries(template.body.content)) {
+        body.append(key, interpolate(value, data));
+      }
+    } else {
+      body = interpolate(template.body.content, data);
+    }
+  }
+  const response = await fetch(url, {
+    method,
+    headers,
+    body
+  });
+  const renderOutput = async (type2, temple, response2) => {
+    switch (type2) {
+      case "text":
+        return interpolate(temple, await response2.text());
+      case "json":
+      default:
+        return interpolate(temple, await response2.json());
+    }
+  };
+  if (!response.ok) {
+    const content2 = await renderOutput(template.response?.error?.input_type, template.response.error?.output, response);
+    return {
+      type: template.response.error.output_type,
+      content: content2
+    };
+  }
+  let content = await renderOutput(template.response.content?.input_type, template.response.content?.output, response);
+  if (template.response?.render) {
+    content = template.response.render.replace("{{input}}", data.DATA).replace("{{output}}", content);
+  }
+  return {
+    type: template.response.content.output_type,
+    content
+  };
+}
+function formatInput(input, type2) {
+  if (type2 === "json") {
+    return JSON.parse(input);
+  } else if (type2 === "space-separated") {
+    return input.split(/\s+/);
+  } else if (type2 === "comma-separated") {
+    return input.split(/\s*,\s*/);
+  } else {
+    return input;
+  }
+}
+const logSingleton = /* @__PURE__ */ new WeakMap();
+const tagMessageIds = /* @__PURE__ */ new WeakMap();
+function Log(value, context) {
+  if (context.kind === "field") {
+    const configIndex = 1;
+    return function(initialValue) {
+      if (typeof initialValue === "function") {
+        return async function(...args2) {
+          const config = args2[configIndex];
+          const logs = getLogSingleton(config);
+          const startTime2 = Date.now();
+          logs.ongoingFunctions.push({
+            name: initialValue.name || "anonymous",
+            startTime: startTime2
+          });
+          let model;
+          try {
+            model = args2[0]?.model || this.model(config, args2[0]);
+            if (this.type === "tool") {
+              logs.tool.model = model;
+            } else {
+              logs.chat.model.push(model);
+            }
+            const result2 = await initialValue.apply(this, args2);
+            const endTime = Date.now();
+            const elapsed = ((endTime - startTime2) / 1e3).toFixed(1);
+            logs.ongoingFunctions = logs.ongoingFunctions.filter(
+              (func) => func.startTime !== startTime2
+            );
+            handleLlmLog(logs, result2, elapsed, this.type);
+            if (!result2.content && !result2.tool_calls) {
+              return result2;
+            }
+            if (result2.usage) {
+              logs.tokens.push(`${result2.usage.prompt_tokens},${result2.usage.completion_tokens}`);
+            }
+            return { content: result2.content, tool_calls: result2.tool_calls };
+          } catch (error) {
+            logs.ongoingFunctions = logs.ongoingFunctions.filter(
+              (func) => func.startTime !== startTime2
+            );
+            throw error;
+          }
+        };
+      } else {
+        return initialValue;
+      }
+    };
+  }
+  if (context.kind === "method" && typeof value === "function") {
+    return async function(...args2) {
+      const config = this.context.USER_CONFIG;
+      const logs = getLogSingleton(config);
+      const startTime2 = Date.now();
+      const result2 = await value.apply(this, args2);
+      const endTime = Date.now();
+      const elapsed = ((endTime - startTime2) / 1e3).toFixed(1);
+      logs.functionTime.push(elapsed);
+      return result2;
+    };
+  }
+  return value;
+}
+function getLogSingleton(config) {
+  if (!logSingleton.has(config)) {
+    logSingleton.set(config, {
+      functions: [],
+      functionTime: [],
+      tool: {
+        model: "",
+        time: []
+      },
+      chat: {
+        model: [],
+        time: []
+      },
+      tokens: [],
+      ongoingFunctions: [],
+      error: ""
+    });
+  }
+  return logSingleton.get(config);
+}
+function getLog(context, returnModel = false) {
+  if (!context.ENABLE_SHOWINFO)
+    return "";
+  const showToken = context.ENABLE_SHOWTOKEN;
+  const logList = [];
+  const logObj = logSingleton.get(context);
+  if (!logObj)
+    return "";
+  if (returnModel) {
+    return logObj.chat.model?.at(-1) || logObj.tool.model || "UNKNOWN";
+  }
+  if (logObj.tool.model) {
+    let toolsLog = `${logObj.tool.model}`;
+    if (logObj.tool.time.length > 0) {
+      toolsLog += ` c_t: ${logObj.tool.time.join("s ")}s`;
+    }
+    if (logObj.functionTime.length > 0) {
+      toolsLog += ` f_t: ${logObj.functionTime.join("s ")}s`;
+    }
+    logList.push(toolsLog);
+  }
+  if (logObj.functions.length > 0) {
+    const functionLogs = logObj.functions.map((log2) => {
+      const args2 = Object.values(log2.arguments).join(", ");
+      return `${log2.name}: ${args2}`.substring(0, 50);
+    });
+    logList.push(...functionLogs);
+  }
+  if (logObj.error) {
+    logList.push(`${logObj.error}`);
+  }
+  if (logObj.chat.model.length > 0) {
+    const chatLogs = logObj.chat.model.map((m, i) => {
+      const time = logObj.chat.time[i];
+      return `${m}${time ? ` ${time}s` : ""}`;
+    }).join("|");
+    logList.push(chatLogs);
+  }
+  logObj.ongoingFunctions.forEach((func) => {
+    const elapsed = ((Date.now() - func.startTime) / 1e3).toFixed(1);
+    logList.push(`[ongoing: ${func.name} ${elapsed}s]`);
+  });
+  if (logObj.tokens.length > 0 && showToken) {
+    logList.push(`${logObj.tokens.join("|")}`);
+  }
+  const formattedEntries = logList.filter(Boolean).map((entry) => `>\`${entry}\``).join("\n");
+  return `LOGSTART
+${formattedEntries}LOGEND
+`;
+}
+function clearLog(context) {
+  logSingleton.delete(context);
+}
+function handleLlmLog(logs, result2, time, type2) {
+  if (type2 === "tool") {
+    logs.tool.time.push(time);
+  } else {
+    logs.chat.time.push(time);
+  }
+  if (type2 === "tool" && result2.tool_calls && result2.tool_calls.length > 0) {
+    logs.functions.push(
+      ...result2.tool_calls.map((tool2) => ({
+        name: tool2.function.name,
+        arguments: JSON.parse(tool2.function.arguments)
+      }))
+    );
+  }
+}
+const LOG_LEVEL_PRIORITY = {
+  debug: 1,
+  info: 2,
+  warn: 3,
+  error: 4
+};
+function LogLevel(level, ...args2) {
+  const timestamp = (/* @__PURE__ */ new Date()).toISOString();
+  const logParts = args2.map((e) => {
+    if (typeof e === "object") {
+      return JSON.stringify(e, null, 2);
+    }
+    return e;
+  });
+  const logStr = logParts.join("\n");
+  const formattedMessage = `[${timestamp}] [${level.toUpperCase()}] ${logStr}`;
+  switch (level) {
+    case "error":
+      console.error(formattedMessage);
+      break;
+    case "warn":
+      console.warn(formattedMessage);
+      break;
+    case "info":
+      console.info(formattedMessage);
+      break;
+    case "debug":
+      console.debug(formattedMessage);
+      break;
+    default:
+      console.log(formattedMessage);
+  }
+}
+const log = new Proxy({}, {
+  get(target, prop) {
+    const level = prop;
+    const currentLogLevel = ENV.LOG_LEVEL || "info";
+    if (LOG_LEVEL_PRIORITY[level] >= LOG_LEVEL_PRIORITY[currentLogLevel]) {
+      return (...args2) => LogLevel(level, ...args2);
+    }
+    return () => {
+    };
+  }
+});
+function markdownToTelegraphNodes(markdown) {
+  const lines = markdown.split("\n");
+  const nodes = [];
+  let inCodeBlock = false;
+  let codeBlockContent = "";
+  let codeBlockLanguage = "";
+  for (let line of lines) {
+    if (line.trim().startsWith("```")) {
+      if (inCodeBlock) {
+        nodes.push({
+          tag: "pre",
+          children: [
+            {
+              tag: "code",
+              attrs: codeBlockLanguage ? { class: `language-${codeBlockLanguage}` } : {},
+              children: [codeBlockContent.trim()]
+            }
+          ]
+        });
+        inCodeBlock = false;
+        codeBlockContent = "";
+        codeBlockLanguage = "";
+      } else {
+        inCodeBlock = true;
+        codeBlockLanguage = line.trim().slice(3).trim();
+      }
+      continue;
+    }
+    if (inCodeBlock) {
+      codeBlockContent += `${line}
+`;
+      continue;
+    }
+    const _line = line.trim();
+    if (!_line)
+      continue;
+    if (_line.startsWith("#")) {
+      const match = /^#+/.exec(_line);
+      let level = match ? match[0].length : 0;
+      level = level <= 2 ? 3 : 4;
+      const text = line.replace(/^#+\s*/, "");
+      nodes.push({ tag: `h${level}`, children: processInlineElements(text) });
+    } else if (_line.startsWith("> ")) {
+      const text = line.slice(2);
+      nodes.push({ tag: "blockquote", children: processInlineElements(text) });
+    } else if (_line === "---" || _line === "***") {
+      nodes.push({ tag: "hr" });
+    } else {
+      const matches = /^(\s*)(?:-|\*)\s/.exec(line);
+      if (matches) {
+        line = `${matches[1]}• ${line.slice(matches[0].length)}`;
+      }
+      nodes.push({ tag: "p", children: processInlineElements(line) });
+    }
+  }
+  if (inCodeBlock) {
+    nodes.push({
+      tag: "pre",
+      children: [
+        {
+          tag: "code",
+          attrs: codeBlockLanguage ? { class: `language-${codeBlockLanguage}` } : {},
+          children: [codeBlockContent.trim()]
+        }
+      ]
+    });
+  }
+  return nodes;
+}
+function processInlineElementsHelper(text) {
+  const children = [];
+  const linkRegex = /\[([^\]]+)\]\(([^)]+)\)/g;
+  let match = null;
+  let index2 = 0;
+  while (true) {
+    match = linkRegex.exec(text);
+    if (match === null)
+      break;
+    if (match.index > index2) {
+      children.push(...processInlineStyles(text.slice(index2, match.index)));
+    }
+    children.push({
+      tag: "a",
+      attrs: { href: match[2] },
+      children: [match[1]]
+    });
+    index2 = match.index + match[0].length;
+  }
+  if (index2 < text.length) {
+    children.push(...processInlineStyles(text.slice(index2)));
+  }
+  return children;
+}
+function processInlineStyles(text) {
+  const children = [];
+  const styleRegex = /(\*\*|__|_|~~)(.+?)\1/g;
+  let lastIndex = 0;
+  let match;
+  while (true) {
+    match = styleRegex.exec(text);
+    if (match === null)
+      break;
+    if (match.index > lastIndex) {
+      children.push(text.slice(lastIndex, match.index));
+    }
+    let tag = "";
+    switch (match[1]) {
+      case "**":
+        tag = "strong";
+        break;
+      case "__":
+        tag = "u";
+        break;
+      case "_":
+        tag = "i";
+        break;
+      case "~~":
+        tag = "s";
+        break;
+      default:
+        tag = "span";
+        break;
+    }
+    children.push({
+      tag,
+      children: [match[2]]
+    });
+    lastIndex = match.index + match[0].length;
+  }
+  if (lastIndex < text.length) {
+    children.push(text.slice(lastIndex));
+  }
+  return children;
+}
+function processInlineElements(text) {
+  const children = [];
+  const codeRegex = /`([^`]+)`/g;
+  let codeMatch = null;
+  let lastIndex = 0;
+  while (true) {
+    codeMatch = codeRegex.exec(text);
+    if (codeMatch === null)
+      break;
+    if (codeMatch.index > lastIndex) {
+      children.push(...processInlineElementsHelper(text.slice(lastIndex, codeMatch.index)));
+    }
+    children.push({
+      tag: "code",
+      children: [codeMatch[1]]
+    });
+    lastIndex = codeMatch.index + codeMatch[0].length;
+  }
+  if (lastIndex < text.length) {
+    children.push(...processInlineElementsHelper(text.slice(lastIndex)));
+  }
+  return children;
+}
+const escapeChars = /([_*[\]()\\~`>#+\-=|{}.!])/g;
+const escapedChars = {
+  "\\*": "ESCAPEASTERISK",
+  "\\_": "ESCAPEUNDERSCORE",
+  "\\~": "ESCAPETILDE",
+  "\\|": "ESCAPEPIP",
+  "\\`": "ESCAPEBACKTICK",
+  "\\\\": "ESCAPEBACKSLASH",
+  "\\(": "ESCAPELEFTPARENTHESIS",
+  "\\)": "ESCAPERIGHTPARENTHESIS",
+  "\\[": "ESCAPELEFTBRACKET",
+  "\\]": "ESCAPERIGHTBRACKET",
+  "\\{": "ESCAPELEFTBRACE",
+  "\\}": "ESCAPERIGHTBRACE",
+  "\\>": "ESCAPEGREATERTHAN",
+  "\\#": "ESCAPEHASH",
+  "\\+": "ESCAPEPLUS",
+  "\\-": "ESCAPEMINUS",
+  "\\=": "ESCAPEEQUAL",
+  "\\.": "ESCAPEDOT",
+  "\\!": "ESCAPEEXCLAMATION",
+  "\\?": "ESCAPEQUESTION"
+};
+const escapedCharsReverseMap = new Map(Object.entries(escapedChars).map(([key, value]) => [value, key]));
+function escape(lines) {
+  const stack = [];
+  const result2 = [];
+  let lineTrim = "";
+  let modifiedLine = "";
+  for (const [i, line] of lines.entries()) {
+    lineTrim = line.trim();
+    modifiedLine = line;
+    let startIndex = 0;
+    if (/^```.+/.test(lineTrim)) {
+      stack.push(i);
+    } else if (lineTrim === "```") {
+      if (stack.length) {
+        startIndex = stack.pop();
+        if (!stack.length) {
+          const content = lines.slice(startIndex, i + 1).join("\n");
+          result2.push(handleEscape(content, "code"));
+          continue;
+        }
+      } else {
+        stack.push(i);
+      }
+    } else if (lineTrim && i > 0 && /^\s*>/.test(result2.at(-1) ?? "") && !lineTrim.startsWith(">")) {
+      modifiedLine = `>${line}`;
+    }
+    if (!stack.length) {
+      result2.push(handleEscape(modifiedLine));
+    }
+  }
+  if (stack.length) {
+    const last = `${lines.slice(stack[0]).join("\n")}
+\`\`\``;
+    result2.push(handleEscape(last, "code"));
+  }
+  const regexp = /^LOGSTART\n(.*?)LOGEND/s;
+  return result2.join("\n").replace(regexp, "**$1||").replace(new RegExp(Object.values(escapedChars).join("|"), "g"), (match) => escapedCharsReverseMap.get(match) ?? match);
+}
+function handleEscape(text, type2 = "text") {
+  if (!text.trim()) {
+    return text;
+  }
+  text = text.replace(/\\[*_~|`\\()[\]{}>#+\-=.!]/g, (match) => escapedChars[match]);
+  if (type2 === "text") {
+    text = text.replace(escapeChars, "\\$1").replace(/\\\*\\\*(\S|\S.*?\S)\\\*\\\*/g, "*$1*").replace(/\\_\\_(\S|\S.*?\S)\\_\\_/g, "__$1__").replace(/\\_(\S|\S.*?\S)\\_/g, "_$1_").replace(/\\~(\S|\S.*?\S)\\~/g, "~$1~").replace(/\\\|\\\|(\S|\S.*?\S)\\\|\\\|/g, "||$1||").replace(/\\\[([^\]]+)\\\]\\\((.+?)\\\)/g, "[$1]($2)").replace(/\\`(.*?)\\`/g, "`$1`").replace(/^\s*\\>\s*(.+)$/gm, ">$1").replace(/^(>?\s*)\\(-|\*)\s+(.+)$/gm, "$1• $3").replace(/^((\\#){1,3}\s)(.+)/gm, "$1*$3*");
+  } else {
+    const codeBlank = text.length - text.trimStart().length;
+    if (codeBlank > 0) {
+      const blankReg = new RegExp(`^\\s{${codeBlank}}`, "gm");
+      text = text.replace(blankReg, "");
+    }
+    text = text.trimEnd().replace(/([\\`])/g, "\\$1").replace(/^\\`\\`\\`([\s\S]+)\\`\\`\\`$/g, "```$1```");
+  }
+  return text;
+}
+function chunkDocument(text, chunkSize = 4096) {
+  const textList = text.split("\n");
+  const chunks = [[]];
+  let chunkIndex = 0;
+  const codeStack = [];
+  for (const line of textList) {
+    if (chunks[chunkIndex].join("\n").length + line.length >= chunkSize) {
+      chunkIndex++;
+      chunks.push([]);
+      if (codeStack.length) {
+        if (chunks[chunkIndex - 1].join("\n").length + codeStack.length * 4 >= chunkSize) {
+          chunks[chunkIndex - 1].push(...chunks[chunkIndex - 1].slice(-codeStack.length));
+          chunks[chunkIndex - 1].length -= codeStack.length;
+        }
+        chunks[chunkIndex - 1].push(...Array.from({ length: codeStack.length }).fill("```"));
+        chunks[chunkIndex].push(...codeStack);
+      }
+      if (line.length > chunkSize) {
+        const lineSplit = chunkText(chunks[chunkIndex].join("\n") + line, chunkSize);
+        if (lineSplit.length > 1) {
+          chunks.length -= 1;
+          chunks.push(...lineSplit.map((item) => item.split("\n")));
+          chunkIndex = chunks.length - 1;
+        } else {
+          chunks[chunkIndex].push(line);
+        }
+      } else {
+        chunks[chunkIndex].push(line);
+      }
+      continue;
+    }
+    if (/^```.+/.test(line.trim())) {
+      codeStack.push(line);
+    } else if (line.trim() === "```") {
+      if (codeStack.length) {
+        codeStack.pop();
+      } else {
+        codeStack.push(line);
+      }
+    }
+    chunks[chunkIndex].push(line);
+  }
+  if (codeStack.length) {
+    chunks[chunkIndex].push(...Array.from({ length: codeStack.length }).fill("```"));
+  }
+  return chunks;
+}
+function chunkText(text, chunkSize) {
+  const chunks = [];
+  for (let i = 0; i < text.length; i += chunkSize) {
+    chunks.push(text.slice(i, i + chunkSize));
+  }
+  return chunks;
+}
+class MessageContext {
+  chat_id;
+  message_id = null;
+  reply_to_message_id;
+  parse_mode = null;
+  allow_sending_without_reply = null;
+  disable_web_page_preview = ENV.DISABLE_WEB_PREVIEW;
+  message_thread_id = null;
+  chatType;
+  message;
+  sentMessageIds = /* @__PURE__ */ new Set();
+  constructor(message) {
+    this.chat_id = message.chat.id;
+    this.chatType = message.chat.type;
+    this.message = message;
+    if (message.chat.type === "group" || message.chat.type === "supergroup") {
+      if (message?.reply_to_message && ENV.EXTRA_MESSAGE_CONTEXT && !message.is_topic_message && ENV.ENABLE_REPLY_TO_MENTION && !message.reply_to_message.from?.is_bot) {
+        this.reply_to_message_id = message.reply_to_message.message_id;
+      } else {
+        this.reply_to_message_id = message.message_id;
+      }
+      this.allow_sending_without_reply = true;
+      if (message.message_thread_id && message.is_topic_message) {
+        this.message_thread_id = message.message_thread_id;
+      }
+    } else {
+      this.reply_to_message_id = null;
+    }
+  }
+}
+class MessageSender {
+  api;
+  context;
+  constructor(token, context) {
+    this.api = createTelegramBotAPI(token);
+    this.context = context;
+    this.sendRichText = this.sendRichText.bind(this);
+    this.sendPlainText = this.sendPlainText.bind(this);
+    this.sendPhoto = this.sendPhoto.bind(this);
+  }
+  static from(token, message) {
+    return new MessageSender(token, new MessageContext(message));
+  }
+  with(message) {
+    this.context = new MessageContext(message);
+    return this;
+  }
+  update(context) {
+    if (!this.context) {
+      this.context = context;
+      return this;
+    }
+    for (const key in context) {
+      this.context[key] = context[key];
+    }
+    return this;
+  }
+  async sendMessage(message, context) {
+    if (context?.message_id) {
+      const params = {
+        chat_id: context.chat_id,
+        message_id: context.message_id,
+        parse_mode: context.parse_mode || void 0,
+        text: message
+      };
+      if (context.disable_web_page_preview) {
+        params.link_preview_options = {
+          is_disabled: true
+        };
+      }
+      return this.api.editMessageText(params);
+    } else {
+      const params = {
+        chat_id: context.chat_id,
+        message_thread_id: context.message_thread_id || void 0,
+        parse_mode: context.parse_mode || void 0,
+        text: message
+      };
+      if (context.reply_to_message_id) {
+        params.reply_parameters = {
+          message_id: context.reply_to_message_id,
+          chat_id: context.chat_id,
+          allow_sending_without_reply: context.allow_sending_without_reply || void 0
+        };
+      }
+      if (context.disable_web_page_preview) {
+        params.link_preview_options = {
+          is_disabled: true
+        };
+      }
+      return this.api.sendMessage(params);
+    }
+  }
+  async sendLongMessage(message, context) {
+    const chatContext = { ...context };
+    const messages = renderMessage(context.parse_mode, message);
+    let lastMessageResponse = null;
+    let lastMessageRespJson = null;
+    for (let i = 0; i < messages.length; i++) {
+      if (i > 0 && i < context.sentMessageIds.size - 1) {
+        continue;
+      }
+      chatContext.message_id = [...context.sentMessageIds][i] ?? null;
+      lastMessageResponse = await this.sendMessage(messages[i], chatContext);
+      if (lastMessageResponse.status !== 200) {
+        break;
+      }
+      lastMessageRespJson = await lastMessageResponse.clone().json();
+      this.context.sentMessageIds.add(lastMessageRespJson.result.message_id);
+      this.context.message_id = lastMessageRespJson.result.message_id;
+    }
+    if (lastMessageResponse === null) {
+      throw new Error("Send message failed");
+    }
+    return lastMessageResponse;
+  }
+  sendRichText(message, parseMode = ENV.DEFAULT_PARSE_MODE, type2 = "chat") {
+    if (!this.context) {
+      throw new Error("Message context not set");
+    }
+    const resp = this.sendLongMessage(message, {
+      ...this.context,
+      parse_mode: parseMode
+    });
+    return checkIsNeedTagIds(this.context, resp, type2);
+  }
+  sendPlainText(message, type2 = "tip") {
+    if (!this.context) {
+      throw new Error("Message context not set");
+    }
+    const resp = this.sendLongMessage(message, {
+      ...this.context,
+      parse_mode: null
+    });
+    return checkIsNeedTagIds(this.context, resp, type2);
+  }
+  sendPhoto(photo, caption, parse_mode) {
+    if (!this.context) {
+      throw new Error("Message context not set");
+    }
+    const params = {
+      chat_id: this.context.chat_id,
+      message_thread_id: this.context.message_thread_id || void 0,
+      photo,
+      ...caption ? { caption: renderMessage(parse_mode || null, caption)[0] } : {},
+      parse_mode
+    };
+    if (this.context.reply_to_message_id) {
+      params.reply_parameters = {
+        message_id: this.context.reply_to_message_id,
+        chat_id: this.context.chat_id,
+        allow_sending_without_reply: this.context.allow_sending_without_reply || void 0
+      };
+    }
+    const resp = this.api.sendPhoto(params);
+    return checkIsNeedTagIds(this.context, resp, "chat");
+  }
+  sendMediaGroup(media) {
+    if (!this.context) {
+      throw new Error("Message context not set");
+    }
+    const params = {
+      chat_id: this.context.chat_id,
+      message_thread_id: this.context.message_thread_id || void 0,
+      media
+    };
+    if (this.context.reply_to_message_id) {
+      params.reply_parameters = {
+        message_id: this.context.reply_to_message_id,
+        chat_id: this.context.chat_id,
+        allow_sending_without_reply: this.context.allow_sending_without_reply || void 0
+      };
+    }
+    const resp = this.api.sendMediaGroup(params);
+    return checkIsNeedTagIds(this.context, resp, "chat");
+  }
+  sendDocument(document, caption, parse_mode) {
+    if (!this.context) {
+      throw new Error("Message context not set");
+    }
+    const params = {
+      chat_id: this.context.chat_id,
+      message_thread_id: this.context.message_thread_id || void 0,
+      document,
+      caption,
+      parse_mode
+    };
+    if (this.context.reply_to_message_id) {
+      params.reply_parameters = {
+        message_id: this.context.reply_to_message_id,
+        chat_id: this.context.chat_id,
+        allow_sending_without_reply: this.context.allow_sending_without_reply || void 0
+      };
+    }
+    return this.api.sendDocument(params);
+  }
+  editMessageMedia(media, caption, parse_mode) {
+    if (!this.context) {
+      throw new Error("Message context not set");
+    }
+    if (!this.context.message_id) {
+      throw new Error("Message id is null");
+    }
+    const params = {
+      chat_id: this.context.chat_id,
+      message_id: this.context.message_id,
+      media: {
+        ...media,
+        ...caption ? { caption: parse_mode ? renderMessage(parse_mode, caption)[0] : caption } : {},
+        parse_mode
+      }
+    };
+    const resp = this.api.editMessageMedia(params);
+    return checkIsNeedTagIds(this.context, resp, "chat");
+  }
+}
+class TelegraphSender {
+  telegraphAccessTokenKey;
+  telegraphAccessToken;
+  teleph_path;
+  author = {
+    short_name: "Mewo",
+    author_name: "A Cat",
+    author_url: ENV.TELEGRAPH_AUTHOR_URL
+  };
+  constructor(botName, telegraphAccessTokenKey) {
+    this.telegraphAccessTokenKey = telegraphAccessTokenKey;
+    if (botName) {
+      this.author = {
+        short_name: botName,
+        author_name: botName,
+        author_url: ENV.TELEGRAPH_AUTHOR_URL
+      };
+    }
+  }
+  async createAccount() {
+    const { short_name, author_name } = this.author;
+    const url = `https://api.telegra.ph/createAccount?short_name=${short_name}&author_name=${author_name}`;
+    const resp = await fetch(url).then((r) => r.json());
+    if (resp.ok) {
+      return resp.result.access_token;
+    } else {
+      throw new Error("create telegraph account failed");
+    }
+  }
+  async createOrEditPage(url, title, content) {
+    const body = {
+      access_token: this.telegraphAccessToken,
+      teleph_path: this.teleph_path ?? void 0,
+      title: title || "Daily Q&A",
+      content: markdownToTelegraphNodes(content),
+      ...this.author
+    };
+    const headers = { "Content-Type": "application/json" };
+    return fetch(url, {
+      method: "post",
+      headers,
+      body: JSON.stringify(body)
+    }).then((r) => r.json());
+  }
+  async send(title, content) {
+    let endPoint = "https://api.telegra.ph/editPage";
+    if (!this.telegraphAccessToken) {
+      this.telegraphAccessToken = await ENV.DATABASE.get(this.telegraphAccessTokenKey);
+      if (!this.telegraphAccessToken) {
+        this.telegraphAccessToken = await this.createAccount();
+        await ENV.DATABASE.put(this.telegraphAccessTokenKey, this.telegraphAccessToken).catch(console.error);
+      }
+    }
+    if (!this.teleph_path) {
+      endPoint = "https://api.telegra.ph/createPage";
+      const c_resp = await this.createOrEditPage(endPoint, title, content);
+      if (c_resp.ok) {
+        this.teleph_path = c_resp.result.path;
+        log.info("telegraph url:", c_resp.result.url);
+        return c_resp;
+      } else {
+        console.error(c_resp.error);
+        throw new Error(c_resp.error);
+      }
+    } else {
+      return this.createOrEditPage(endPoint, title, content);
+    }
+  }
+}
+function sendAction(botToken, chat_id, action = "typing") {
+  const api = createTelegramBotAPI(botToken);
+  setTimeout(() => api.sendChatAction({
+    chat_id,
+    action
+  }).catch(console.error), 0);
+}
+async function checkIsNeedTagIds(context, resp, msgType) {
+  const { chatType } = context;
+  let message_id = [];
+  const original_resp = await resp;
+  do {
+    if (ENV.EXPIRED_TIME <= 0) break;
+    const clone_resp = await original_resp.clone().json();
+    if (Array.isArray(clone_resp.result)) {
+      message_id = clone_resp?.result?.map((i) => i.message_id);
+    } else {
+      message_id = [clone_resp?.result?.message_id];
+    }
+    if (message_id.filter(Boolean).length === 0) {
+      log.error("resp:", JSON.stringify(clone_resp));
+      break;
+    }
+    const isGroup = ["group", "supergroup"].includes(chatType);
+    const isNeedTag = isGroup && ENV.SCHEDULE_GROUP_DELETE_TYPE.includes(msgType) || !isGroup && ENV.SCHEDULE_PRIVATE_DELETE_TYPE.includes(msgType);
+    if (isNeedTag) {
+      if (!tagMessageIds.has(context.message)) {
+        tagMessageIds.set(context.message, []);
+      }
+      message_id.forEach((id) => tagMessageIds.get(context.message)?.push(id));
+    }
+  } while (false);
+  return original_resp;
+}
+class ChosenInlineContext {
+  result_id;
+  inline_message_id;
+  query;
+  parse_mode = null;
+  telegraphAccessTokenKey;
+  constructor(result2) {
+    this.result_id = result2.result_id;
+    this.inline_message_id = result2.inline_message_id;
+    this.query = result2.query;
+    if (ENV.TELEGRAPH_NUM_LIMIT > 0) {
+      this.telegraphAccessTokenKey = `telegraph_access_token:${result2.from.id}`;
+    }
+  }
+}
+class ChosenInlineSender {
+  api;
+  context;
+  constructor(token, context) {
+    this.api = createTelegramBotAPI(token);
+    this.context = context;
+  }
+  static from(token, result2) {
+    return new ChosenInlineSender(token, new ChosenInlineContext(result2));
+  }
+  sendRichText(text, parseMode = ENV.DEFAULT_PARSE_MODE, type2 = "chat") {
+    return this.editMessageText(text, parseMode);
+  }
+  sendPlainText(text) {
+    return this.editMessageText(text);
+  }
+  editMessageText(text, parse_mode) {
+    return this.api.editMessageText({
+      inline_message_id: this.context.inline_message_id,
+      text: renderMessage(parse_mode || null, text)[0],
+      parse_mode,
+      link_preview_options: {
+        is_disabled: ENV.DISABLE_WEB_PREVIEW
+      }
+    });
+  }
+  editMessageMedia(media, type2, caption, parse_mode) {
+    return this.api.editMessageMedia({
+      inline_message_id: this.context.inline_message_id,
+      media: {
+        type: type2,
+        media,
+        ...caption ? { caption: renderMessage(parse_mode || null, caption)[0] } : {}
+      }
+    });
+  }
+}
+function renderMessage(parse_mode, message) {
+  const chunkMessage = chunkDocument(message);
+  if (parse_mode === "MarkdownV2") {
+    return chunkMessage.map((lines) => escape(lines));
+  }
+  return chunkMessage.map((line) => line.join("\n"));
+}
+async function loadChatRoleWithContext(message, context, isCallbackQuery = false) {
+  const { groupAdminsKey } = context.SHARE_CONTEXT;
+  const chatId = message.chat.id;
+  const speakerId = isCallbackQuery ? context?.from?.id : message.from?.id || chatId;
+  if (!groupAdminsKey) {
+    return null;
+  }
+  let groupAdmin = null;
+  try {
+    groupAdmin = JSON.parse(await ENV.DATABASE.get(groupAdminsKey));
+  } catch (e) {
+    console.error(e);
+  }
+  if (groupAdmin === null || !Array.isArray(groupAdmin) || groupAdmin.length === 0) {
+    const api = createTelegramBotAPI(context.SHARE_CONTEXT.botToken);
+    const result2 = await api.getChatAdministratorsWithReturns({ chat_id: chatId });
+    if (result2 == null) {
+      return null;
+    }
+    groupAdmin = result2.result;
+    await ENV.DATABASE.put(
+      groupAdminsKey,
+      JSON.stringify(groupAdmin),
+      { expiration: Date.now() / 1e3 + 120 }
+    );
+  }
+  for (const user of groupAdmin) {
+    if (`${user.user?.id}` === `${speakerId}`) {
+      return user.status;
+    }
+  }
+  return "member";
+}
 var marker$1 = "vercel.ai.error";
 var symbol$1 = Symbol.for(marker$1);
 var _a$1;
@@ -1682,63 +2800,6 @@ function convertUint8ArrayToBase64(array) {
 }
 function withoutTrailingSlash(url) {
   return url == null ? void 0 : url.replace(/\/$/, "");
-}
-const ignoreOverride = Symbol("Let zodToJsonSchema decide on which parser to use");
-const defaultOptions = {
-  name: void 0,
-  $refStrategy: "root",
-  basePath: ["#"],
-  effectStrategy: "input",
-  pipeStrategy: "all",
-  dateStrategy: "format:date-time",
-  mapStrategy: "entries",
-  removeAdditionalStrategy: "passthrough",
-  definitionPath: "definitions",
-  target: "jsonSchema7",
-  strictUnions: false,
-  definitions: {},
-  errorMessages: false,
-  markdownDescription: false,
-  patternStrategy: "escape",
-  applyRegexFlags: false,
-  emailStrategy: "format:email",
-  base64Strategy: "contentEncoding:base64",
-  nameStrategy: "ref"
-};
-const getDefaultOptions = (options2) => ({
-  ...defaultOptions,
-  ...options2
-});
-const getRefs = (options2) => {
-  const _options = getDefaultOptions(options2);
-  const currentPath = _options.name !== void 0 ? [..._options.basePath, _options.definitionPath, _options.name] : _options.basePath;
-  return {
-    ..._options,
-    currentPath,
-    propertyPath: void 0,
-    seen: new Map(Object.entries(_options.definitions).map(([name14, def]) => [
-      def._def,
-      {
-        def: def._def,
-        path: [..._options.basePath, _options.definitionPath, name14],
-        jsonSchema: void 0
-      }
-    ]))
-  };
-};
-function addErrorMessage(res, key, errorMessage, refs) {
-  if (!refs?.errorMessages)
-    return;
-  if (errorMessage) {
-    res.errorMessage = {
-      ...res.errorMessage,
-      [key]: errorMessage
-    };
-  }
-}
-function setResponseValueAndErrors(res, key, value, errorMessage, refs) {
-  res[key] = value;
-  addErrorMessage(res, key, errorMessage, refs);
 }
 var util;
 (function(util2) {
@@ -5652,6671 +6713,6 @@ var z = /* @__PURE__ */ Object.freeze({
   quotelessJson,
   ZodError
 });
-function parseAnyDef() {
-  return {};
-}
-function parseArrayDef(def, refs) {
-  const res = {
-    type: "array"
-  };
-  if (def.type?._def && def.type?._def?.typeName !== ZodFirstPartyTypeKind.ZodAny) {
-    res.items = parseDef(def.type._def, {
-      ...refs,
-      currentPath: [...refs.currentPath, "items"]
-    });
-  }
-  if (def.minLength) {
-    setResponseValueAndErrors(res, "minItems", def.minLength.value, def.minLength.message, refs);
-  }
-  if (def.maxLength) {
-    setResponseValueAndErrors(res, "maxItems", def.maxLength.value, def.maxLength.message, refs);
-  }
-  if (def.exactLength) {
-    setResponseValueAndErrors(res, "minItems", def.exactLength.value, def.exactLength.message, refs);
-    setResponseValueAndErrors(res, "maxItems", def.exactLength.value, def.exactLength.message, refs);
-  }
-  return res;
-}
-function parseBigintDef(def, refs) {
-  const res = {
-    type: "integer",
-    format: "int64"
-  };
-  if (!def.checks)
-    return res;
-  for (const check of def.checks) {
-    switch (check.kind) {
-      case "min":
-        if (refs.target === "jsonSchema7") {
-          if (check.inclusive) {
-            setResponseValueAndErrors(res, "minimum", check.value, check.message, refs);
-          } else {
-            setResponseValueAndErrors(res, "exclusiveMinimum", check.value, check.message, refs);
-          }
-        } else {
-          if (!check.inclusive) {
-            res.exclusiveMinimum = true;
-          }
-          setResponseValueAndErrors(res, "minimum", check.value, check.message, refs);
-        }
-        break;
-      case "max":
-        if (refs.target === "jsonSchema7") {
-          if (check.inclusive) {
-            setResponseValueAndErrors(res, "maximum", check.value, check.message, refs);
-          } else {
-            setResponseValueAndErrors(res, "exclusiveMaximum", check.value, check.message, refs);
-          }
-        } else {
-          if (!check.inclusive) {
-            res.exclusiveMaximum = true;
-          }
-          setResponseValueAndErrors(res, "maximum", check.value, check.message, refs);
-        }
-        break;
-      case "multipleOf":
-        setResponseValueAndErrors(res, "multipleOf", check.value, check.message, refs);
-        break;
-    }
-  }
-  return res;
-}
-function parseBooleanDef() {
-  return {
-    type: "boolean"
-  };
-}
-function parseBrandedDef(_def, refs) {
-  return parseDef(_def.type._def, refs);
-}
-const parseCatchDef = (def, refs) => {
-  return parseDef(def.innerType._def, refs);
-};
-function parseDateDef(def, refs, overrideDateStrategy) {
-  const strategy = overrideDateStrategy ?? refs.dateStrategy;
-  if (Array.isArray(strategy)) {
-    return {
-      anyOf: strategy.map((item, i) => parseDateDef(def, refs, item))
-    };
-  }
-  switch (strategy) {
-    case "string":
-    case "format:date-time":
-      return {
-        type: "string",
-        format: "date-time"
-      };
-    case "format:date":
-      return {
-        type: "string",
-        format: "date"
-      };
-    case "integer":
-      return integerDateParser(def, refs);
-  }
-}
-const integerDateParser = (def, refs) => {
-  const res = {
-    type: "integer",
-    format: "unix-time"
-  };
-  if (refs.target === "openApi3") {
-    return res;
-  }
-  for (const check of def.checks) {
-    switch (check.kind) {
-      case "min":
-        setResponseValueAndErrors(
-          res,
-          "minimum",
-          check.value,
-          check.message,
-          refs
-        );
-        break;
-      case "max":
-        setResponseValueAndErrors(
-          res,
-          "maximum",
-          check.value,
-          check.message,
-          refs
-        );
-        break;
-    }
-  }
-  return res;
-};
-function parseDefaultDef(_def, refs) {
-  return {
-    ...parseDef(_def.innerType._def, refs),
-    default: _def.defaultValue()
-  };
-}
-function parseEffectsDef(_def, refs) {
-  return refs.effectStrategy === "input" ? parseDef(_def.schema._def, refs) : {};
-}
-function parseEnumDef(def) {
-  return {
-    type: "string",
-    enum: def.values
-  };
-}
-const isJsonSchema7AllOfType = (type2) => {
-  if ("type" in type2 && type2.type === "string")
-    return false;
-  return "allOf" in type2;
-};
-function parseIntersectionDef(def, refs) {
-  const allOf = [
-    parseDef(def.left._def, {
-      ...refs,
-      currentPath: [...refs.currentPath, "allOf", "0"]
-    }),
-    parseDef(def.right._def, {
-      ...refs,
-      currentPath: [...refs.currentPath, "allOf", "1"]
-    })
-  ].filter((x) => !!x);
-  let unevaluatedProperties = refs.target === "jsonSchema2019-09" ? { unevaluatedProperties: false } : void 0;
-  const mergedAllOf = [];
-  allOf.forEach((schema2) => {
-    if (isJsonSchema7AllOfType(schema2)) {
-      mergedAllOf.push(...schema2.allOf);
-      if (schema2.unevaluatedProperties === void 0) {
-        unevaluatedProperties = void 0;
-      }
-    } else {
-      let nestedSchema = schema2;
-      if ("additionalProperties" in schema2 && schema2.additionalProperties === false) {
-        const { additionalProperties, ...rest } = schema2;
-        nestedSchema = rest;
-      } else {
-        unevaluatedProperties = void 0;
-      }
-      mergedAllOf.push(nestedSchema);
-    }
-  });
-  return mergedAllOf.length ? {
-    allOf: mergedAllOf,
-    ...unevaluatedProperties
-  } : void 0;
-}
-function parseLiteralDef(def, refs) {
-  const parsedType = typeof def.value;
-  if (parsedType !== "bigint" && parsedType !== "number" && parsedType !== "boolean" && parsedType !== "string") {
-    return {
-      type: Array.isArray(def.value) ? "array" : "object"
-    };
-  }
-  if (refs.target === "openApi3") {
-    return {
-      type: parsedType === "bigint" ? "integer" : parsedType,
-      enum: [def.value]
-    };
-  }
-  return {
-    type: parsedType === "bigint" ? "integer" : parsedType,
-    const: def.value
-  };
-}
-let emojiRegex;
-const zodPatterns = {
-  cuid: /^[cC][^\s-]{8,}$/,
-  cuid2: /^[0-9a-z]+$/,
-  ulid: /^[0-9A-HJKMNP-TV-Z]{26}$/,
-  email: /^(?!\.)(?!.*\.\.)([a-zA-Z0-9_'+\-\.]*)[a-zA-Z0-9_+-]@([a-zA-Z0-9][a-zA-Z0-9\-]*\.)+[a-zA-Z]{2,}$/,
-  emoji: () => {
-    if (emojiRegex === void 0) {
-      emojiRegex = RegExp("^(\\p{Extended_Pictographic}|\\p{Emoji_Component})+$", "u");
-    }
-    return emojiRegex;
-  },
-  uuid: /^[0-9a-fA-F]{8}\b-[0-9a-fA-F]{4}\b-[0-9a-fA-F]{4}\b-[0-9a-fA-F]{4}\b-[0-9a-fA-F]{12}$/,
-  ipv4: /^(?:(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\.){3}(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])$/,
-  ipv6: /^(([a-f0-9]{1,4}:){7}|::([a-f0-9]{1,4}:){0,6}|([a-f0-9]{1,4}:){1}:([a-f0-9]{1,4}:){0,5}|([a-f0-9]{1,4}:){2}:([a-f0-9]{1,4}:){0,4}|([a-f0-9]{1,4}:){3}:([a-f0-9]{1,4}:){0,3}|([a-f0-9]{1,4}:){4}:([a-f0-9]{1,4}:){0,2}|([a-f0-9]{1,4}:){5}:([a-f0-9]{1,4}:){0,1})([a-f0-9]{1,4}|(((25[0-5])|(2[0-4][0-9])|(1[0-9]{2})|([0-9]{1,2}))\.){3}((25[0-5])|(2[0-4][0-9])|(1[0-9]{2})|([0-9]{1,2})))$/,
-  base64: /^([0-9a-zA-Z+/]{4})*(([0-9a-zA-Z+/]{2}==)|([0-9a-zA-Z+/]{3}=))?$/,
-  nanoid: /^[a-zA-Z0-9_-]{21}$/
-};
-function parseStringDef(def, refs) {
-  const res = {
-    type: "string"
-  };
-  function processPattern(value) {
-    return refs.patternStrategy === "escape" ? escapeNonAlphaNumeric(value) : value;
-  }
-  if (def.checks) {
-    for (const check of def.checks) {
-      switch (check.kind) {
-        case "min":
-          setResponseValueAndErrors(res, "minLength", typeof res.minLength === "number" ? Math.max(res.minLength, check.value) : check.value, check.message, refs);
-          break;
-        case "max":
-          setResponseValueAndErrors(res, "maxLength", typeof res.maxLength === "number" ? Math.min(res.maxLength, check.value) : check.value, check.message, refs);
-          break;
-        case "email":
-          switch (refs.emailStrategy) {
-            case "format:email":
-              addFormat(res, "email", check.message, refs);
-              break;
-            case "format:idn-email":
-              addFormat(res, "idn-email", check.message, refs);
-              break;
-            case "pattern:zod":
-              addPattern(res, zodPatterns.email, check.message, refs);
-              break;
-          }
-          break;
-        case "url":
-          addFormat(res, "uri", check.message, refs);
-          break;
-        case "uuid":
-          addFormat(res, "uuid", check.message, refs);
-          break;
-        case "regex":
-          addPattern(res, check.regex, check.message, refs);
-          break;
-        case "cuid":
-          addPattern(res, zodPatterns.cuid, check.message, refs);
-          break;
-        case "cuid2":
-          addPattern(res, zodPatterns.cuid2, check.message, refs);
-          break;
-        case "startsWith":
-          addPattern(res, RegExp(`^${processPattern(check.value)}`), check.message, refs);
-          break;
-        case "endsWith":
-          addPattern(res, RegExp(`${processPattern(check.value)}$`), check.message, refs);
-          break;
-        case "datetime":
-          addFormat(res, "date-time", check.message, refs);
-          break;
-        case "date":
-          addFormat(res, "date", check.message, refs);
-          break;
-        case "time":
-          addFormat(res, "time", check.message, refs);
-          break;
-        case "duration":
-          addFormat(res, "duration", check.message, refs);
-          break;
-        case "length":
-          setResponseValueAndErrors(res, "minLength", typeof res.minLength === "number" ? Math.max(res.minLength, check.value) : check.value, check.message, refs);
-          setResponseValueAndErrors(res, "maxLength", typeof res.maxLength === "number" ? Math.min(res.maxLength, check.value) : check.value, check.message, refs);
-          break;
-        case "includes": {
-          addPattern(res, RegExp(processPattern(check.value)), check.message, refs);
-          break;
-        }
-        case "ip": {
-          if (check.version !== "v6") {
-            addFormat(res, "ipv4", check.message, refs);
-          }
-          if (check.version !== "v4") {
-            addFormat(res, "ipv6", check.message, refs);
-          }
-          break;
-        }
-        case "emoji":
-          addPattern(res, zodPatterns.emoji, check.message, refs);
-          break;
-        case "ulid": {
-          addPattern(res, zodPatterns.ulid, check.message, refs);
-          break;
-        }
-        case "base64": {
-          switch (refs.base64Strategy) {
-            case "format:binary": {
-              addFormat(res, "binary", check.message, refs);
-              break;
-            }
-            case "contentEncoding:base64": {
-              setResponseValueAndErrors(res, "contentEncoding", "base64", check.message, refs);
-              break;
-            }
-            case "pattern:zod": {
-              addPattern(res, zodPatterns.base64, check.message, refs);
-              break;
-            }
-          }
-          break;
-        }
-        case "nanoid": {
-          addPattern(res, zodPatterns.nanoid, check.message, refs);
-        }
-      }
-    }
-  }
-  return res;
-}
-const escapeNonAlphaNumeric = (value) => Array.from(value).map((c) => /[a-zA-Z0-9]/.test(c) ? c : `\\${c}`).join("");
-const addFormat = (schema2, value, message, refs) => {
-  if (schema2.format || schema2.anyOf?.some((x) => x.format)) {
-    if (!schema2.anyOf) {
-      schema2.anyOf = [];
-    }
-    if (schema2.format) {
-      schema2.anyOf.push({
-        format: schema2.format,
-        ...schema2.errorMessage && refs.errorMessages && {
-          errorMessage: { format: schema2.errorMessage.format }
-        }
-      });
-      delete schema2.format;
-      if (schema2.errorMessage) {
-        delete schema2.errorMessage.format;
-        if (Object.keys(schema2.errorMessage).length === 0) {
-          delete schema2.errorMessage;
-        }
-      }
-    }
-    schema2.anyOf.push({
-      format: value,
-      ...message && refs.errorMessages && { errorMessage: { format: message } }
-    });
-  } else {
-    setResponseValueAndErrors(schema2, "format", value, message, refs);
-  }
-};
-const addPattern = (schema2, regex, message, refs) => {
-  if (schema2.pattern || schema2.allOf?.some((x) => x.pattern)) {
-    if (!schema2.allOf) {
-      schema2.allOf = [];
-    }
-    if (schema2.pattern) {
-      schema2.allOf.push({
-        pattern: schema2.pattern,
-        ...schema2.errorMessage && refs.errorMessages && {
-          errorMessage: { pattern: schema2.errorMessage.pattern }
-        }
-      });
-      delete schema2.pattern;
-      if (schema2.errorMessage) {
-        delete schema2.errorMessage.pattern;
-        if (Object.keys(schema2.errorMessage).length === 0) {
-          delete schema2.errorMessage;
-        }
-      }
-    }
-    schema2.allOf.push({
-      pattern: processRegExp(regex, refs),
-      ...message && refs.errorMessages && { errorMessage: { pattern: message } }
-    });
-  } else {
-    setResponseValueAndErrors(schema2, "pattern", processRegExp(regex, refs), message, refs);
-  }
-};
-const processRegExp = (regexOrFunction, refs) => {
-  const regex = typeof regexOrFunction === "function" ? regexOrFunction() : regexOrFunction;
-  if (!refs.applyRegexFlags || !regex.flags)
-    return regex.source;
-  const flags = {
-    i: regex.flags.includes("i"),
-    m: regex.flags.includes("m"),
-    s: regex.flags.includes("s")
-  };
-  const source = flags.i ? regex.source.toLowerCase() : regex.source;
-  let pattern = "";
-  let isEscaped = false;
-  let inCharGroup = false;
-  let inCharRange = false;
-  for (let i = 0; i < source.length; i++) {
-    if (isEscaped) {
-      pattern += source[i];
-      isEscaped = false;
-      continue;
-    }
-    if (flags.i) {
-      if (inCharGroup) {
-        if (source[i].match(/[a-z]/)) {
-          if (inCharRange) {
-            pattern += source[i];
-            pattern += `${source[i - 2]}-${source[i]}`.toUpperCase();
-            inCharRange = false;
-          } else if (source[i + 1] === "-" && source[i + 2]?.match(/[a-z]/)) {
-            pattern += source[i];
-            inCharRange = true;
-          } else {
-            pattern += `${source[i]}${source[i].toUpperCase()}`;
-          }
-          continue;
-        }
-      } else if (source[i].match(/[a-z]/)) {
-        pattern += `[${source[i]}${source[i].toUpperCase()}]`;
-        continue;
-      }
-    }
-    if (flags.m) {
-      if (source[i] === "^") {
-        pattern += `(^|(?<=[\r
-]))`;
-        continue;
-      } else if (source[i] === "$") {
-        pattern += `($|(?=[\r
-]))`;
-        continue;
-      }
-    }
-    if (flags.s && source[i] === ".") {
-      pattern += inCharGroup ? `${source[i]}\r
-` : `[${source[i]}\r
-]`;
-      continue;
-    }
-    pattern += source[i];
-    if (source[i] === "\\") {
-      isEscaped = true;
-    } else if (inCharGroup && source[i] === "]") {
-      inCharGroup = false;
-    } else if (!inCharGroup && source[i] === "[") {
-      inCharGroup = true;
-    }
-  }
-  try {
-    const regexTest = new RegExp(pattern);
-  } catch {
-    console.warn(`Could not convert regex pattern at ${refs.currentPath.join("/")} to a flag-independent form! Falling back to the flag-ignorant source`);
-    return regex.source;
-  }
-  return pattern;
-};
-function parseRecordDef(def, refs) {
-  if (refs.target === "openApi3" && def.keyType?._def.typeName === ZodFirstPartyTypeKind.ZodEnum) {
-    return {
-      type: "object",
-      required: def.keyType._def.values,
-      properties: def.keyType._def.values.reduce((acc, key) => ({
-        ...acc,
-        [key]: parseDef(def.valueType._def, {
-          ...refs,
-          currentPath: [...refs.currentPath, "properties", key]
-        }) ?? {}
-      }), {}),
-      additionalProperties: false
-    };
-  }
-  const schema2 = {
-    type: "object",
-    additionalProperties: parseDef(def.valueType._def, {
-      ...refs,
-      currentPath: [...refs.currentPath, "additionalProperties"]
-    }) ?? {}
-  };
-  if (refs.target === "openApi3") {
-    return schema2;
-  }
-  if (def.keyType?._def.typeName === ZodFirstPartyTypeKind.ZodString && def.keyType._def.checks?.length) {
-    const { type: type2, ...keyType } = parseStringDef(def.keyType._def, refs);
-    return {
-      ...schema2,
-      propertyNames: keyType
-    };
-  } else if (def.keyType?._def.typeName === ZodFirstPartyTypeKind.ZodEnum) {
-    return {
-      ...schema2,
-      propertyNames: {
-        enum: def.keyType._def.values
-      }
-    };
-  } else if (def.keyType?._def.typeName === ZodFirstPartyTypeKind.ZodBranded && def.keyType._def.type._def.typeName === ZodFirstPartyTypeKind.ZodString && def.keyType._def.type._def.checks?.length) {
-    const { type: type2, ...keyType } = parseBrandedDef(def.keyType._def, refs);
-    return {
-      ...schema2,
-      propertyNames: keyType
-    };
-  }
-  return schema2;
-}
-function parseMapDef(def, refs) {
-  if (refs.mapStrategy === "record") {
-    return parseRecordDef(def, refs);
-  }
-  const keys = parseDef(def.keyType._def, {
-    ...refs,
-    currentPath: [...refs.currentPath, "items", "items", "0"]
-  }) || {};
-  const values = parseDef(def.valueType._def, {
-    ...refs,
-    currentPath: [...refs.currentPath, "items", "items", "1"]
-  }) || {};
-  return {
-    type: "array",
-    maxItems: 125,
-    items: {
-      type: "array",
-      items: [keys, values],
-      minItems: 2,
-      maxItems: 2
-    }
-  };
-}
-function parseNativeEnumDef(def) {
-  const object = def.values;
-  const actualKeys = Object.keys(def.values).filter((key) => {
-    return typeof object[object[key]] !== "number";
-  });
-  const actualValues = actualKeys.map((key) => object[key]);
-  const parsedTypes = Array.from(new Set(actualValues.map((values) => typeof values)));
-  return {
-    type: parsedTypes.length === 1 ? parsedTypes[0] === "string" ? "string" : "number" : ["string", "number"],
-    enum: actualValues
-  };
-}
-function parseNeverDef() {
-  return {
-    not: {}
-  };
-}
-function parseNullDef(refs) {
-  return refs.target === "openApi3" ? {
-    enum: ["null"],
-    nullable: true
-  } : {
-    type: "null"
-  };
-}
-const primitiveMappings = {
-  ZodString: "string",
-  ZodNumber: "number",
-  ZodBigInt: "integer",
-  ZodBoolean: "boolean",
-  ZodNull: "null"
-};
-function parseUnionDef(def, refs) {
-  if (refs.target === "openApi3")
-    return asAnyOf(def, refs);
-  const options2 = def.options instanceof Map ? Array.from(def.options.values()) : def.options;
-  if (options2.every((x) => x._def.typeName in primitiveMappings && (!x._def.checks || !x._def.checks.length))) {
-    const types = options2.reduce((types2, x) => {
-      const type2 = primitiveMappings[x._def.typeName];
-      return type2 && !types2.includes(type2) ? [...types2, type2] : types2;
-    }, []);
-    return {
-      type: types.length > 1 ? types : types[0]
-    };
-  } else if (options2.every((x) => x._def.typeName === "ZodLiteral" && !x.description)) {
-    const types = options2.reduce((acc, x) => {
-      const type2 = typeof x._def.value;
-      switch (type2) {
-        case "string":
-        case "number":
-        case "boolean":
-          return [...acc, type2];
-        case "bigint":
-          return [...acc, "integer"];
-        case "object":
-          if (x._def.value === null)
-            return [...acc, "null"];
-        case "symbol":
-        case "undefined":
-        case "function":
-        default:
-          return acc;
-      }
-    }, []);
-    if (types.length === options2.length) {
-      const uniqueTypes = types.filter((x, i, a) => a.indexOf(x) === i);
-      return {
-        type: uniqueTypes.length > 1 ? uniqueTypes : uniqueTypes[0],
-        enum: options2.reduce((acc, x) => {
-          return acc.includes(x._def.value) ? acc : [...acc, x._def.value];
-        }, [])
-      };
-    }
-  } else if (options2.every((x) => x._def.typeName === "ZodEnum")) {
-    return {
-      type: "string",
-      enum: options2.reduce((acc, x) => [
-        ...acc,
-        ...x._def.values.filter((x2) => !acc.includes(x2))
-      ], [])
-    };
-  }
-  return asAnyOf(def, refs);
-}
-const asAnyOf = (def, refs) => {
-  const anyOf = (def.options instanceof Map ? Array.from(def.options.values()) : def.options).map((x, i) => parseDef(x._def, {
-    ...refs,
-    currentPath: [...refs.currentPath, "anyOf", `${i}`]
-  })).filter((x) => !!x && (!refs.strictUnions || typeof x === "object" && Object.keys(x).length > 0));
-  return anyOf.length ? { anyOf } : void 0;
-};
-function parseNullableDef(def, refs) {
-  if (["ZodString", "ZodNumber", "ZodBigInt", "ZodBoolean", "ZodNull"].includes(def.innerType._def.typeName) && (!def.innerType._def.checks || !def.innerType._def.checks.length)) {
-    if (refs.target === "openApi3") {
-      return {
-        type: primitiveMappings[def.innerType._def.typeName],
-        nullable: true
-      };
-    }
-    return {
-      type: [
-        primitiveMappings[def.innerType._def.typeName],
-        "null"
-      ]
-    };
-  }
-  if (refs.target === "openApi3") {
-    const base2 = parseDef(def.innerType._def, {
-      ...refs,
-      currentPath: [...refs.currentPath]
-    });
-    if (base2 && "$ref" in base2)
-      return { allOf: [base2], nullable: true };
-    return base2 && { ...base2, nullable: true };
-  }
-  const base = parseDef(def.innerType._def, {
-    ...refs,
-    currentPath: [...refs.currentPath, "anyOf", "0"]
-  });
-  return base && { anyOf: [base, { type: "null" }] };
-}
-function parseNumberDef(def, refs) {
-  const res = {
-    type: "number"
-  };
-  if (!def.checks)
-    return res;
-  for (const check of def.checks) {
-    switch (check.kind) {
-      case "int":
-        res.type = "integer";
-        addErrorMessage(res, "type", check.message, refs);
-        break;
-      case "min":
-        if (refs.target === "jsonSchema7") {
-          if (check.inclusive) {
-            setResponseValueAndErrors(res, "minimum", check.value, check.message, refs);
-          } else {
-            setResponseValueAndErrors(res, "exclusiveMinimum", check.value, check.message, refs);
-          }
-        } else {
-          if (!check.inclusive) {
-            res.exclusiveMinimum = true;
-          }
-          setResponseValueAndErrors(res, "minimum", check.value, check.message, refs);
-        }
-        break;
-      case "max":
-        if (refs.target === "jsonSchema7") {
-          if (check.inclusive) {
-            setResponseValueAndErrors(res, "maximum", check.value, check.message, refs);
-          } else {
-            setResponseValueAndErrors(res, "exclusiveMaximum", check.value, check.message, refs);
-          }
-        } else {
-          if (!check.inclusive) {
-            res.exclusiveMaximum = true;
-          }
-          setResponseValueAndErrors(res, "maximum", check.value, check.message, refs);
-        }
-        break;
-      case "multipleOf":
-        setResponseValueAndErrors(res, "multipleOf", check.value, check.message, refs);
-        break;
-    }
-  }
-  return res;
-}
-function decideAdditionalProperties(def, refs) {
-  if (refs.removeAdditionalStrategy === "strict") {
-    return def.catchall._def.typeName === "ZodNever" ? def.unknownKeys !== "strict" : parseDef(def.catchall._def, {
-      ...refs,
-      currentPath: [...refs.currentPath, "additionalProperties"]
-    }) ?? true;
-  } else {
-    return def.catchall._def.typeName === "ZodNever" ? def.unknownKeys === "passthrough" : parseDef(def.catchall._def, {
-      ...refs,
-      currentPath: [...refs.currentPath, "additionalProperties"]
-    }) ?? true;
-  }
-}
-function parseObjectDef(def, refs) {
-  const result2 = {
-    type: "object",
-    ...Object.entries(def.shape()).reduce((acc, [propName, propDef]) => {
-      if (propDef === void 0 || propDef._def === void 0)
-        return acc;
-      const parsedDef = parseDef(propDef._def, {
-        ...refs,
-        currentPath: [...refs.currentPath, "properties", propName],
-        propertyPath: [...refs.currentPath, "properties", propName]
-      });
-      if (parsedDef === void 0)
-        return acc;
-      return {
-        properties: { ...acc.properties, [propName]: parsedDef },
-        required: propDef.isOptional() ? acc.required : [...acc.required, propName]
-      };
-    }, { properties: {}, required: [] }),
-    additionalProperties: decideAdditionalProperties(def, refs)
-  };
-  if (!result2.required.length)
-    delete result2.required;
-  return result2;
-}
-const parseOptionalDef = (def, refs) => {
-  if (refs.currentPath.toString() === refs.propertyPath?.toString()) {
-    return parseDef(def.innerType._def, refs);
-  }
-  const innerSchema = parseDef(def.innerType._def, {
-    ...refs,
-    currentPath: [...refs.currentPath, "anyOf", "1"]
-  });
-  return innerSchema ? {
-    anyOf: [
-      {
-        not: {}
-      },
-      innerSchema
-    ]
-  } : {};
-};
-const parsePipelineDef = (def, refs) => {
-  if (refs.pipeStrategy === "input") {
-    return parseDef(def.in._def, refs);
-  } else if (refs.pipeStrategy === "output") {
-    return parseDef(def.out._def, refs);
-  }
-  const a = parseDef(def.in._def, {
-    ...refs,
-    currentPath: [...refs.currentPath, "allOf", "0"]
-  });
-  const b = parseDef(def.out._def, {
-    ...refs,
-    currentPath: [...refs.currentPath, "allOf", a ? "1" : "0"]
-  });
-  return {
-    allOf: [a, b].filter((x) => x !== void 0)
-  };
-};
-function parsePromiseDef(def, refs) {
-  return parseDef(def.type._def, refs);
-}
-function parseSetDef(def, refs) {
-  const items = parseDef(def.valueType._def, {
-    ...refs,
-    currentPath: [...refs.currentPath, "items"]
-  });
-  const schema2 = {
-    type: "array",
-    uniqueItems: true,
-    items
-  };
-  if (def.minSize) {
-    setResponseValueAndErrors(schema2, "minItems", def.minSize.value, def.minSize.message, refs);
-  }
-  if (def.maxSize) {
-    setResponseValueAndErrors(schema2, "maxItems", def.maxSize.value, def.maxSize.message, refs);
-  }
-  return schema2;
-}
-function parseTupleDef(def, refs) {
-  if (def.rest) {
-    return {
-      type: "array",
-      minItems: def.items.length,
-      items: def.items.map((x, i) => parseDef(x._def, {
-        ...refs,
-        currentPath: [...refs.currentPath, "items", `${i}`]
-      })).reduce((acc, x) => x === void 0 ? acc : [...acc, x], []),
-      additionalItems: parseDef(def.rest._def, {
-        ...refs,
-        currentPath: [...refs.currentPath, "additionalItems"]
-      })
-    };
-  } else {
-    return {
-      type: "array",
-      minItems: def.items.length,
-      maxItems: def.items.length,
-      items: def.items.map((x, i) => parseDef(x._def, {
-        ...refs,
-        currentPath: [...refs.currentPath, "items", `${i}`]
-      })).reduce((acc, x) => x === void 0 ? acc : [...acc, x], [])
-    };
-  }
-}
-function parseUndefinedDef() {
-  return {
-    not: {}
-  };
-}
-function parseUnknownDef() {
-  return {};
-}
-const parseReadonlyDef = (def, refs) => {
-  return parseDef(def.innerType._def, refs);
-};
-function parseDef(def, refs, forceResolution = false) {
-  const seenItem = refs.seen.get(def);
-  if (refs.override) {
-    const overrideResult = refs.override?.(def, refs, seenItem, forceResolution);
-    if (overrideResult !== ignoreOverride) {
-      return overrideResult;
-    }
-  }
-  if (seenItem && !forceResolution) {
-    const seenSchema = get$ref(seenItem, refs);
-    if (seenSchema !== void 0) {
-      return seenSchema;
-    }
-  }
-  const newItem = { def, path: refs.currentPath, jsonSchema: void 0 };
-  refs.seen.set(def, newItem);
-  const jsonSchema2 = selectParser(def, def.typeName, refs);
-  if (jsonSchema2) {
-    addMeta(def, refs, jsonSchema2);
-  }
-  newItem.jsonSchema = jsonSchema2;
-  return jsonSchema2;
-}
-const get$ref = (item, refs) => {
-  switch (refs.$refStrategy) {
-    case "root":
-      return { $ref: item.path.join("/") };
-    case "relative":
-      return { $ref: getRelativePath(refs.currentPath, item.path) };
-    case "none":
-    case "seen": {
-      if (item.path.length < refs.currentPath.length && item.path.every((value, index2) => refs.currentPath[index2] === value)) {
-        console.warn(`Recursive reference detected at ${refs.currentPath.join("/")}! Defaulting to any`);
-        return {};
-      }
-      return refs.$refStrategy === "seen" ? {} : void 0;
-    }
-  }
-};
-const getRelativePath = (pathA, pathB) => {
-  let i = 0;
-  for (; i < pathA.length && i < pathB.length; i++) {
-    if (pathA[i] !== pathB[i])
-      break;
-  }
-  return [(pathA.length - i).toString(), ...pathB.slice(i)].join("/");
-};
-const selectParser = (def, typeName, refs) => {
-  switch (typeName) {
-    case ZodFirstPartyTypeKind.ZodString:
-      return parseStringDef(def, refs);
-    case ZodFirstPartyTypeKind.ZodNumber:
-      return parseNumberDef(def, refs);
-    case ZodFirstPartyTypeKind.ZodObject:
-      return parseObjectDef(def, refs);
-    case ZodFirstPartyTypeKind.ZodBigInt:
-      return parseBigintDef(def, refs);
-    case ZodFirstPartyTypeKind.ZodBoolean:
-      return parseBooleanDef();
-    case ZodFirstPartyTypeKind.ZodDate:
-      return parseDateDef(def, refs);
-    case ZodFirstPartyTypeKind.ZodUndefined:
-      return parseUndefinedDef();
-    case ZodFirstPartyTypeKind.ZodNull:
-      return parseNullDef(refs);
-    case ZodFirstPartyTypeKind.ZodArray:
-      return parseArrayDef(def, refs);
-    case ZodFirstPartyTypeKind.ZodUnion:
-    case ZodFirstPartyTypeKind.ZodDiscriminatedUnion:
-      return parseUnionDef(def, refs);
-    case ZodFirstPartyTypeKind.ZodIntersection:
-      return parseIntersectionDef(def, refs);
-    case ZodFirstPartyTypeKind.ZodTuple:
-      return parseTupleDef(def, refs);
-    case ZodFirstPartyTypeKind.ZodRecord:
-      return parseRecordDef(def, refs);
-    case ZodFirstPartyTypeKind.ZodLiteral:
-      return parseLiteralDef(def, refs);
-    case ZodFirstPartyTypeKind.ZodEnum:
-      return parseEnumDef(def);
-    case ZodFirstPartyTypeKind.ZodNativeEnum:
-      return parseNativeEnumDef(def);
-    case ZodFirstPartyTypeKind.ZodNullable:
-      return parseNullableDef(def, refs);
-    case ZodFirstPartyTypeKind.ZodOptional:
-      return parseOptionalDef(def, refs);
-    case ZodFirstPartyTypeKind.ZodMap:
-      return parseMapDef(def, refs);
-    case ZodFirstPartyTypeKind.ZodSet:
-      return parseSetDef(def, refs);
-    case ZodFirstPartyTypeKind.ZodLazy:
-      return parseDef(def.getter()._def, refs);
-    case ZodFirstPartyTypeKind.ZodPromise:
-      return parsePromiseDef(def, refs);
-    case ZodFirstPartyTypeKind.ZodNaN:
-    case ZodFirstPartyTypeKind.ZodNever:
-      return parseNeverDef();
-    case ZodFirstPartyTypeKind.ZodEffects:
-      return parseEffectsDef(def, refs);
-    case ZodFirstPartyTypeKind.ZodAny:
-      return parseAnyDef();
-    case ZodFirstPartyTypeKind.ZodUnknown:
-      return parseUnknownDef();
-    case ZodFirstPartyTypeKind.ZodDefault:
-      return parseDefaultDef(def, refs);
-    case ZodFirstPartyTypeKind.ZodBranded:
-      return parseBrandedDef(def, refs);
-    case ZodFirstPartyTypeKind.ZodReadonly:
-      return parseReadonlyDef(def, refs);
-    case ZodFirstPartyTypeKind.ZodCatch:
-      return parseCatchDef(def, refs);
-    case ZodFirstPartyTypeKind.ZodPipeline:
-      return parsePipelineDef(def, refs);
-    case ZodFirstPartyTypeKind.ZodFunction:
-    case ZodFirstPartyTypeKind.ZodVoid:
-    case ZodFirstPartyTypeKind.ZodSymbol:
-      return void 0;
-    default:
-      return /* @__PURE__ */ ((_) => void 0)();
-  }
-};
-const addMeta = (def, refs, jsonSchema2) => {
-  if (def.description) {
-    jsonSchema2.description = def.description;
-    if (refs.markdownDescription) {
-      jsonSchema2.markdownDescription = def.description;
-    }
-  }
-  return jsonSchema2;
-};
-const zodToJsonSchema = (schema2, options2) => {
-  const refs = getRefs(options2);
-  const definitions = void 0;
-  const name14 = options2?.name;
-  const main = parseDef(
-    schema2._def,
-    refs,
-    false
-  ) ?? {};
-  const combined = name14 === void 0 ? definitions ? {
-    ...main,
-    [refs.definitionPath]: definitions
-  } : main : {
-    $ref: [
-      ...refs.$refStrategy === "relative" ? [] : refs.basePath,
-      refs.definitionPath,
-      name14
-    ].join("/"),
-    [refs.definitionPath]: {
-      ...definitions,
-      [name14]: main
-    }
-  };
-  if (refs.target === "jsonSchema7") {
-    combined.$schema = "http://json-schema.org/draft-07/schema#";
-  } else if (refs.target === "jsonSchema2019-09") {
-    combined.$schema = "https://json-schema.org/draft/2019-09/schema#";
-  }
-  return combined;
-};
-var textStreamPart = {
-  code: "0",
-  name: "text",
-  parse: (value) => {
-    if (typeof value !== "string") {
-      throw new Error('"text" parts expect a string value.');
-    }
-    return { type: "text", value };
-  }
-};
-var functionCallStreamPart = {
-  code: "1",
-  name: "function_call",
-  parse: (value) => {
-    if (value == null || typeof value !== "object" || !("function_call" in value) || typeof value.function_call !== "object" || value.function_call == null || !("name" in value.function_call) || !("arguments" in value.function_call) || typeof value.function_call.name !== "string" || typeof value.function_call.arguments !== "string") {
-      throw new Error(
-        '"function_call" parts expect an object with a "function_call" property.'
-      );
-    }
-    return {
-      type: "function_call",
-      value
-    };
-  }
-};
-var dataStreamPart = {
-  code: "2",
-  name: "data",
-  parse: (value) => {
-    if (!Array.isArray(value)) {
-      throw new Error('"data" parts expect an array value.');
-    }
-    return { type: "data", value };
-  }
-};
-var errorStreamPart = {
-  code: "3",
-  name: "error",
-  parse: (value) => {
-    if (typeof value !== "string") {
-      throw new Error('"error" parts expect a string value.');
-    }
-    return { type: "error", value };
-  }
-};
-var assistantMessageStreamPart = {
-  code: "4",
-  name: "assistant_message",
-  parse: (value) => {
-    if (value == null || typeof value !== "object" || !("id" in value) || !("role" in value) || !("content" in value) || typeof value.id !== "string" || typeof value.role !== "string" || value.role !== "assistant" || !Array.isArray(value.content) || !value.content.every(
-      (item) => item != null && typeof item === "object" && "type" in item && item.type === "text" && "text" in item && item.text != null && typeof item.text === "object" && "value" in item.text && typeof item.text.value === "string"
-    )) {
-      throw new Error(
-        '"assistant_message" parts expect an object with an "id", "role", and "content" property.'
-      );
-    }
-    return {
-      type: "assistant_message",
-      value
-    };
-  }
-};
-var assistantControlDataStreamPart = {
-  code: "5",
-  name: "assistant_control_data",
-  parse: (value) => {
-    if (value == null || typeof value !== "object" || !("threadId" in value) || !("messageId" in value) || typeof value.threadId !== "string" || typeof value.messageId !== "string") {
-      throw new Error(
-        '"assistant_control_data" parts expect an object with a "threadId" and "messageId" property.'
-      );
-    }
-    return {
-      type: "assistant_control_data",
-      value: {
-        threadId: value.threadId,
-        messageId: value.messageId
-      }
-    };
-  }
-};
-var dataMessageStreamPart = {
-  code: "6",
-  name: "data_message",
-  parse: (value) => {
-    if (value == null || typeof value !== "object" || !("role" in value) || !("data" in value) || typeof value.role !== "string" || value.role !== "data") {
-      throw new Error(
-        '"data_message" parts expect an object with a "role" and "data" property.'
-      );
-    }
-    return {
-      type: "data_message",
-      value
-    };
-  }
-};
-var toolCallsStreamPart = {
-  code: "7",
-  name: "tool_calls",
-  parse: (value) => {
-    if (value == null || typeof value !== "object" || !("tool_calls" in value) || typeof value.tool_calls !== "object" || value.tool_calls == null || !Array.isArray(value.tool_calls) || value.tool_calls.some(
-      (tc) => tc == null || typeof tc !== "object" || !("id" in tc) || typeof tc.id !== "string" || !("type" in tc) || typeof tc.type !== "string" || !("function" in tc) || tc.function == null || typeof tc.function !== "object" || !("arguments" in tc.function) || typeof tc.function.name !== "string" || typeof tc.function.arguments !== "string"
-    )) {
-      throw new Error(
-        '"tool_calls" parts expect an object with a ToolCallPayload.'
-      );
-    }
-    return {
-      type: "tool_calls",
-      value
-    };
-  }
-};
-var messageAnnotationsStreamPart = {
-  code: "8",
-  name: "message_annotations",
-  parse: (value) => {
-    if (!Array.isArray(value)) {
-      throw new Error('"message_annotations" parts expect an array value.');
-    }
-    return { type: "message_annotations", value };
-  }
-};
-var toolCallStreamPart = {
-  code: "9",
-  name: "tool_call",
-  parse: (value) => {
-    if (value == null || typeof value !== "object" || !("toolCallId" in value) || typeof value.toolCallId !== "string" || !("toolName" in value) || typeof value.toolName !== "string" || !("args" in value) || typeof value.args !== "object") {
-      throw new Error(
-        '"tool_call" parts expect an object with a "toolCallId", "toolName", and "args" property.'
-      );
-    }
-    return {
-      type: "tool_call",
-      value
-    };
-  }
-};
-var toolResultStreamPart = {
-  code: "a",
-  name: "tool_result",
-  parse: (value) => {
-    if (value == null || typeof value !== "object" || !("toolCallId" in value) || typeof value.toolCallId !== "string" || !("result" in value)) {
-      throw new Error(
-        '"tool_result" parts expect an object with a "toolCallId" and a "result" property.'
-      );
-    }
-    return {
-      type: "tool_result",
-      value
-    };
-  }
-};
-var toolCallStreamingStartStreamPart = {
-  code: "b",
-  name: "tool_call_streaming_start",
-  parse: (value) => {
-    if (value == null || typeof value !== "object" || !("toolCallId" in value) || typeof value.toolCallId !== "string" || !("toolName" in value) || typeof value.toolName !== "string") {
-      throw new Error(
-        '"tool_call_streaming_start" parts expect an object with a "toolCallId" and "toolName" property.'
-      );
-    }
-    return {
-      type: "tool_call_streaming_start",
-      value
-    };
-  }
-};
-var toolCallDeltaStreamPart = {
-  code: "c",
-  name: "tool_call_delta",
-  parse: (value) => {
-    if (value == null || typeof value !== "object" || !("toolCallId" in value) || typeof value.toolCallId !== "string" || !("argsTextDelta" in value) || typeof value.argsTextDelta !== "string") {
-      throw new Error(
-        '"tool_call_delta" parts expect an object with a "toolCallId" and "argsTextDelta" property.'
-      );
-    }
-    return {
-      type: "tool_call_delta",
-      value
-    };
-  }
-};
-var finishMessageStreamPart = {
-  code: "d",
-  name: "finish_message",
-  parse: (value) => {
-    if (value == null || typeof value !== "object" || !("finishReason" in value) || typeof value.finishReason !== "string") {
-      throw new Error(
-        '"finish_message" parts expect an object with a "finishReason" property.'
-      );
-    }
-    const result2 = {
-      finishReason: value.finishReason
-    };
-    if ("usage" in value && value.usage != null && typeof value.usage === "object" && "promptTokens" in value.usage && "completionTokens" in value.usage) {
-      result2.usage = {
-        promptTokens: typeof value.usage.promptTokens === "number" ? value.usage.promptTokens : Number.NaN,
-        completionTokens: typeof value.usage.completionTokens === "number" ? value.usage.completionTokens : Number.NaN
-      };
-    }
-    return {
-      type: "finish_message",
-      value: result2
-    };
-  }
-};
-var finishStepStreamPart = {
-  code: "e",
-  name: "finish_step",
-  parse: (value) => {
-    if (value == null || typeof value !== "object" || !("finishReason" in value) || typeof value.finishReason !== "string") {
-      throw new Error(
-        '"finish_step" parts expect an object with a "finishReason" property.'
-      );
-    }
-    const result2 = {
-      finishReason: value.finishReason,
-      isContinued: false
-    };
-    if ("usage" in value && value.usage != null && typeof value.usage === "object" && "promptTokens" in value.usage && "completionTokens" in value.usage) {
-      result2.usage = {
-        promptTokens: typeof value.usage.promptTokens === "number" ? value.usage.promptTokens : Number.NaN,
-        completionTokens: typeof value.usage.completionTokens === "number" ? value.usage.completionTokens : Number.NaN
-      };
-    }
-    if ("isContinued" in value && typeof value.isContinued === "boolean") {
-      result2.isContinued = value.isContinued;
-    }
-    return {
-      type: "finish_step",
-      value: result2
-    };
-  }
-};
-var streamParts = [
-  textStreamPart,
-  functionCallStreamPart,
-  dataStreamPart,
-  errorStreamPart,
-  assistantMessageStreamPart,
-  assistantControlDataStreamPart,
-  dataMessageStreamPart,
-  toolCallsStreamPart,
-  messageAnnotationsStreamPart,
-  toolCallStreamPart,
-  toolResultStreamPart,
-  toolCallStreamingStartStreamPart,
-  toolCallDeltaStreamPart,
-  finishMessageStreamPart,
-  finishStepStreamPart
-];
-({
-  [textStreamPart.code]: textStreamPart,
-  [functionCallStreamPart.code]: functionCallStreamPart,
-  [dataStreamPart.code]: dataStreamPart,
-  [errorStreamPart.code]: errorStreamPart,
-  [assistantMessageStreamPart.code]: assistantMessageStreamPart,
-  [assistantControlDataStreamPart.code]: assistantControlDataStreamPart,
-  [dataMessageStreamPart.code]: dataMessageStreamPart,
-  [toolCallsStreamPart.code]: toolCallsStreamPart,
-  [messageAnnotationsStreamPart.code]: messageAnnotationsStreamPart,
-  [toolCallStreamPart.code]: toolCallStreamPart,
-  [toolResultStreamPart.code]: toolResultStreamPart,
-  [toolCallStreamingStartStreamPart.code]: toolCallStreamingStartStreamPart,
-  [toolCallDeltaStreamPart.code]: toolCallDeltaStreamPart,
-  [finishMessageStreamPart.code]: finishMessageStreamPart,
-  [finishStepStreamPart.code]: finishStepStreamPart
-});
-({
-  [textStreamPart.name]: textStreamPart.code,
-  [functionCallStreamPart.name]: functionCallStreamPart.code,
-  [dataStreamPart.name]: dataStreamPart.code,
-  [errorStreamPart.name]: errorStreamPart.code,
-  [assistantMessageStreamPart.name]: assistantMessageStreamPart.code,
-  [assistantControlDataStreamPart.name]: assistantControlDataStreamPart.code,
-  [dataMessageStreamPart.name]: dataMessageStreamPart.code,
-  [toolCallsStreamPart.name]: toolCallsStreamPart.code,
-  [messageAnnotationsStreamPart.name]: messageAnnotationsStreamPart.code,
-  [toolCallStreamPart.name]: toolCallStreamPart.code,
-  [toolResultStreamPart.name]: toolResultStreamPart.code,
-  [toolCallStreamingStartStreamPart.name]: toolCallStreamingStartStreamPart.code,
-  [toolCallDeltaStreamPart.name]: toolCallDeltaStreamPart.code,
-  [finishMessageStreamPart.name]: finishMessageStreamPart.code,
-  [finishStepStreamPart.name]: finishStepStreamPart.code
-});
-streamParts.map((part) => part.code);
-function formatStreamPart(type2, value) {
-  const streamPart = streamParts.find((part) => part.name === type2);
-  if (!streamPart) {
-    throw new Error(`Invalid stream part type: ${type2}`);
-  }
-  return `${streamPart.code}:${JSON.stringify(value)}
-`;
-}
-var schemaSymbol = Symbol.for("vercel.ai.schema");
-function jsonSchema(jsonSchema2, {
-  validate
-} = {}) {
-  return {
-    [schemaSymbol]: true,
-    _type: void 0,
-    // should never be used directly
-    [validatorSymbol]: true,
-    jsonSchema: jsonSchema2,
-    validate
-  };
-}
-function isSchema(value) {
-  return typeof value === "object" && value !== null && schemaSymbol in value && value[schemaSymbol] === true && "jsonSchema" in value && "validate" in value;
-}
-function asSchema(schema2) {
-  return isSchema(schema2) ? schema2 : zodSchema(schema2);
-}
-function zodSchema(zodSchema2) {
-  return jsonSchema(
-    // we assume that zodToJsonSchema will return a valid JSONSchema7:
-    zodToJsonSchema(zodSchema2),
-    {
-      validate: (value) => {
-        const result2 = zodSchema2.safeParse(value);
-        return result2.success ? { success: true, value: result2.data } : { success: false, error: result2.error };
-      }
-    }
-  );
-}
-var _globalThis = typeof globalThis === "object" ? globalThis : typeof self === "object" ? self : typeof window === "object" ? window : typeof global === "object" ? global : {};
-var VERSION = "1.9.0";
-var re = /^(\d+)\.(\d+)\.(\d+)(-(.+))?$/;
-function _makeCompatibilityCheck(ownVersion) {
-  var acceptedVersions = /* @__PURE__ */ new Set([ownVersion]);
-  var rejectedVersions = /* @__PURE__ */ new Set();
-  var myVersionMatch = ownVersion.match(re);
-  if (!myVersionMatch) {
-    return function() {
-      return false;
-    };
-  }
-  var ownVersionParsed = {
-    major: +myVersionMatch[1],
-    minor: +myVersionMatch[2],
-    patch: +myVersionMatch[3],
-    prerelease: myVersionMatch[4]
-  };
-  if (ownVersionParsed.prerelease != null) {
-    return function isExactmatch(globalVersion) {
-      return globalVersion === ownVersion;
-    };
-  }
-  function _reject(v) {
-    rejectedVersions.add(v);
-    return false;
-  }
-  function _accept(v) {
-    acceptedVersions.add(v);
-    return true;
-  }
-  return function isCompatible2(globalVersion) {
-    if (acceptedVersions.has(globalVersion)) {
-      return true;
-    }
-    if (rejectedVersions.has(globalVersion)) {
-      return false;
-    }
-    var globalVersionMatch = globalVersion.match(re);
-    if (!globalVersionMatch) {
-      return _reject(globalVersion);
-    }
-    var globalVersionParsed = {
-      major: +globalVersionMatch[1],
-      minor: +globalVersionMatch[2],
-      patch: +globalVersionMatch[3],
-      prerelease: globalVersionMatch[4]
-    };
-    if (globalVersionParsed.prerelease != null) {
-      return _reject(globalVersion);
-    }
-    if (ownVersionParsed.major !== globalVersionParsed.major) {
-      return _reject(globalVersion);
-    }
-    if (ownVersionParsed.major === 0) {
-      if (ownVersionParsed.minor === globalVersionParsed.minor && ownVersionParsed.patch <= globalVersionParsed.patch) {
-        return _accept(globalVersion);
-      }
-      return _reject(globalVersion);
-    }
-    if (ownVersionParsed.minor <= globalVersionParsed.minor) {
-      return _accept(globalVersion);
-    }
-    return _reject(globalVersion);
-  };
-}
-var isCompatible = _makeCompatibilityCheck(VERSION);
-var major = VERSION.split(".")[0];
-var GLOBAL_OPENTELEMETRY_API_KEY = Symbol.for("opentelemetry.js.api." + major);
-var _global = _globalThis;
-function registerGlobal(type2, instance, diag, allowOverride) {
-  var _a15;
-  if (allowOverride === void 0) {
-    allowOverride = false;
-  }
-  var api = _global[GLOBAL_OPENTELEMETRY_API_KEY] = (_a15 = _global[GLOBAL_OPENTELEMETRY_API_KEY]) !== null && _a15 !== void 0 ? _a15 : {
-    version: VERSION
-  };
-  if (!allowOverride && api[type2]) {
-    var err = new Error("@opentelemetry/api: Attempted duplicate registration of API: " + type2);
-    diag.error(err.stack || err.message);
-    return false;
-  }
-  if (api.version !== VERSION) {
-    var err = new Error("@opentelemetry/api: Registration of version v" + api.version + " for " + type2 + " does not match previously registered API v" + VERSION);
-    diag.error(err.stack || err.message);
-    return false;
-  }
-  api[type2] = instance;
-  diag.debug("@opentelemetry/api: Registered a global for " + type2 + " v" + VERSION + ".");
-  return true;
-}
-function getGlobal(type2) {
-  var _a15, _b2;
-  var globalVersion = (_a15 = _global[GLOBAL_OPENTELEMETRY_API_KEY]) === null || _a15 === void 0 ? void 0 : _a15.version;
-  if (!globalVersion || !isCompatible(globalVersion)) {
-    return;
-  }
-  return (_b2 = _global[GLOBAL_OPENTELEMETRY_API_KEY]) === null || _b2 === void 0 ? void 0 : _b2[type2];
-}
-function unregisterGlobal(type2, diag) {
-  diag.debug("@opentelemetry/api: Unregistering a global for " + type2 + " v" + VERSION + ".");
-  var api = _global[GLOBAL_OPENTELEMETRY_API_KEY];
-  if (api) {
-    delete api[type2];
-  }
-}
-var __read$3 = function(o, n) {
-  var m = typeof Symbol === "function" && o[Symbol.iterator];
-  if (!m) return o;
-  var i = m.call(o), r, ar = [], e;
-  try {
-    while ((n === void 0 || n-- > 0) && !(r = i.next()).done) ar.push(r.value);
-  } catch (error) {
-    e = { error };
-  } finally {
-    try {
-      if (r && !r.done && (m = i["return"])) m.call(i);
-    } finally {
-      if (e) throw e.error;
-    }
-  }
-  return ar;
-};
-var __spreadArray$3 = function(to, from, pack) {
-  if (pack || arguments.length === 2) for (var i = 0, l = from.length, ar; i < l; i++) {
-    if (ar || !(i in from)) {
-      if (!ar) ar = Array.prototype.slice.call(from, 0, i);
-      ar[i] = from[i];
-    }
-  }
-  return to.concat(ar || Array.prototype.slice.call(from));
-};
-var DiagComponentLogger = function() {
-  function DiagComponentLogger2(props) {
-    this._namespace = props.namespace || "DiagComponentLogger";
-  }
-  DiagComponentLogger2.prototype.debug = function() {
-    var args2 = [];
-    for (var _i = 0; _i < arguments.length; _i++) {
-      args2[_i] = arguments[_i];
-    }
-    return logProxy("debug", this._namespace, args2);
-  };
-  DiagComponentLogger2.prototype.error = function() {
-    var args2 = [];
-    for (var _i = 0; _i < arguments.length; _i++) {
-      args2[_i] = arguments[_i];
-    }
-    return logProxy("error", this._namespace, args2);
-  };
-  DiagComponentLogger2.prototype.info = function() {
-    var args2 = [];
-    for (var _i = 0; _i < arguments.length; _i++) {
-      args2[_i] = arguments[_i];
-    }
-    return logProxy("info", this._namespace, args2);
-  };
-  DiagComponentLogger2.prototype.warn = function() {
-    var args2 = [];
-    for (var _i = 0; _i < arguments.length; _i++) {
-      args2[_i] = arguments[_i];
-    }
-    return logProxy("warn", this._namespace, args2);
-  };
-  DiagComponentLogger2.prototype.verbose = function() {
-    var args2 = [];
-    for (var _i = 0; _i < arguments.length; _i++) {
-      args2[_i] = arguments[_i];
-    }
-    return logProxy("verbose", this._namespace, args2);
-  };
-  return DiagComponentLogger2;
-}();
-function logProxy(funcName, namespace, args2) {
-  var logger = getGlobal("diag");
-  if (!logger) {
-    return;
-  }
-  args2.unshift(namespace);
-  return logger[funcName].apply(logger, __spreadArray$3([], __read$3(args2), false));
-}
-var DiagLogLevel;
-(function(DiagLogLevel2) {
-  DiagLogLevel2[DiagLogLevel2["NONE"] = 0] = "NONE";
-  DiagLogLevel2[DiagLogLevel2["ERROR"] = 30] = "ERROR";
-  DiagLogLevel2[DiagLogLevel2["WARN"] = 50] = "WARN";
-  DiagLogLevel2[DiagLogLevel2["INFO"] = 60] = "INFO";
-  DiagLogLevel2[DiagLogLevel2["DEBUG"] = 70] = "DEBUG";
-  DiagLogLevel2[DiagLogLevel2["VERBOSE"] = 80] = "VERBOSE";
-  DiagLogLevel2[DiagLogLevel2["ALL"] = 9999] = "ALL";
-})(DiagLogLevel || (DiagLogLevel = {}));
-function createLogLevelDiagLogger(maxLevel, logger) {
-  if (maxLevel < DiagLogLevel.NONE) {
-    maxLevel = DiagLogLevel.NONE;
-  } else if (maxLevel > DiagLogLevel.ALL) {
-    maxLevel = DiagLogLevel.ALL;
-  }
-  logger = logger || {};
-  function _filterFunc(funcName, theLevel) {
-    var theFunc = logger[funcName];
-    if (typeof theFunc === "function" && maxLevel >= theLevel) {
-      return theFunc.bind(logger);
-    }
-    return function() {
-    };
-  }
-  return {
-    error: _filterFunc("error", DiagLogLevel.ERROR),
-    warn: _filterFunc("warn", DiagLogLevel.WARN),
-    info: _filterFunc("info", DiagLogLevel.INFO),
-    debug: _filterFunc("debug", DiagLogLevel.DEBUG),
-    verbose: _filterFunc("verbose", DiagLogLevel.VERBOSE)
-  };
-}
-var __read$2 = function(o, n) {
-  var m = typeof Symbol === "function" && o[Symbol.iterator];
-  if (!m) return o;
-  var i = m.call(o), r, ar = [], e;
-  try {
-    while ((n === void 0 || n-- > 0) && !(r = i.next()).done) ar.push(r.value);
-  } catch (error) {
-    e = { error };
-  } finally {
-    try {
-      if (r && !r.done && (m = i["return"])) m.call(i);
-    } finally {
-      if (e) throw e.error;
-    }
-  }
-  return ar;
-};
-var __spreadArray$2 = function(to, from, pack) {
-  if (pack || arguments.length === 2) for (var i = 0, l = from.length, ar; i < l; i++) {
-    if (ar || !(i in from)) {
-      if (!ar) ar = Array.prototype.slice.call(from, 0, i);
-      ar[i] = from[i];
-    }
-  }
-  return to.concat(ar || Array.prototype.slice.call(from));
-};
-var API_NAME$2 = "diag";
-var DiagAPI = function() {
-  function DiagAPI2() {
-    function _logProxy(funcName) {
-      return function() {
-        var args2 = [];
-        for (var _i = 0; _i < arguments.length; _i++) {
-          args2[_i] = arguments[_i];
-        }
-        var logger = getGlobal("diag");
-        if (!logger)
-          return;
-        return logger[funcName].apply(logger, __spreadArray$2([], __read$2(args2), false));
-      };
-    }
-    var self2 = this;
-    var setLogger = function(logger, optionsOrLogLevel) {
-      var _a15, _b2, _c2;
-      if (optionsOrLogLevel === void 0) {
-        optionsOrLogLevel = { logLevel: DiagLogLevel.INFO };
-      }
-      if (logger === self2) {
-        var err = new Error("Cannot use diag as the logger for itself. Please use a DiagLogger implementation like ConsoleDiagLogger or a custom implementation");
-        self2.error((_a15 = err.stack) !== null && _a15 !== void 0 ? _a15 : err.message);
-        return false;
-      }
-      if (typeof optionsOrLogLevel === "number") {
-        optionsOrLogLevel = {
-          logLevel: optionsOrLogLevel
-        };
-      }
-      var oldLogger = getGlobal("diag");
-      var newLogger = createLogLevelDiagLogger((_b2 = optionsOrLogLevel.logLevel) !== null && _b2 !== void 0 ? _b2 : DiagLogLevel.INFO, logger);
-      if (oldLogger && !optionsOrLogLevel.suppressOverrideMessage) {
-        var stack = (_c2 = new Error().stack) !== null && _c2 !== void 0 ? _c2 : "<failed to generate stacktrace>";
-        oldLogger.warn("Current logger will be overwritten from " + stack);
-        newLogger.warn("Current logger will overwrite one already registered from " + stack);
-      }
-      return registerGlobal("diag", newLogger, self2, true);
-    };
-    self2.setLogger = setLogger;
-    self2.disable = function() {
-      unregisterGlobal(API_NAME$2, self2);
-    };
-    self2.createComponentLogger = function(options2) {
-      return new DiagComponentLogger(options2);
-    };
-    self2.verbose = _logProxy("verbose");
-    self2.debug = _logProxy("debug");
-    self2.info = _logProxy("info");
-    self2.warn = _logProxy("warn");
-    self2.error = _logProxy("error");
-  }
-  DiagAPI2.instance = function() {
-    if (!this._instance) {
-      this._instance = new DiagAPI2();
-    }
-    return this._instance;
-  };
-  return DiagAPI2;
-}();
-function createContextKey(description) {
-  return Symbol.for(description);
-}
-var BaseContext = /* @__PURE__ */ function() {
-  function BaseContext2(parentContext) {
-    var self2 = this;
-    self2._currentContext = parentContext ? new Map(parentContext) : /* @__PURE__ */ new Map();
-    self2.getValue = function(key) {
-      return self2._currentContext.get(key);
-    };
-    self2.setValue = function(key, value) {
-      var context = new BaseContext2(self2._currentContext);
-      context._currentContext.set(key, value);
-      return context;
-    };
-    self2.deleteValue = function(key) {
-      var context = new BaseContext2(self2._currentContext);
-      context._currentContext.delete(key);
-      return context;
-    };
-  }
-  return BaseContext2;
-}();
-var ROOT_CONTEXT = new BaseContext();
-var __read$1 = function(o, n) {
-  var m = typeof Symbol === "function" && o[Symbol.iterator];
-  if (!m) return o;
-  var i = m.call(o), r, ar = [], e;
-  try {
-    while ((n === void 0 || n-- > 0) && !(r = i.next()).done) ar.push(r.value);
-  } catch (error) {
-    e = { error };
-  } finally {
-    try {
-      if (r && !r.done && (m = i["return"])) m.call(i);
-    } finally {
-      if (e) throw e.error;
-    }
-  }
-  return ar;
-};
-var __spreadArray$1 = function(to, from, pack) {
-  if (pack || arguments.length === 2) for (var i = 0, l = from.length, ar; i < l; i++) {
-    if (ar || !(i in from)) {
-      if (!ar) ar = Array.prototype.slice.call(from, 0, i);
-      ar[i] = from[i];
-    }
-  }
-  return to.concat(ar || Array.prototype.slice.call(from));
-};
-var NoopContextManager = function() {
-  function NoopContextManager2() {
-  }
-  NoopContextManager2.prototype.active = function() {
-    return ROOT_CONTEXT;
-  };
-  NoopContextManager2.prototype.with = function(_context, fn, thisArg) {
-    var args2 = [];
-    for (var _i = 3; _i < arguments.length; _i++) {
-      args2[_i - 3] = arguments[_i];
-    }
-    return fn.call.apply(fn, __spreadArray$1([thisArg], __read$1(args2), false));
-  };
-  NoopContextManager2.prototype.bind = function(_context, target) {
-    return target;
-  };
-  NoopContextManager2.prototype.enable = function() {
-    return this;
-  };
-  NoopContextManager2.prototype.disable = function() {
-    return this;
-  };
-  return NoopContextManager2;
-}();
-var __read = function(o, n) {
-  var m = typeof Symbol === "function" && o[Symbol.iterator];
-  if (!m) return o;
-  var i = m.call(o), r, ar = [], e;
-  try {
-    while ((n === void 0 || n-- > 0) && !(r = i.next()).done) ar.push(r.value);
-  } catch (error) {
-    e = { error };
-  } finally {
-    try {
-      if (r && !r.done && (m = i["return"])) m.call(i);
-    } finally {
-      if (e) throw e.error;
-    }
-  }
-  return ar;
-};
-var __spreadArray = function(to, from, pack) {
-  if (pack || arguments.length === 2) for (var i = 0, l = from.length, ar; i < l; i++) {
-    if (ar || !(i in from)) {
-      if (!ar) ar = Array.prototype.slice.call(from, 0, i);
-      ar[i] = from[i];
-    }
-  }
-  return to.concat(ar || Array.prototype.slice.call(from));
-};
-var API_NAME$1 = "context";
-var NOOP_CONTEXT_MANAGER = new NoopContextManager();
-var ContextAPI = function() {
-  function ContextAPI2() {
-  }
-  ContextAPI2.getInstance = function() {
-    if (!this._instance) {
-      this._instance = new ContextAPI2();
-    }
-    return this._instance;
-  };
-  ContextAPI2.prototype.setGlobalContextManager = function(contextManager) {
-    return registerGlobal(API_NAME$1, contextManager, DiagAPI.instance());
-  };
-  ContextAPI2.prototype.active = function() {
-    return this._getContextManager().active();
-  };
-  ContextAPI2.prototype.with = function(context, fn, thisArg) {
-    var _a15;
-    var args2 = [];
-    for (var _i = 3; _i < arguments.length; _i++) {
-      args2[_i - 3] = arguments[_i];
-    }
-    return (_a15 = this._getContextManager()).with.apply(_a15, __spreadArray([context, fn, thisArg], __read(args2), false));
-  };
-  ContextAPI2.prototype.bind = function(context, target) {
-    return this._getContextManager().bind(context, target);
-  };
-  ContextAPI2.prototype._getContextManager = function() {
-    return getGlobal(API_NAME$1) || NOOP_CONTEXT_MANAGER;
-  };
-  ContextAPI2.prototype.disable = function() {
-    this._getContextManager().disable();
-    unregisterGlobal(API_NAME$1, DiagAPI.instance());
-  };
-  return ContextAPI2;
-}();
-var TraceFlags;
-(function(TraceFlags2) {
-  TraceFlags2[TraceFlags2["NONE"] = 0] = "NONE";
-  TraceFlags2[TraceFlags2["SAMPLED"] = 1] = "SAMPLED";
-})(TraceFlags || (TraceFlags = {}));
-var INVALID_SPANID = "0000000000000000";
-var INVALID_TRACEID = "00000000000000000000000000000000";
-var INVALID_SPAN_CONTEXT = {
-  traceId: INVALID_TRACEID,
-  spanId: INVALID_SPANID,
-  traceFlags: TraceFlags.NONE
-};
-var NonRecordingSpan = function() {
-  function NonRecordingSpan2(_spanContext) {
-    if (_spanContext === void 0) {
-      _spanContext = INVALID_SPAN_CONTEXT;
-    }
-    this._spanContext = _spanContext;
-  }
-  NonRecordingSpan2.prototype.spanContext = function() {
-    return this._spanContext;
-  };
-  NonRecordingSpan2.prototype.setAttribute = function(_key, _value) {
-    return this;
-  };
-  NonRecordingSpan2.prototype.setAttributes = function(_attributes) {
-    return this;
-  };
-  NonRecordingSpan2.prototype.addEvent = function(_name, _attributes) {
-    return this;
-  };
-  NonRecordingSpan2.prototype.addLink = function(_link) {
-    return this;
-  };
-  NonRecordingSpan2.prototype.addLinks = function(_links) {
-    return this;
-  };
-  NonRecordingSpan2.prototype.setStatus = function(_status) {
-    return this;
-  };
-  NonRecordingSpan2.prototype.updateName = function(_name) {
-    return this;
-  };
-  NonRecordingSpan2.prototype.end = function(_endTime) {
-  };
-  NonRecordingSpan2.prototype.isRecording = function() {
-    return false;
-  };
-  NonRecordingSpan2.prototype.recordException = function(_exception, _time) {
-  };
-  return NonRecordingSpan2;
-}();
-var SPAN_KEY = createContextKey("OpenTelemetry Context Key SPAN");
-function getSpan(context) {
-  return context.getValue(SPAN_KEY) || void 0;
-}
-function getActiveSpan() {
-  return getSpan(ContextAPI.getInstance().active());
-}
-function setSpan(context, span) {
-  return context.setValue(SPAN_KEY, span);
-}
-function deleteSpan(context) {
-  return context.deleteValue(SPAN_KEY);
-}
-function setSpanContext(context, spanContext) {
-  return setSpan(context, new NonRecordingSpan(spanContext));
-}
-function getSpanContext(context) {
-  var _a15;
-  return (_a15 = getSpan(context)) === null || _a15 === void 0 ? void 0 : _a15.spanContext();
-}
-var VALID_TRACEID_REGEX = /^([0-9a-f]{32})$/i;
-var VALID_SPANID_REGEX = /^[0-9a-f]{16}$/i;
-function isValidTraceId(traceId) {
-  return VALID_TRACEID_REGEX.test(traceId) && traceId !== INVALID_TRACEID;
-}
-function isValidSpanId(spanId) {
-  return VALID_SPANID_REGEX.test(spanId) && spanId !== INVALID_SPANID;
-}
-function isSpanContextValid(spanContext) {
-  return isValidTraceId(spanContext.traceId) && isValidSpanId(spanContext.spanId);
-}
-function wrapSpanContext(spanContext) {
-  return new NonRecordingSpan(spanContext);
-}
-var contextApi = ContextAPI.getInstance();
-var NoopTracer = function() {
-  function NoopTracer2() {
-  }
-  NoopTracer2.prototype.startSpan = function(name14, options2, context) {
-    if (context === void 0) {
-      context = contextApi.active();
-    }
-    var root = Boolean(options2 === null || options2 === void 0 ? void 0 : options2.root);
-    if (root) {
-      return new NonRecordingSpan();
-    }
-    var parentFromContext = context && getSpanContext(context);
-    if (isSpanContext(parentFromContext) && isSpanContextValid(parentFromContext)) {
-      return new NonRecordingSpan(parentFromContext);
-    } else {
-      return new NonRecordingSpan();
-    }
-  };
-  NoopTracer2.prototype.startActiveSpan = function(name14, arg2, arg3, arg4) {
-    var opts;
-    var ctx;
-    var fn;
-    if (arguments.length < 2) {
-      return;
-    } else if (arguments.length === 2) {
-      fn = arg2;
-    } else if (arguments.length === 3) {
-      opts = arg2;
-      fn = arg3;
-    } else {
-      opts = arg2;
-      ctx = arg3;
-      fn = arg4;
-    }
-    var parentContext = ctx !== null && ctx !== void 0 ? ctx : contextApi.active();
-    var span = this.startSpan(name14, opts, parentContext);
-    var contextWithSpanSet = setSpan(parentContext, span);
-    return contextApi.with(contextWithSpanSet, fn, void 0, span);
-  };
-  return NoopTracer2;
-}();
-function isSpanContext(spanContext) {
-  return typeof spanContext === "object" && typeof spanContext["spanId"] === "string" && typeof spanContext["traceId"] === "string" && typeof spanContext["traceFlags"] === "number";
-}
-var NOOP_TRACER = new NoopTracer();
-var ProxyTracer = function() {
-  function ProxyTracer2(_provider, name14, version, options2) {
-    this._provider = _provider;
-    this.name = name14;
-    this.version = version;
-    this.options = options2;
-  }
-  ProxyTracer2.prototype.startSpan = function(name14, options2, context) {
-    return this._getTracer().startSpan(name14, options2, context);
-  };
-  ProxyTracer2.prototype.startActiveSpan = function(_name, _options, _context, _fn) {
-    var tracer = this._getTracer();
-    return Reflect.apply(tracer.startActiveSpan, tracer, arguments);
-  };
-  ProxyTracer2.prototype._getTracer = function() {
-    if (this._delegate) {
-      return this._delegate;
-    }
-    var tracer = this._provider.getDelegateTracer(this.name, this.version, this.options);
-    if (!tracer) {
-      return NOOP_TRACER;
-    }
-    this._delegate = tracer;
-    return this._delegate;
-  };
-  return ProxyTracer2;
-}();
-var NoopTracerProvider = function() {
-  function NoopTracerProvider2() {
-  }
-  NoopTracerProvider2.prototype.getTracer = function(_name, _version, _options) {
-    return new NoopTracer();
-  };
-  return NoopTracerProvider2;
-}();
-var NOOP_TRACER_PROVIDER = new NoopTracerProvider();
-var ProxyTracerProvider = function() {
-  function ProxyTracerProvider2() {
-  }
-  ProxyTracerProvider2.prototype.getTracer = function(name14, version, options2) {
-    var _a15;
-    return (_a15 = this.getDelegateTracer(name14, version, options2)) !== null && _a15 !== void 0 ? _a15 : new ProxyTracer(this, name14, version, options2);
-  };
-  ProxyTracerProvider2.prototype.getDelegate = function() {
-    var _a15;
-    return (_a15 = this._delegate) !== null && _a15 !== void 0 ? _a15 : NOOP_TRACER_PROVIDER;
-  };
-  ProxyTracerProvider2.prototype.setDelegate = function(delegate) {
-    this._delegate = delegate;
-  };
-  ProxyTracerProvider2.prototype.getDelegateTracer = function(name14, version, options2) {
-    var _a15;
-    return (_a15 = this._delegate) === null || _a15 === void 0 ? void 0 : _a15.getTracer(name14, version, options2);
-  };
-  return ProxyTracerProvider2;
-}();
-var SpanStatusCode;
-(function(SpanStatusCode2) {
-  SpanStatusCode2[SpanStatusCode2["UNSET"] = 0] = "UNSET";
-  SpanStatusCode2[SpanStatusCode2["OK"] = 1] = "OK";
-  SpanStatusCode2[SpanStatusCode2["ERROR"] = 2] = "ERROR";
-})(SpanStatusCode || (SpanStatusCode = {}));
-var API_NAME = "trace";
-var TraceAPI = function() {
-  function TraceAPI2() {
-    this._proxyTracerProvider = new ProxyTracerProvider();
-    this.wrapSpanContext = wrapSpanContext;
-    this.isSpanContextValid = isSpanContextValid;
-    this.deleteSpan = deleteSpan;
-    this.getSpan = getSpan;
-    this.getActiveSpan = getActiveSpan;
-    this.getSpanContext = getSpanContext;
-    this.setSpan = setSpan;
-    this.setSpanContext = setSpanContext;
-  }
-  TraceAPI2.getInstance = function() {
-    if (!this._instance) {
-      this._instance = new TraceAPI2();
-    }
-    return this._instance;
-  };
-  TraceAPI2.prototype.setGlobalTracerProvider = function(provider) {
-    var success = registerGlobal(API_NAME, this._proxyTracerProvider, DiagAPI.instance());
-    if (success) {
-      this._proxyTracerProvider.setDelegate(provider);
-    }
-    return success;
-  };
-  TraceAPI2.prototype.getTracerProvider = function() {
-    return getGlobal(API_NAME) || this._proxyTracerProvider;
-  };
-  TraceAPI2.prototype.getTracer = function(name14, version) {
-    return this.getTracerProvider().getTracer(name14, version);
-  };
-  TraceAPI2.prototype.disable = function() {
-    unregisterGlobal(API_NAME, DiagAPI.instance());
-    this._proxyTracerProvider = new ProxyTracerProvider();
-  };
-  return TraceAPI2;
-}();
-var trace = TraceAPI.getInstance();
-var __defProp = Object.defineProperty;
-var __export = (target, all) => {
-  for (var name112 in all)
-    __defProp(target, name112, { get: all[name112], enumerable: true });
-};
-async function delay(delayInMs) {
-  return delayInMs === void 0 ? Promise.resolve() : new Promise((resolve) => setTimeout(resolve, delayInMs));
-}
-var name = "AI_RetryError";
-var marker = `vercel.ai.error.${name}`;
-var symbol = Symbol.for(marker);
-var _a;
-var RetryError = class extends AISDKError {
-  constructor({
-    message,
-    reason,
-    errors
-  }) {
-    super({ name, message });
-    this[_a] = true;
-    this.reason = reason;
-    this.errors = errors;
-    this.lastError = errors[errors.length - 1];
-  }
-  static isInstance(error) {
-    return AISDKError.hasMarker(error, marker);
-  }
-  /**
-   * @deprecated use `isInstance` instead
-   */
-  static isRetryError(error) {
-    return error instanceof Error && error.name === name && typeof error.reason === "string" && Array.isArray(error.errors);
-  }
-  /**
-   * @deprecated Do not use this method. It will be removed in the next major version.
-   */
-  toJSON() {
-    return {
-      name: this.name,
-      message: this.message,
-      reason: this.reason,
-      lastError: this.lastError,
-      errors: this.errors
-    };
-  }
-};
-_a = symbol;
-var retryWithExponentialBackoff = ({
-  maxRetries = 2,
-  initialDelayInMs = 2e3,
-  backoffFactor = 2
-} = {}) => async (f2) => _retryWithExponentialBackoff(f2, {
-  maxRetries,
-  delayInMs: initialDelayInMs,
-  backoffFactor
-});
-async function _retryWithExponentialBackoff(f2, {
-  maxRetries,
-  delayInMs,
-  backoffFactor
-}, errors = []) {
-  try {
-    return await f2();
-  } catch (error) {
-    if (isAbortError(error)) {
-      throw error;
-    }
-    if (maxRetries === 0) {
-      throw error;
-    }
-    const errorMessage = getErrorMessage(error);
-    const newErrors = [...errors, error];
-    const tryNumber = newErrors.length;
-    if (tryNumber > maxRetries) {
-      throw new RetryError({
-        message: `Failed after ${tryNumber} attempts. Last error: ${errorMessage}`,
-        reason: "maxRetriesExceeded",
-        errors: newErrors
-      });
-    }
-    if (error instanceof Error && APICallError.isAPICallError(error) && error.isRetryable === true && tryNumber <= maxRetries) {
-      await delay(delayInMs);
-      return _retryWithExponentialBackoff(
-        f2,
-        { maxRetries, delayInMs: backoffFactor * delayInMs, backoffFactor },
-        newErrors
-      );
-    }
-    if (tryNumber === 1) {
-      throw error;
-    }
-    throw new RetryError({
-      message: `Failed after ${tryNumber} attempts with non-retryable error: '${errorMessage}'`,
-      reason: "errorNotRetryable",
-      errors: newErrors
-    });
-  }
-}
-function assembleOperationName({
-  operationId,
-  telemetry
-}) {
-  return {
-    // standardized operation and resource name:
-    "operation.name": `${operationId}${(telemetry == null ? void 0 : telemetry.functionId) != null ? ` ${telemetry.functionId}` : ""}`,
-    "resource.name": telemetry == null ? void 0 : telemetry.functionId,
-    // detailed, AI SDK specific data:
-    "ai.operationId": operationId,
-    "ai.telemetry.functionId": telemetry == null ? void 0 : telemetry.functionId
-  };
-}
-function getBaseTelemetryAttributes({
-  model,
-  settings,
-  telemetry,
-  headers
-}) {
-  var _a112;
-  return {
-    "ai.model.provider": model.provider,
-    "ai.model.id": model.modelId,
-    // settings:
-    ...Object.entries(settings).reduce((attributes, [key, value]) => {
-      attributes[`ai.settings.${key}`] = value;
-      return attributes;
-    }, {}),
-    // add metadata as attributes:
-    ...Object.entries((_a112 = telemetry == null ? void 0 : telemetry.metadata) != null ? _a112 : {}).reduce(
-      (attributes, [key, value]) => {
-        attributes[`ai.telemetry.metadata.${key}`] = value;
-        return attributes;
-      },
-      {}
-    ),
-    // request headers
-    ...Object.entries(headers != null ? headers : {}).reduce((attributes, [key, value]) => {
-      if (value !== void 0) {
-        attributes[`ai.request.headers.${key}`] = value;
-      }
-      return attributes;
-    }, {})
-  };
-}
-var noopTracer = {
-  startSpan() {
-    return noopSpan;
-  },
-  startActiveSpan(name112, arg1, arg2, arg3) {
-    if (typeof arg1 === "function") {
-      return arg1(noopSpan);
-    }
-    if (typeof arg2 === "function") {
-      return arg2(noopSpan);
-    }
-    if (typeof arg3 === "function") {
-      return arg3(noopSpan);
-    }
-  }
-};
-var noopSpan = {
-  spanContext() {
-    return noopSpanContext;
-  },
-  setAttribute() {
-    return this;
-  },
-  setAttributes() {
-    return this;
-  },
-  addEvent() {
-    return this;
-  },
-  addLink() {
-    return this;
-  },
-  addLinks() {
-    return this;
-  },
-  setStatus() {
-    return this;
-  },
-  updateName() {
-    return this;
-  },
-  end() {
-    return this;
-  },
-  isRecording() {
-    return false;
-  },
-  recordException() {
-    return this;
-  }
-};
-var noopSpanContext = {
-  traceId: "",
-  spanId: "",
-  traceFlags: 0
-};
-function getTracer({
-  isEnabled = false,
-  tracer
-} = {}) {
-  if (!isEnabled) {
-    return noopTracer;
-  }
-  if (tracer) {
-    return tracer;
-  }
-  return trace.getTracer("ai");
-}
-function recordSpan({
-  name: name112,
-  tracer,
-  attributes,
-  fn,
-  endWhenDone = true
-}) {
-  return tracer.startActiveSpan(name112, { attributes }, async (span) => {
-    try {
-      const result2 = await fn(span);
-      if (endWhenDone) {
-        span.end();
-      }
-      return result2;
-    } catch (error) {
-      try {
-        if (error instanceof Error) {
-          span.recordException({
-            name: error.name,
-            message: error.message,
-            stack: error.stack
-          });
-          span.setStatus({
-            code: SpanStatusCode.ERROR,
-            message: error.message
-          });
-        } else {
-          span.setStatus({ code: SpanStatusCode.ERROR });
-        }
-      } finally {
-        span.end();
-      }
-      throw error;
-    }
-  });
-}
-function selectTelemetryAttributes({
-  telemetry,
-  attributes
-}) {
-  if ((telemetry == null ? void 0 : telemetry.isEnabled) !== true) {
-    return {};
-  }
-  return Object.entries(attributes).reduce((attributes2, [key, value]) => {
-    if (value === void 0) {
-      return attributes2;
-    }
-    if (typeof value === "object" && "input" in value && typeof value.input === "function") {
-      if ((telemetry == null ? void 0 : telemetry.recordInputs) === false) {
-        return attributes2;
-      }
-      const result2 = value.input();
-      return result2 === void 0 ? attributes2 : { ...attributes2, [key]: result2 };
-    }
-    if (typeof value === "object" && "output" in value && typeof value.output === "function") {
-      if ((telemetry == null ? void 0 : telemetry.recordOutputs) === false) {
-        return attributes2;
-      }
-      const result2 = value.output();
-      return result2 === void 0 ? attributes2 : { ...attributes2, [key]: result2 };
-    }
-    return { ...attributes2, [key]: value };
-  }, {});
-}
-var name2 = "AI_DownloadError";
-var marker2 = `vercel.ai.error.${name2}`;
-var symbol2 = Symbol.for(marker2);
-var _a2;
-var DownloadError = class extends AISDKError {
-  constructor({
-    url,
-    statusCode,
-    statusText,
-    cause,
-    message = cause == null ? `Failed to download ${url}: ${statusCode} ${statusText}` : `Failed to download ${url}: ${cause}`
-  }) {
-    super({ name: name2, message, cause });
-    this[_a2] = true;
-    this.url = url;
-    this.statusCode = statusCode;
-    this.statusText = statusText;
-  }
-  static isInstance(error) {
-    return AISDKError.hasMarker(error, marker2);
-  }
-  /**
-   * @deprecated use `isInstance` instead
-   */
-  static isDownloadError(error) {
-    return error instanceof Error && error.name === name2 && typeof error.url === "string" && (error.statusCode == null || typeof error.statusCode === "number") && (error.statusText == null || typeof error.statusText === "string");
-  }
-  /**
-   * @deprecated Do not use this method. It will be removed in the next major version.
-   */
-  toJSON() {
-    return {
-      name: this.name,
-      message: this.message,
-      url: this.url,
-      statusCode: this.statusCode,
-      statusText: this.statusText,
-      cause: this.cause
-    };
-  }
-};
-_a2 = symbol2;
-async function download({
-  url,
-  fetchImplementation = fetch
-}) {
-  var _a112;
-  const urlText = url.toString();
-  try {
-    const response = await fetchImplementation(urlText);
-    if (!response.ok) {
-      throw new DownloadError({
-        url: urlText,
-        statusCode: response.status,
-        statusText: response.statusText
-      });
-    }
-    return {
-      data: new Uint8Array(await response.arrayBuffer()),
-      mimeType: (_a112 = response.headers.get("content-type")) != null ? _a112 : void 0
-    };
-  } catch (error) {
-    if (DownloadError.isInstance(error)) {
-      throw error;
-    }
-    throw new DownloadError({ url: urlText, cause: error });
-  }
-}
-var mimeTypeSignatures = [
-  { mimeType: "image/gif", bytes: [71, 73, 70] },
-  { mimeType: "image/png", bytes: [137, 80, 78, 71] },
-  { mimeType: "image/jpeg", bytes: [255, 216] },
-  { mimeType: "image/webp", bytes: [82, 73, 70, 70] }
-];
-function detectImageMimeType(image) {
-  for (const { bytes, mimeType } of mimeTypeSignatures) {
-    if (image.length >= bytes.length && bytes.every((byte, index2) => image[index2] === byte)) {
-      return mimeType;
-    }
-  }
-  return void 0;
-}
-var name3 = "AI_InvalidDataContentError";
-var marker3 = `vercel.ai.error.${name3}`;
-var symbol3 = Symbol.for(marker3);
-var _a3;
-var InvalidDataContentError = class extends AISDKError {
-  constructor({
-    content,
-    cause,
-    message = `Invalid data content. Expected a base64 string, Uint8Array, ArrayBuffer, or Buffer, but got ${typeof content}.`
-  }) {
-    super({ name: name3, message, cause });
-    this[_a3] = true;
-    this.content = content;
-  }
-  static isInstance(error) {
-    return AISDKError.hasMarker(error, marker3);
-  }
-  /**
-   * @deprecated use `isInstance` instead
-   */
-  static isInvalidDataContentError(error) {
-    return error instanceof Error && error.name === name3 && error.content != null;
-  }
-  /**
-   * @deprecated Do not use this method. It will be removed in the next major version.
-   */
-  toJSON() {
-    return {
-      name: this.name,
-      message: this.message,
-      stack: this.stack,
-      cause: this.cause,
-      content: this.content
-    };
-  }
-};
-_a3 = symbol3;
-var dataContentSchema = z.union([
-  z.string(),
-  z.instanceof(Uint8Array),
-  z.instanceof(ArrayBuffer),
-  z.custom(
-    // Buffer might not be available in some environments such as CloudFlare:
-    (value) => {
-      var _a112, _b2;
-      return (_b2 = (_a112 = globalThis.Buffer) == null ? void 0 : _a112.isBuffer(value)) != null ? _b2 : false;
-    },
-    { message: "Must be a Buffer" }
-  )
-]);
-function convertDataContentToBase64String(content) {
-  if (typeof content === "string") {
-    return content;
-  }
-  if (content instanceof ArrayBuffer) {
-    return convertUint8ArrayToBase64(new Uint8Array(content));
-  }
-  return convertUint8ArrayToBase64(content);
-}
-function convertDataContentToUint8Array(content) {
-  if (content instanceof Uint8Array) {
-    return content;
-  }
-  if (typeof content === "string") {
-    try {
-      return convertBase64ToUint8Array(content);
-    } catch (error) {
-      throw new InvalidDataContentError({
-        message: "Invalid data content. Content string is not a base64-encoded media.",
-        content,
-        cause: error
-      });
-    }
-  }
-  if (content instanceof ArrayBuffer) {
-    return new Uint8Array(content);
-  }
-  throw new InvalidDataContentError({ content });
-}
-function convertUint8ArrayToText(uint8Array) {
-  try {
-    return new TextDecoder().decode(uint8Array);
-  } catch (error) {
-    throw new Error("Error decoding Uint8Array to text");
-  }
-}
-var name4 = "AI_InvalidMessageRoleError";
-var marker4 = `vercel.ai.error.${name4}`;
-var symbol4 = Symbol.for(marker4);
-var _a4;
-var InvalidMessageRoleError = class extends AISDKError {
-  constructor({
-    role,
-    message = `Invalid message role: '${role}'. Must be one of: "system", "user", "assistant", "tool".`
-  }) {
-    super({ name: name4, message });
-    this[_a4] = true;
-    this.role = role;
-  }
-  static isInstance(error) {
-    return AISDKError.hasMarker(error, marker4);
-  }
-  /**
-   * @deprecated use `isInstance` instead
-   */
-  static isInvalidMessageRoleError(error) {
-    return error instanceof Error && error.name === name4 && typeof error.role === "string";
-  }
-  /**
-   * @deprecated Do not use this method. It will be removed in the next major version.
-   */
-  toJSON() {
-    return {
-      name: this.name,
-      message: this.message,
-      stack: this.stack,
-      role: this.role
-    };
-  }
-};
-_a4 = symbol4;
-function splitDataUrl(dataUrl) {
-  try {
-    const [header, base64Content] = dataUrl.split(",");
-    return {
-      mimeType: header.split(";")[0].split(":")[1],
-      base64Content
-    };
-  } catch (error) {
-    return {
-      mimeType: void 0,
-      base64Content: void 0
-    };
-  }
-}
-async function convertToLanguageModelPrompt({
-  prompt: prompt2,
-  modelSupportsImageUrls = true,
-  modelSupportsUrl = () => false,
-  downloadImplementation = download
-}) {
-  const downloadedAssets = await downloadAssets(
-    prompt2.messages,
-    downloadImplementation,
-    modelSupportsImageUrls,
-    modelSupportsUrl
-  );
-  return [
-    ...prompt2.system != null ? [{ role: "system", content: prompt2.system }] : [],
-    ...prompt2.messages.map(
-      (message) => convertToLanguageModelMessage(message, downloadedAssets)
-    )
-  ];
-}
-function convertToLanguageModelMessage(message, downloadedAssets) {
-  const role = message.role;
-  switch (role) {
-    case "system": {
-      return {
-        role: "system",
-        content: message.content,
-        providerMetadata: message.experimental_providerMetadata
-      };
-    }
-    case "user": {
-      if (typeof message.content === "string") {
-        return {
-          role: "user",
-          content: [{ type: "text", text: message.content }],
-          providerMetadata: message.experimental_providerMetadata
-        };
-      }
-      return {
-        role: "user",
-        content: message.content.map((part) => convertPartToLanguageModelPart(part, downloadedAssets)).filter((part) => part.type !== "text" || part.text !== ""),
-        providerMetadata: message.experimental_providerMetadata
-      };
-    }
-    case "assistant": {
-      if (typeof message.content === "string") {
-        return {
-          role: "assistant",
-          content: [{ type: "text", text: message.content }],
-          providerMetadata: message.experimental_providerMetadata
-        };
-      }
-      return {
-        role: "assistant",
-        content: message.content.filter(
-          // remove empty text parts:
-          (part) => part.type !== "text" || part.text !== ""
-        ).map((part) => {
-          const { experimental_providerMetadata, ...rest } = part;
-          return {
-            ...rest,
-            providerMetadata: experimental_providerMetadata
-          };
-        }),
-        providerMetadata: message.experimental_providerMetadata
-      };
-    }
-    case "tool": {
-      return {
-        role: "tool",
-        content: message.content.map((part) => ({
-          type: "tool-result",
-          toolCallId: part.toolCallId,
-          toolName: part.toolName,
-          result: part.result,
-          content: part.experimental_content,
-          isError: part.isError,
-          providerMetadata: part.experimental_providerMetadata
-        })),
-        providerMetadata: message.experimental_providerMetadata
-      };
-    }
-    default: {
-      const _exhaustiveCheck = role;
-      throw new InvalidMessageRoleError({ role: _exhaustiveCheck });
-    }
-  }
-}
-async function downloadAssets(messages, downloadImplementation, modelSupportsImageUrls, modelSupportsUrl) {
-  const urls = messages.filter((message) => message.role === "user").map((message) => message.content).filter(
-    (content) => Array.isArray(content)
-  ).flat().filter(
-    (part) => part.type === "image" || part.type === "file"
-  ).filter(
-    (part) => !(part.type === "image" && modelSupportsImageUrls === true)
-  ).map((part) => part.type === "image" ? part.image : part.data).map(
-    (part) => (
-      // support string urls:
-      typeof part === "string" && (part.startsWith("http:") || part.startsWith("https:")) ? new URL(part) : part
-    )
-  ).filter((image) => image instanceof URL).filter((url) => !modelSupportsUrl(url));
-  const downloadedImages = await Promise.all(
-    urls.map(async (url) => ({
-      url,
-      data: await downloadImplementation({ url })
-    }))
-  );
-  return Object.fromEntries(
-    downloadedImages.map(({ url, data }) => [url.toString(), data])
-  );
-}
-function convertPartToLanguageModelPart(part, downloadedAssets) {
-  if (part.type === "text") {
-    return {
-      type: "text",
-      text: part.text,
-      providerMetadata: part.experimental_providerMetadata
-    };
-  }
-  let mimeType = part.mimeType;
-  let data;
-  let content;
-  let normalizedData;
-  const type2 = part.type;
-  switch (type2) {
-    case "image":
-      data = part.image;
-      break;
-    case "file":
-      data = part.data;
-      break;
-    default:
-      throw new Error(`Unsupported part type: ${type2}`);
-  }
-  try {
-    content = typeof data === "string" ? new URL(data) : data;
-  } catch (error) {
-    content = data;
-  }
-  if (content instanceof URL) {
-    if (content.protocol === "data:") {
-      const { mimeType: dataUrlMimeType, base64Content } = splitDataUrl(
-        content.toString()
-      );
-      if (dataUrlMimeType == null || base64Content == null) {
-        throw new Error(`Invalid data URL format in part ${type2}`);
-      }
-      mimeType = dataUrlMimeType;
-      normalizedData = convertDataContentToUint8Array(base64Content);
-    } else {
-      const downloadedFile = downloadedAssets[content.toString()];
-      if (downloadedFile) {
-        normalizedData = downloadedFile.data;
-        mimeType != null ? mimeType : mimeType = downloadedFile.mimeType;
-      } else {
-        normalizedData = content;
-      }
-    }
-  } else {
-    normalizedData = convertDataContentToUint8Array(content);
-  }
-  switch (type2) {
-    case "image":
-      if (mimeType == null && normalizedData instanceof Uint8Array) {
-        mimeType = detectImageMimeType(normalizedData);
-      }
-      return {
-        type: "image",
-        image: normalizedData,
-        mimeType,
-        providerMetadata: part.experimental_providerMetadata
-      };
-    case "file":
-      if (mimeType == null) {
-        throw new Error(`Mime type is missing for file part`);
-      }
-      return {
-        type: "file",
-        data: normalizedData instanceof Uint8Array ? convertDataContentToBase64String(normalizedData) : normalizedData,
-        mimeType,
-        providerMetadata: part.experimental_providerMetadata
-      };
-  }
-}
-var name5 = "AI_InvalidArgumentError";
-var marker5 = `vercel.ai.error.${name5}`;
-var symbol5 = Symbol.for(marker5);
-var _a5;
-var InvalidArgumentError = class extends AISDKError {
-  constructor({
-    parameter,
-    value,
-    message
-  }) {
-    super({
-      name: name5,
-      message: `Invalid argument for parameter ${parameter}: ${message}`
-    });
-    this[_a5] = true;
-    this.parameter = parameter;
-    this.value = value;
-  }
-  static isInstance(error) {
-    return AISDKError.hasMarker(error, marker5);
-  }
-  /**
-   * @deprecated use `isInstance` instead
-   */
-  static isInvalidArgumentError(error) {
-    return error instanceof Error && error.name === name5 && typeof error.parameter === "string" && typeof error.value === "string";
-  }
-  toJSON() {
-    return {
-      name: this.name,
-      message: this.message,
-      stack: this.stack,
-      parameter: this.parameter,
-      value: this.value
-    };
-  }
-};
-_a5 = symbol5;
-function prepareCallSettings({
-  maxTokens,
-  temperature,
-  topP,
-  topK,
-  presencePenalty,
-  frequencyPenalty,
-  stopSequences,
-  seed,
-  maxRetries
-}) {
-  if (maxTokens != null) {
-    if (!Number.isInteger(maxTokens)) {
-      throw new InvalidArgumentError({
-        parameter: "maxTokens",
-        value: maxTokens,
-        message: "maxTokens must be an integer"
-      });
-    }
-    if (maxTokens < 1) {
-      throw new InvalidArgumentError({
-        parameter: "maxTokens",
-        value: maxTokens,
-        message: "maxTokens must be >= 1"
-      });
-    }
-  }
-  if (temperature != null) {
-    if (typeof temperature !== "number") {
-      throw new InvalidArgumentError({
-        parameter: "temperature",
-        value: temperature,
-        message: "temperature must be a number"
-      });
-    }
-  }
-  if (topP != null) {
-    if (typeof topP !== "number") {
-      throw new InvalidArgumentError({
-        parameter: "topP",
-        value: topP,
-        message: "topP must be a number"
-      });
-    }
-  }
-  if (topK != null) {
-    if (typeof topK !== "number") {
-      throw new InvalidArgumentError({
-        parameter: "topK",
-        value: topK,
-        message: "topK must be a number"
-      });
-    }
-  }
-  if (presencePenalty != null) {
-    if (typeof presencePenalty !== "number") {
-      throw new InvalidArgumentError({
-        parameter: "presencePenalty",
-        value: presencePenalty,
-        message: "presencePenalty must be a number"
-      });
-    }
-  }
-  if (frequencyPenalty != null) {
-    if (typeof frequencyPenalty !== "number") {
-      throw new InvalidArgumentError({
-        parameter: "frequencyPenalty",
-        value: frequencyPenalty,
-        message: "frequencyPenalty must be a number"
-      });
-    }
-  }
-  if (seed != null) {
-    if (!Number.isInteger(seed)) {
-      throw new InvalidArgumentError({
-        parameter: "seed",
-        value: seed,
-        message: "seed must be an integer"
-      });
-    }
-  }
-  if (maxRetries != null) {
-    if (!Number.isInteger(maxRetries)) {
-      throw new InvalidArgumentError({
-        parameter: "maxRetries",
-        value: maxRetries,
-        message: "maxRetries must be an integer"
-      });
-    }
-    if (maxRetries < 0) {
-      throw new InvalidArgumentError({
-        parameter: "maxRetries",
-        value: maxRetries,
-        message: "maxRetries must be >= 0"
-      });
-    }
-  }
-  return {
-    maxTokens,
-    temperature: temperature != null ? temperature : 0,
-    topP,
-    topK,
-    presencePenalty,
-    frequencyPenalty,
-    stopSequences: stopSequences != null && stopSequences.length > 0 ? stopSequences : void 0,
-    seed,
-    maxRetries: maxRetries != null ? maxRetries : 2
-  };
-}
-var jsonValueSchema = z.lazy(
-  () => z.union([
-    z.null(),
-    z.string(),
-    z.number(),
-    z.boolean(),
-    z.record(z.string(), jsonValueSchema),
-    z.array(jsonValueSchema)
-  ])
-);
-var providerMetadataSchema = z.record(
-  z.string(),
-  z.record(z.string(), jsonValueSchema)
-);
-var toolResultContentSchema = z.array(
-  z.union([
-    z.object({ type: z.literal("text"), text: z.string() }),
-    z.object({
-      type: z.literal("image"),
-      data: z.string(),
-      mimeType: z.string().optional()
-    })
-  ])
-);
-var textPartSchema = z.object({
-  type: z.literal("text"),
-  text: z.string(),
-  experimental_providerMetadata: providerMetadataSchema.optional()
-});
-var imagePartSchema = z.object({
-  type: z.literal("image"),
-  image: z.union([dataContentSchema, z.instanceof(URL)]),
-  mimeType: z.string().optional(),
-  experimental_providerMetadata: providerMetadataSchema.optional()
-});
-var filePartSchema = z.object({
-  type: z.literal("file"),
-  data: z.union([dataContentSchema, z.instanceof(URL)]),
-  mimeType: z.string(),
-  experimental_providerMetadata: providerMetadataSchema.optional()
-});
-var toolCallPartSchema = z.object({
-  type: z.literal("tool-call"),
-  toolCallId: z.string(),
-  toolName: z.string(),
-  args: z.unknown()
-});
-var toolResultPartSchema = z.object({
-  type: z.literal("tool-result"),
-  toolCallId: z.string(),
-  toolName: z.string(),
-  result: z.unknown(),
-  content: toolResultContentSchema.optional(),
-  isError: z.boolean().optional(),
-  experimental_providerMetadata: providerMetadataSchema.optional()
-});
-var coreSystemMessageSchema = z.object({
-  role: z.literal("system"),
-  content: z.string(),
-  experimental_providerMetadata: providerMetadataSchema.optional()
-});
-var coreUserMessageSchema = z.object({
-  role: z.literal("user"),
-  content: z.union([
-    z.string(),
-    z.array(z.union([textPartSchema, imagePartSchema, filePartSchema]))
-  ]),
-  experimental_providerMetadata: providerMetadataSchema.optional()
-});
-var coreAssistantMessageSchema = z.object({
-  role: z.literal("assistant"),
-  content: z.union([
-    z.string(),
-    z.array(z.union([textPartSchema, toolCallPartSchema]))
-  ]),
-  experimental_providerMetadata: providerMetadataSchema.optional()
-});
-var coreToolMessageSchema = z.object({
-  role: z.literal("tool"),
-  content: z.array(toolResultPartSchema),
-  experimental_providerMetadata: providerMetadataSchema.optional()
-});
-var coreMessageSchema = z.union([
-  coreSystemMessageSchema,
-  coreUserMessageSchema,
-  coreAssistantMessageSchema,
-  coreToolMessageSchema
-]);
-function detectPromptType(prompt2) {
-  if (!Array.isArray(prompt2)) {
-    return "other";
-  }
-  if (prompt2.length === 0) {
-    return "messages";
-  }
-  const characteristics = prompt2.map(detectSingleMessageCharacteristics);
-  if (characteristics.some((c) => c === "has-ui-specific-parts")) {
-    return "ui-messages";
-  } else if (characteristics.every(
-    (c) => c === "has-core-specific-parts" || c === "message"
-  )) {
-    return "messages";
-  } else {
-    return "other";
-  }
-}
-function detectSingleMessageCharacteristics(message) {
-  if (typeof message === "object" && message !== null && (message.role === "function" || // UI-only role
-  message.role === "data" || // UI-only role
-  "toolInvocations" in message || // UI-specific field
-  "experimental_attachments" in message)) {
-    return "has-ui-specific-parts";
-  } else if (typeof message === "object" && message !== null && "content" in message && (Array.isArray(message.content) || // Core messages can have array content
-  "experimental_providerMetadata" in message)) {
-    return "has-core-specific-parts";
-  } else if (typeof message === "object" && message !== null && "role" in message && "content" in message && typeof message.content === "string" && ["system", "user", "assistant", "tool"].includes(message.role)) {
-    return "message";
-  } else {
-    return "other";
-  }
-}
-function attachmentsToParts(attachments) {
-  var _a112, _b2, _c2;
-  const parts = [];
-  for (const attachment of attachments) {
-    let url;
-    try {
-      url = new URL(attachment.url);
-    } catch (error) {
-      throw new Error(`Invalid URL: ${attachment.url}`);
-    }
-    switch (url.protocol) {
-      case "http:":
-      case "https:": {
-        if ((_a112 = attachment.contentType) == null ? void 0 : _a112.startsWith("image/")) {
-          parts.push({ type: "image", image: url });
-        } else {
-          if (!attachment.contentType) {
-            throw new Error(
-              "If the attachment is not an image, it must specify a content type"
-            );
-          }
-          parts.push({
-            type: "file",
-            data: url,
-            mimeType: attachment.contentType
-          });
-        }
-        break;
-      }
-      case "data:": {
-        let header;
-        let base64Content;
-        let mimeType;
-        try {
-          [header, base64Content] = attachment.url.split(",");
-          mimeType = header.split(";")[0].split(":")[1];
-        } catch (error) {
-          throw new Error(`Error processing data URL: ${attachment.url}`);
-        }
-        if (mimeType == null || base64Content == null) {
-          throw new Error(`Invalid data URL format: ${attachment.url}`);
-        }
-        if ((_b2 = attachment.contentType) == null ? void 0 : _b2.startsWith("image/")) {
-          parts.push({
-            type: "image",
-            image: convertDataContentToUint8Array(base64Content)
-          });
-        } else if ((_c2 = attachment.contentType) == null ? void 0 : _c2.startsWith("text/")) {
-          parts.push({
-            type: "text",
-            text: convertUint8ArrayToText(
-              convertDataContentToUint8Array(base64Content)
-            )
-          });
-        } else {
-          if (!attachment.contentType) {
-            throw new Error(
-              "If the attachment is not an image or text, it must specify a content type"
-            );
-          }
-          parts.push({
-            type: "file",
-            data: base64Content,
-            mimeType: attachment.contentType
-          });
-        }
-        break;
-      }
-      default: {
-        throw new Error(`Unsupported URL protocol: ${url.protocol}`);
-      }
-    }
-  }
-  return parts;
-}
-var name6 = "AI_MessageConversionError";
-var marker6 = `vercel.ai.error.${name6}`;
-var symbol6 = Symbol.for(marker6);
-var _a6;
-var MessageConversionError = class extends AISDKError {
-  constructor({
-    originalMessage,
-    message
-  }) {
-    super({ name: name6, message });
-    this[_a6] = true;
-    this.originalMessage = originalMessage;
-  }
-  static isInstance(error) {
-    return AISDKError.hasMarker(error, marker6);
-  }
-};
-_a6 = symbol6;
-function convertToCoreMessages(messages, options2) {
-  var _a112;
-  const tools2 = (_a112 = options2 == null ? void 0 : options2.tools) != null ? _a112 : {};
-  const coreMessages = [];
-  for (const message of messages) {
-    const { role, content, toolInvocations, experimental_attachments } = message;
-    switch (role) {
-      case "system": {
-        coreMessages.push({
-          role: "system",
-          content
-        });
-        break;
-      }
-      case "user": {
-        coreMessages.push({
-          role: "user",
-          content: experimental_attachments ? [
-            { type: "text", text: content },
-            ...attachmentsToParts(experimental_attachments)
-          ] : content
-        });
-        break;
-      }
-      case "assistant": {
-        if (toolInvocations == null) {
-          coreMessages.push({ role: "assistant", content });
-          break;
-        }
-        coreMessages.push({
-          role: "assistant",
-          content: [
-            { type: "text", text: content },
-            ...toolInvocations.map(
-              ({ toolCallId, toolName, args: args2 }) => ({
-                type: "tool-call",
-                toolCallId,
-                toolName,
-                args: args2
-              })
-            )
-          ]
-        });
-        coreMessages.push({
-          role: "tool",
-          content: toolInvocations.map((toolInvocation) => {
-            if (!("result" in toolInvocation)) {
-              throw new MessageConversionError({
-                originalMessage: message,
-                message: "ToolInvocation must have a result: " + JSON.stringify(toolInvocation)
-              });
-            }
-            const { toolCallId, toolName, result: result2 } = toolInvocation;
-            const tool2 = tools2[toolName];
-            return (tool2 == null ? void 0 : tool2.experimental_toToolResultContent) != null ? {
-              type: "tool-result",
-              toolCallId,
-              toolName,
-              result: tool2.experimental_toToolResultContent(result2),
-              experimental_content: tool2.experimental_toToolResultContent(result2)
-            } : {
-              type: "tool-result",
-              toolCallId,
-              toolName,
-              result: result2
-            };
-          })
-        });
-        break;
-      }
-      case "function":
-      case "data":
-      case "tool": {
-        break;
-      }
-      default: {
-        const _exhaustiveCheck = role;
-        throw new MessageConversionError({
-          originalMessage: message,
-          message: `Unsupported role: ${_exhaustiveCheck}`
-        });
-      }
-    }
-  }
-  return coreMessages;
-}
-function standardizePrompt({
-  prompt: prompt2,
-  tools: tools2
-}) {
-  if (prompt2.prompt == null && prompt2.messages == null) {
-    throw new InvalidPromptError({
-      prompt: prompt2,
-      message: "prompt or messages must be defined"
-    });
-  }
-  if (prompt2.prompt != null && prompt2.messages != null) {
-    throw new InvalidPromptError({
-      prompt: prompt2,
-      message: "prompt and messages cannot be defined at the same time"
-    });
-  }
-  if (prompt2.system != null && typeof prompt2.system !== "string") {
-    throw new InvalidPromptError({
-      prompt: prompt2,
-      message: "system must be a string"
-    });
-  }
-  if (prompt2.prompt != null) {
-    if (typeof prompt2.prompt !== "string") {
-      throw new InvalidPromptError({
-        prompt: prompt2,
-        message: "prompt must be a string"
-      });
-    }
-    return {
-      type: "prompt",
-      system: prompt2.system,
-      messages: [
-        {
-          role: "user",
-          content: prompt2.prompt
-        }
-      ]
-    };
-  }
-  if (prompt2.messages != null) {
-    const promptType = detectPromptType(prompt2.messages);
-    if (promptType === "other") {
-      throw new InvalidPromptError({
-        prompt: prompt2,
-        message: "messages must be an array of CoreMessage or UIMessage"
-      });
-    }
-    const messages = promptType === "ui-messages" ? convertToCoreMessages(prompt2.messages, {
-      tools: tools2
-    }) : prompt2.messages;
-    const validationResult = safeValidateTypes({
-      value: messages,
-      schema: z.array(coreMessageSchema)
-    });
-    if (!validationResult.success) {
-      throw new InvalidPromptError({
-        prompt: prompt2,
-        message: "messages must be an array of CoreMessage or UIMessage",
-        cause: validationResult.error
-      });
-    }
-    return {
-      type: "messages",
-      messages,
-      system: prompt2.system
-    };
-  }
-  throw new Error("unreachable");
-}
-function calculateLanguageModelUsage(usage) {
-  return {
-    promptTokens: usage.promptTokens,
-    completionTokens: usage.completionTokens,
-    totalTokens: usage.promptTokens + usage.completionTokens
-  };
-}
-function prepareResponseHeaders(init, {
-  contentType,
-  dataStreamVersion
-}) {
-  var _a112;
-  const headers = new Headers((_a112 = init == null ? void 0 : init.headers) != null ? _a112 : {});
-  if (!headers.has("Content-Type")) {
-    headers.set("Content-Type", contentType);
-  }
-  if (dataStreamVersion !== void 0) {
-    headers.set("X-Vercel-AI-Data-Stream", dataStreamVersion);
-  }
-  return headers;
-}
-function createAsyncIterableStream(source, transformer) {
-  const transformedStream = source.pipeThrough(
-    new TransformStream(transformer)
-  );
-  transformedStream[Symbol.asyncIterator] = () => {
-    const reader = transformedStream.getReader();
-    return {
-      async next() {
-        const { done, value } = await reader.read();
-        return done ? { done: true, value: void 0 } : { done: false, value };
-      }
-    };
-  };
-  return transformedStream;
-}
-createIdGenerator({ prefix: "aiobj", size: 24 });
-function createResolvablePromise() {
-  let resolve;
-  let reject;
-  const promise = new Promise((res, rej) => {
-    resolve = res;
-    reject = rej;
-  });
-  return {
-    promise,
-    resolve,
-    reject
-  };
-}
-function now() {
-  var _a112, _b2;
-  return (_b2 = (_a112 = globalThis == null ? void 0 : globalThis.performance) == null ? void 0 : _a112.now()) != null ? _b2 : Date.now();
-}
-function prepareOutgoingHttpHeaders(init, {
-  contentType,
-  dataStreamVersion
-}) {
-  const headers = {};
-  if ((init == null ? void 0 : init.headers) != null) {
-    for (const [key, value] of Object.entries(init.headers)) {
-      headers[key] = value;
-    }
-  }
-  if (headers["Content-Type"] == null) {
-    headers["Content-Type"] = contentType;
-  }
-  if (dataStreamVersion !== void 0) {
-    headers["X-Vercel-AI-Data-Stream"] = dataStreamVersion;
-  }
-  return headers;
-}
-function writeToServerResponse({
-  response,
-  status,
-  statusText,
-  headers,
-  stream
-}) {
-  response.writeHead(status != null ? status : 200, statusText, headers);
-  const reader = stream.getReader();
-  const read = async () => {
-    try {
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done)
-          break;
-        response.write(value);
-      }
-    } catch (error) {
-      throw error;
-    } finally {
-      response.end();
-    }
-  };
-  read();
-}
-createIdGenerator({ prefix: "aiobj", size: 24 });
-var name8 = "AI_InvalidToolArgumentsError";
-var marker8 = `vercel.ai.error.${name8}`;
-var symbol8 = Symbol.for(marker8);
-var _a8;
-var InvalidToolArgumentsError = class extends AISDKError {
-  constructor({
-    toolArgs,
-    toolName,
-    cause,
-    message = `Invalid arguments for tool ${toolName}: ${getErrorMessage$1(
-      cause
-    )}`
-  }) {
-    super({ name: name8, message, cause });
-    this[_a8] = true;
-    this.toolArgs = toolArgs;
-    this.toolName = toolName;
-  }
-  static isInstance(error) {
-    return AISDKError.hasMarker(error, marker8);
-  }
-  /**
-   * @deprecated use `isInstance` instead
-   */
-  static isInvalidToolArgumentsError(error) {
-    return error instanceof Error && error.name === name8 && typeof error.toolName === "string" && typeof error.toolArgs === "string";
-  }
-  /**
-   * @deprecated Do not use this method. It will be removed in the next major version.
-   */
-  toJSON() {
-    return {
-      name: this.name,
-      message: this.message,
-      cause: this.cause,
-      stack: this.stack,
-      toolName: this.toolName,
-      toolArgs: this.toolArgs
-    };
-  }
-};
-_a8 = symbol8;
-var name9 = "AI_NoSuchToolError";
-var marker9 = `vercel.ai.error.${name9}`;
-var symbol9 = Symbol.for(marker9);
-var _a9;
-var NoSuchToolError = class extends AISDKError {
-  constructor({
-    toolName,
-    availableTools = void 0,
-    message = `Model tried to call unavailable tool '${toolName}'. ${availableTools === void 0 ? "No tools are available." : `Available tools: ${availableTools.join(", ")}.`}`
-  }) {
-    super({ name: name9, message });
-    this[_a9] = true;
-    this.toolName = toolName;
-    this.availableTools = availableTools;
-  }
-  static isInstance(error) {
-    return AISDKError.hasMarker(error, marker9);
-  }
-  /**
-   * @deprecated use `isInstance` instead
-   */
-  static isNoSuchToolError(error) {
-    return error instanceof Error && error.name === name9 && "toolName" in error && error.toolName != void 0 && typeof error.name === "string";
-  }
-  /**
-   * @deprecated Do not use this method. It will be removed in the next major version.
-   */
-  toJSON() {
-    return {
-      name: this.name,
-      message: this.message,
-      stack: this.stack,
-      toolName: this.toolName,
-      availableTools: this.availableTools
-    };
-  }
-};
-_a9 = symbol9;
-function isNonEmptyObject(object) {
-  return object != null && Object.keys(object).length > 0;
-}
-function prepareToolsAndToolChoice({
-  tools: tools2,
-  toolChoice,
-  activeTools
-}) {
-  if (!isNonEmptyObject(tools2)) {
-    return {
-      tools: void 0,
-      toolChoice: void 0
-    };
-  }
-  const filteredTools = activeTools != null ? Object.entries(tools2).filter(
-    ([name112]) => activeTools.includes(name112)
-  ) : Object.entries(tools2);
-  return {
-    tools: filteredTools.map(([name112, tool2]) => {
-      const toolType = tool2.type;
-      switch (toolType) {
-        case void 0:
-        case "function":
-          return {
-            type: "function",
-            name: name112,
-            description: tool2.description,
-            parameters: asSchema(tool2.parameters).jsonSchema
-          };
-        case "provider-defined":
-          return {
-            type: "provider-defined",
-            name: name112,
-            id: tool2.id,
-            args: tool2.args
-          };
-        default: {
-          const exhaustiveCheck = toolType;
-          throw new Error(`Unsupported tool type: ${exhaustiveCheck}`);
-        }
-      }
-    }),
-    toolChoice: toolChoice == null ? { type: "auto" } : typeof toolChoice === "string" ? { type: toolChoice } : { type: "tool", toolName: toolChoice.toolName }
-  };
-}
-var lastWhitespaceRegexp = /^([\s\S]*?)(\s+)(\S*)$/;
-function splitOnLastWhitespace(text) {
-  const match = text.match(lastWhitespaceRegexp);
-  return match ? { prefix: match[1], whitespace: match[2], suffix: match[3] } : void 0;
-}
-function removeTextAfterLastWhitespace(text) {
-  const match = splitOnLastWhitespace(text);
-  return match ? match.prefix + match.whitespace : text;
-}
-function parseToolCall({
-  toolCall,
-  tools: tools2
-}) {
-  const toolName = toolCall.toolName;
-  if (tools2 == null) {
-    throw new NoSuchToolError({ toolName: toolCall.toolName });
-  }
-  const tool2 = tools2[toolName];
-  if (tool2 == null) {
-    throw new NoSuchToolError({
-      toolName: toolCall.toolName,
-      availableTools: Object.keys(tools2)
-    });
-  }
-  const schema2 = asSchema(tool2.parameters);
-  const parseResult = toolCall.args.trim() === "" ? safeValidateTypes({ value: {}, schema: schema2 }) : safeParseJSON({ text: toolCall.args, schema: schema2 });
-  if (parseResult.success === false) {
-    throw new InvalidToolArgumentsError({
-      toolName,
-      toolArgs: toolCall.args,
-      cause: parseResult.error
-    });
-  }
-  return {
-    type: "tool-call",
-    toolCallId: toolCall.toolCallId,
-    toolName,
-    args: parseResult.value
-  };
-}
-function toResponseMessages({
-  text = "",
-  tools: tools2,
-  toolCalls,
-  toolResults
-}) {
-  const responseMessages = [];
-  responseMessages.push({
-    role: "assistant",
-    content: [{ type: "text", text }, ...toolCalls]
-  });
-  if (toolResults.length > 0) {
-    responseMessages.push({
-      role: "tool",
-      content: toolResults.map((toolResult) => {
-        const tool2 = tools2[toolResult.toolName];
-        return (tool2 == null ? void 0 : tool2.experimental_toToolResultContent) != null ? {
-          type: "tool-result",
-          toolCallId: toolResult.toolCallId,
-          toolName: toolResult.toolName,
-          result: tool2.experimental_toToolResultContent(toolResult.result),
-          experimental_content: tool2.experimental_toToolResultContent(
-            toolResult.result
-          )
-        } : {
-          type: "tool-result",
-          toolCallId: toolResult.toolCallId,
-          toolName: toolResult.toolName,
-          result: toolResult.result
-        };
-      })
-    });
-  }
-  return responseMessages;
-}
-var originalGenerateId3 = createIdGenerator({ prefix: "aitxt", size: 24 });
-async function generateText({
-  model,
-  tools: tools2,
-  toolChoice,
-  system,
-  prompt: prompt2,
-  messages,
-  maxRetries,
-  abortSignal,
-  headers,
-  maxAutomaticRoundtrips = 0,
-  maxToolRoundtrips = maxAutomaticRoundtrips,
-  maxSteps = maxToolRoundtrips != null ? maxToolRoundtrips + 1 : 1,
-  experimental_continuationSteps,
-  experimental_continueSteps: continueSteps = experimental_continuationSteps != null ? experimental_continuationSteps : false,
-  experimental_telemetry: telemetry,
-  experimental_providerMetadata: providerMetadata,
-  experimental_activeTools: activeTools,
-  _internal: {
-    generateId: generateId3 = originalGenerateId3,
-    currentDate = () => /* @__PURE__ */ new Date()
-  } = {},
-  onStepFinish,
-  ...settings
-}) {
-  if (maxSteps < 1) {
-    throw new InvalidArgumentError({
-      parameter: "maxSteps",
-      value: maxSteps,
-      message: "maxSteps must be at least 1"
-    });
-  }
-  const baseTelemetryAttributes = getBaseTelemetryAttributes({
-    model,
-    telemetry,
-    headers,
-    settings: { ...settings, maxRetries }
-  });
-  const initialPrompt = standardizePrompt({
-    prompt: { system, prompt: prompt2, messages },
-    tools: tools2
-  });
-  const tracer = getTracer(telemetry);
-  return recordSpan({
-    name: "ai.generateText",
-    attributes: selectTelemetryAttributes({
-      telemetry,
-      attributes: {
-        ...assembleOperationName({
-          operationId: "ai.generateText",
-          telemetry
-        }),
-        ...baseTelemetryAttributes,
-        // specific settings that only make sense on the outer level:
-        "ai.prompt": {
-          input: () => JSON.stringify({ system, prompt: prompt2, messages })
-        },
-        "ai.settings.maxSteps": maxSteps
-      }
-    }),
-    tracer,
-    fn: async (span) => {
-      var _a112, _b2, _c2, _d, _e, _f;
-      const retry = retryWithExponentialBackoff({ maxRetries });
-      const mode = {
-        type: "regular",
-        ...prepareToolsAndToolChoice({ tools: tools2, toolChoice, activeTools })
-      };
-      const callSettings = prepareCallSettings(settings);
-      let currentModelResponse;
-      let currentToolCalls = [];
-      let currentToolResults = [];
-      let stepCount = 0;
-      const responseMessages = [];
-      let text = "";
-      const steps = [];
-      const usage = {
-        completionTokens: 0,
-        promptTokens: 0,
-        totalTokens: 0
-      };
-      let stepType = "initial";
-      do {
-        if (stepCount === 1) {
-          initialPrompt.type = "messages";
-        }
-        const promptFormat = stepCount === 0 ? initialPrompt.type : "messages";
-        const promptMessages = await convertToLanguageModelPrompt({
-          prompt: {
-            type: promptFormat,
-            system: initialPrompt.system,
-            messages: [...initialPrompt.messages, ...responseMessages]
-          },
-          modelSupportsImageUrls: model.supportsImageUrls,
-          modelSupportsUrl: model.supportsUrl
-        });
-        currentModelResponse = await retry(
-          () => recordSpan({
-            name: "ai.generateText.doGenerate",
-            attributes: selectTelemetryAttributes({
-              telemetry,
-              attributes: {
-                ...assembleOperationName({
-                  operationId: "ai.generateText.doGenerate",
-                  telemetry
-                }),
-                ...baseTelemetryAttributes,
-                "ai.prompt.format": { input: () => promptFormat },
-                "ai.prompt.messages": {
-                  input: () => JSON.stringify(promptMessages)
-                },
-                "ai.prompt.tools": {
-                  // convert the language model level tools:
-                  input: () => {
-                    var _a122;
-                    return (_a122 = mode.tools) == null ? void 0 : _a122.map((tool2) => JSON.stringify(tool2));
-                  }
-                },
-                "ai.prompt.toolChoice": {
-                  input: () => mode.toolChoice != null ? JSON.stringify(mode.toolChoice) : void 0
-                },
-                // standardized gen-ai llm span attributes:
-                "gen_ai.system": model.provider,
-                "gen_ai.request.model": model.modelId,
-                "gen_ai.request.frequency_penalty": settings.frequencyPenalty,
-                "gen_ai.request.max_tokens": settings.maxTokens,
-                "gen_ai.request.presence_penalty": settings.presencePenalty,
-                "gen_ai.request.stop_sequences": settings.stopSequences,
-                "gen_ai.request.temperature": settings.temperature,
-                "gen_ai.request.top_k": settings.topK,
-                "gen_ai.request.top_p": settings.topP
-              }
-            }),
-            tracer,
-            fn: async (span2) => {
-              var _a122, _b22, _c22, _d2, _e2, _f2;
-              const result2 = await model.doGenerate({
-                mode,
-                ...callSettings,
-                inputFormat: promptFormat,
-                prompt: promptMessages,
-                providerMetadata,
-                abortSignal,
-                headers
-              });
-              const responseData = {
-                id: (_b22 = (_a122 = result2.response) == null ? void 0 : _a122.id) != null ? _b22 : generateId3(),
-                timestamp: (_d2 = (_c22 = result2.response) == null ? void 0 : _c22.timestamp) != null ? _d2 : currentDate(),
-                modelId: (_f2 = (_e2 = result2.response) == null ? void 0 : _e2.modelId) != null ? _f2 : model.modelId
-              };
-              span2.setAttributes(
-                selectTelemetryAttributes({
-                  telemetry,
-                  attributes: {
-                    "ai.response.finishReason": result2.finishReason,
-                    "ai.response.text": {
-                      output: () => result2.text
-                    },
-                    "ai.response.toolCalls": {
-                      output: () => JSON.stringify(result2.toolCalls)
-                    },
-                    "ai.response.id": responseData.id,
-                    "ai.response.model": responseData.modelId,
-                    "ai.response.timestamp": responseData.timestamp.toISOString(),
-                    "ai.usage.promptTokens": result2.usage.promptTokens,
-                    "ai.usage.completionTokens": result2.usage.completionTokens,
-                    // deprecated:
-                    "ai.finishReason": result2.finishReason,
-                    "ai.result.text": {
-                      output: () => result2.text
-                    },
-                    "ai.result.toolCalls": {
-                      output: () => JSON.stringify(result2.toolCalls)
-                    },
-                    // standardized gen-ai llm span attributes:
-                    "gen_ai.response.finish_reasons": [result2.finishReason],
-                    "gen_ai.response.id": responseData.id,
-                    "gen_ai.response.model": responseData.modelId,
-                    "gen_ai.usage.input_tokens": result2.usage.promptTokens,
-                    "gen_ai.usage.output_tokens": result2.usage.completionTokens
-                  }
-                })
-              );
-              return { ...result2, response: responseData };
-            }
-          })
-        );
-        currentToolCalls = ((_a112 = currentModelResponse.toolCalls) != null ? _a112 : []).map(
-          (modelToolCall) => parseToolCall({ toolCall: modelToolCall, tools: tools2 })
-        );
-        currentToolResults = tools2 == null ? [] : await executeTools({
-          toolCalls: currentToolCalls,
-          tools: tools2,
-          tracer,
-          telemetry,
-          abortSignal
-        });
-        const currentUsage = calculateLanguageModelUsage(
-          currentModelResponse.usage
-        );
-        usage.completionTokens += currentUsage.completionTokens;
-        usage.promptTokens += currentUsage.promptTokens;
-        usage.totalTokens += currentUsage.totalTokens;
-        let nextStepType = "done";
-        if (++stepCount < maxSteps) {
-          if (continueSteps && currentModelResponse.finishReason === "length" && // only use continue when there are no tool calls:
-          currentToolCalls.length === 0) {
-            nextStepType = "continue";
-          } else if (
-            // there are tool calls:
-            currentToolCalls.length > 0 && // all current tool calls have results:
-            currentToolResults.length === currentToolCalls.length
-          ) {
-            nextStepType = "tool-result";
-          }
-        }
-        const originalText = (_b2 = currentModelResponse.text) != null ? _b2 : "";
-        const stepTextLeadingWhitespaceTrimmed = stepType === "continue" && // only for continue steps
-        text.trimEnd() !== text ? originalText.trimStart() : originalText;
-        const stepText = nextStepType === "continue" ? removeTextAfterLastWhitespace(stepTextLeadingWhitespaceTrimmed) : stepTextLeadingWhitespaceTrimmed;
-        text = nextStepType === "continue" || stepType === "continue" ? text + stepText : stepText;
-        if (stepType === "continue") {
-          const lastMessage = responseMessages[responseMessages.length - 1];
-          if (typeof lastMessage.content === "string") {
-            lastMessage.content += stepText;
-          } else {
-            lastMessage.content.push({
-              text: stepText,
-              type: "text"
-            });
-          }
-        } else {
-          responseMessages.push(
-            ...toResponseMessages({
-              text,
-              tools: tools2 != null ? tools2 : {},
-              toolCalls: currentToolCalls,
-              toolResults: currentToolResults
-            })
-          );
-        }
-        const currentStepResult = {
-          stepType,
-          text: stepText,
-          toolCalls: currentToolCalls,
-          toolResults: currentToolResults,
-          finishReason: currentModelResponse.finishReason,
-          usage: currentUsage,
-          warnings: currentModelResponse.warnings,
-          logprobs: currentModelResponse.logprobs,
-          request: (_c2 = currentModelResponse.request) != null ? _c2 : {},
-          response: {
-            ...currentModelResponse.response,
-            headers: (_d = currentModelResponse.rawResponse) == null ? void 0 : _d.headers,
-            // deep clone msgs to avoid mutating past messages in multi-step:
-            messages: JSON.parse(JSON.stringify(responseMessages))
-          },
-          experimental_providerMetadata: currentModelResponse.providerMetadata,
-          isContinued: nextStepType === "continue"
-        };
-        steps.push(currentStepResult);
-        await (onStepFinish == null ? void 0 : onStepFinish(currentStepResult));
-        stepType = nextStepType;
-      } while (stepType !== "done");
-      span.setAttributes(
-        selectTelemetryAttributes({
-          telemetry,
-          attributes: {
-            "ai.response.finishReason": currentModelResponse.finishReason,
-            "ai.response.text": {
-              output: () => currentModelResponse.text
-            },
-            "ai.response.toolCalls": {
-              output: () => JSON.stringify(currentModelResponse.toolCalls)
-            },
-            "ai.usage.promptTokens": currentModelResponse.usage.promptTokens,
-            "ai.usage.completionTokens": currentModelResponse.usage.completionTokens,
-            // deprecated:
-            "ai.finishReason": currentModelResponse.finishReason,
-            "ai.result.text": {
-              output: () => currentModelResponse.text
-            },
-            "ai.result.toolCalls": {
-              output: () => JSON.stringify(currentModelResponse.toolCalls)
-            }
-          }
-        })
-      );
-      return new DefaultGenerateTextResult({
-        text,
-        toolCalls: currentToolCalls,
-        toolResults: currentToolResults,
-        finishReason: currentModelResponse.finishReason,
-        usage,
-        warnings: currentModelResponse.warnings,
-        request: (_e = currentModelResponse.request) != null ? _e : {},
-        response: {
-          ...currentModelResponse.response,
-          headers: (_f = currentModelResponse.rawResponse) == null ? void 0 : _f.headers,
-          messages: responseMessages
-        },
-        logprobs: currentModelResponse.logprobs,
-        responseMessages,
-        steps,
-        providerMetadata: currentModelResponse.providerMetadata
-      });
-    }
-  });
-}
-async function executeTools({
-  toolCalls,
-  tools: tools2,
-  tracer,
-  telemetry,
-  abortSignal
-}) {
-  const toolResults = await Promise.all(
-    toolCalls.map(async (toolCall) => {
-      const tool2 = tools2[toolCall.toolName];
-      if ((tool2 == null ? void 0 : tool2.execute) == null) {
-        return void 0;
-      }
-      const result2 = await recordSpan({
-        name: "ai.toolCall",
-        attributes: selectTelemetryAttributes({
-          telemetry,
-          attributes: {
-            ...assembleOperationName({
-              operationId: "ai.toolCall",
-              telemetry
-            }),
-            "ai.toolCall.name": toolCall.toolName,
-            "ai.toolCall.id": toolCall.toolCallId,
-            "ai.toolCall.args": {
-              output: () => JSON.stringify(toolCall.args)
-            }
-          }
-        }),
-        tracer,
-        fn: async (span) => {
-          const result22 = await tool2.execute(toolCall.args, { abortSignal });
-          try {
-            span.setAttributes(
-              selectTelemetryAttributes({
-                telemetry,
-                attributes: {
-                  "ai.toolCall.result": {
-                    output: () => JSON.stringify(result22)
-                  }
-                }
-              })
-            );
-          } catch (ignored) {
-          }
-          return result22;
-        }
-      });
-      return {
-        toolCallId: toolCall.toolCallId,
-        toolName: toolCall.toolName,
-        args: toolCall.args,
-        result: result2
-      };
-    })
-  );
-  return toolResults.filter(
-    (result2) => result2 != null
-  );
-}
-var DefaultGenerateTextResult = class {
-  constructor(options2) {
-    this.text = options2.text;
-    this.toolCalls = options2.toolCalls;
-    this.toolResults = options2.toolResults;
-    this.finishReason = options2.finishReason;
-    this.usage = options2.usage;
-    this.warnings = options2.warnings;
-    this.request = options2.request;
-    this.response = options2.response;
-    this.responseMessages = options2.responseMessages;
-    this.roundtrips = options2.steps;
-    this.steps = options2.steps;
-    this.experimental_providerMetadata = options2.providerMetadata;
-    this.rawResponse = {
-      headers: options2.response.headers
-    };
-    this.logprobs = options2.logprobs;
-  }
-};
-function createStitchableStream() {
-  let innerStreamReaders = [];
-  let controller = null;
-  let isClosed = false;
-  const processPull = async () => {
-    if (isClosed && innerStreamReaders.length === 0) {
-      controller == null ? void 0 : controller.close();
-      return;
-    }
-    if (innerStreamReaders.length === 0) {
-      return;
-    }
-    try {
-      const { value, done } = await innerStreamReaders[0].read();
-      if (done) {
-        innerStreamReaders.shift();
-        if (innerStreamReaders.length > 0) {
-          await processPull();
-        } else if (isClosed) {
-          controller == null ? void 0 : controller.close();
-        }
-      } else {
-        controller == null ? void 0 : controller.enqueue(value);
-      }
-    } catch (error) {
-      controller == null ? void 0 : controller.error(error);
-      innerStreamReaders.shift();
-      if (isClosed && innerStreamReaders.length === 0) {
-        controller == null ? void 0 : controller.close();
-      }
-    }
-  };
-  return {
-    stream: new ReadableStream({
-      start(controllerParam) {
-        controller = controllerParam;
-      },
-      pull: processPull,
-      async cancel() {
-        for (const reader of innerStreamReaders) {
-          await reader.cancel();
-        }
-        innerStreamReaders = [];
-        isClosed = true;
-      }
-    }),
-    addStream: (innerStream) => {
-      if (isClosed) {
-        throw new Error("Cannot add inner stream: outer stream is closed");
-      }
-      innerStreamReaders.push(innerStream.getReader());
-    },
-    close: () => {
-      isClosed = true;
-      if (innerStreamReaders.length === 0) {
-        controller == null ? void 0 : controller.close();
-      }
-    }
-  };
-}
-function mergeStreams(stream1, stream2) {
-  const reader1 = stream1.getReader();
-  const reader2 = stream2.getReader();
-  let lastRead1 = void 0;
-  let lastRead2 = void 0;
-  let stream1Done = false;
-  let stream2Done = false;
-  async function readStream1(controller) {
-    try {
-      if (lastRead1 == null) {
-        lastRead1 = reader1.read();
-      }
-      const result2 = await lastRead1;
-      lastRead1 = void 0;
-      if (!result2.done) {
-        controller.enqueue(result2.value);
-      } else {
-        controller.close();
-      }
-    } catch (error) {
-      controller.error(error);
-    }
-  }
-  async function readStream2(controller) {
-    try {
-      if (lastRead2 == null) {
-        lastRead2 = reader2.read();
-      }
-      const result2 = await lastRead2;
-      lastRead2 = void 0;
-      if (!result2.done) {
-        controller.enqueue(result2.value);
-      } else {
-        controller.close();
-      }
-    } catch (error) {
-      controller.error(error);
-    }
-  }
-  return new ReadableStream({
-    async pull(controller) {
-      try {
-        if (stream1Done) {
-          await readStream2(controller);
-          return;
-        }
-        if (stream2Done) {
-          await readStream1(controller);
-          return;
-        }
-        if (lastRead1 == null) {
-          lastRead1 = reader1.read();
-        }
-        if (lastRead2 == null) {
-          lastRead2 = reader2.read();
-        }
-        const { result: result2, reader } = await Promise.race([
-          lastRead1.then((result22) => ({ result: result22, reader: reader1 })),
-          lastRead2.then((result22) => ({ result: result22, reader: reader2 }))
-        ]);
-        if (!result2.done) {
-          controller.enqueue(result2.value);
-        }
-        if (reader === reader1) {
-          lastRead1 = void 0;
-          if (result2.done) {
-            await readStream2(controller);
-            stream1Done = true;
-          }
-        } else {
-          lastRead2 = void 0;
-          if (result2.done) {
-            stream2Done = true;
-            await readStream1(controller);
-          }
-        }
-      } catch (error) {
-        controller.error(error);
-      }
-    },
-    cancel() {
-      reader1.cancel();
-      reader2.cancel();
-    }
-  });
-}
-function runToolsTransformation({
-  tools: tools2,
-  generatorStream,
-  toolCallStreaming,
-  tracer,
-  telemetry,
-  abortSignal
-}) {
-  let toolResultsStreamController = null;
-  const toolResultsStream = new ReadableStream({
-    start(controller) {
-      toolResultsStreamController = controller;
-    }
-  });
-  const activeToolCalls = {};
-  const outstandingToolResults = /* @__PURE__ */ new Set();
-  let canClose = false;
-  let finishChunk = void 0;
-  function attemptClose() {
-    if (canClose && outstandingToolResults.size === 0) {
-      if (finishChunk != null) {
-        toolResultsStreamController.enqueue(finishChunk);
-      }
-      toolResultsStreamController.close();
-    }
-  }
-  const forwardStream = new TransformStream({
-    transform(chunk, controller) {
-      const chunkType = chunk.type;
-      switch (chunkType) {
-        case "text-delta":
-        case "response-metadata":
-        case "error": {
-          controller.enqueue(chunk);
-          break;
-        }
-        case "tool-call-delta": {
-          if (toolCallStreaming) {
-            if (!activeToolCalls[chunk.toolCallId]) {
-              controller.enqueue({
-                type: "tool-call-streaming-start",
-                toolCallId: chunk.toolCallId,
-                toolName: chunk.toolName
-              });
-              activeToolCalls[chunk.toolCallId] = true;
-            }
-            controller.enqueue({
-              type: "tool-call-delta",
-              toolCallId: chunk.toolCallId,
-              toolName: chunk.toolName,
-              argsTextDelta: chunk.argsTextDelta
-            });
-          }
-          break;
-        }
-        case "tool-call": {
-          const toolName = chunk.toolName;
-          if (tools2 == null) {
-            toolResultsStreamController.enqueue({
-              type: "error",
-              error: new NoSuchToolError({ toolName: chunk.toolName })
-            });
-            break;
-          }
-          const tool2 = tools2[toolName];
-          if (tool2 == null) {
-            toolResultsStreamController.enqueue({
-              type: "error",
-              error: new NoSuchToolError({
-                toolName: chunk.toolName,
-                availableTools: Object.keys(tools2)
-              })
-            });
-            break;
-          }
-          try {
-            const toolCall = parseToolCall({
-              toolCall: chunk,
-              tools: tools2
-            });
-            controller.enqueue(toolCall);
-            if (tool2.execute != null) {
-              const toolExecutionId = generateId();
-              outstandingToolResults.add(toolExecutionId);
-              recordSpan({
-                name: "ai.toolCall",
-                attributes: selectTelemetryAttributes({
-                  telemetry,
-                  attributes: {
-                    ...assembleOperationName({
-                      operationId: "ai.toolCall",
-                      telemetry
-                    }),
-                    "ai.toolCall.name": toolCall.toolName,
-                    "ai.toolCall.id": toolCall.toolCallId,
-                    "ai.toolCall.args": {
-                      output: () => JSON.stringify(toolCall.args)
-                    }
-                  }
-                }),
-                tracer,
-                fn: async (span) => tool2.execute(toolCall.args, { abortSignal }).then(
-                  (result2) => {
-                    toolResultsStreamController.enqueue({
-                      ...toolCall,
-                      type: "tool-result",
-                      result: result2
-                    });
-                    outstandingToolResults.delete(toolExecutionId);
-                    attemptClose();
-                    try {
-                      span.setAttributes(
-                        selectTelemetryAttributes({
-                          telemetry,
-                          attributes: {
-                            "ai.toolCall.result": {
-                              output: () => JSON.stringify(result2)
-                            }
-                          }
-                        })
-                      );
-                    } catch (ignored) {
-                    }
-                  },
-                  (error) => {
-                    toolResultsStreamController.enqueue({
-                      type: "error",
-                      error
-                    });
-                    outstandingToolResults.delete(toolExecutionId);
-                    attemptClose();
-                  }
-                )
-              });
-            }
-          } catch (error) {
-            toolResultsStreamController.enqueue({
-              type: "error",
-              error
-            });
-          }
-          break;
-        }
-        case "finish": {
-          finishChunk = {
-            type: "finish",
-            finishReason: chunk.finishReason,
-            logprobs: chunk.logprobs,
-            usage: calculateLanguageModelUsage(chunk.usage),
-            experimental_providerMetadata: chunk.providerMetadata
-          };
-          break;
-        }
-        default: {
-          const _exhaustiveCheck = chunkType;
-          throw new Error(`Unhandled chunk type: ${_exhaustiveCheck}`);
-        }
-      }
-    },
-    flush() {
-      canClose = true;
-      attemptClose();
-    }
-  });
-  return new ReadableStream({
-    async start(controller) {
-      return Promise.all([
-        generatorStream.pipeThrough(forwardStream).pipeTo(
-          new WritableStream({
-            write(chunk) {
-              controller.enqueue(chunk);
-            },
-            close() {
-            }
-          })
-        ),
-        toolResultsStream.pipeTo(
-          new WritableStream({
-            write(chunk) {
-              controller.enqueue(chunk);
-            },
-            close() {
-              controller.close();
-            }
-          })
-        )
-      ]);
-    }
-  });
-}
-var originalGenerateId4 = createIdGenerator({ prefix: "aitxt", size: 24 });
-async function streamText({
-  model,
-  tools: tools2,
-  toolChoice,
-  system,
-  prompt: prompt2,
-  messages,
-  maxRetries,
-  abortSignal,
-  headers,
-  maxToolRoundtrips = 0,
-  maxSteps = maxToolRoundtrips != null ? maxToolRoundtrips + 1 : 1,
-  experimental_continueSteps: continueSteps = false,
-  experimental_telemetry: telemetry,
-  experimental_providerMetadata: providerMetadata,
-  experimental_toolCallStreaming: toolCallStreaming = false,
-  experimental_activeTools: activeTools,
-  onChunk,
-  onFinish,
-  onStepFinish,
-  _internal: {
-    now: now2 = now,
-    generateId: generateId3 = originalGenerateId4,
-    currentDate = () => /* @__PURE__ */ new Date()
-  } = {},
-  ...settings
-}) {
-  if (maxSteps < 1) {
-    throw new InvalidArgumentError({
-      parameter: "maxSteps",
-      value: maxSteps,
-      message: "maxSteps must be at least 1"
-    });
-  }
-  const baseTelemetryAttributes = getBaseTelemetryAttributes({
-    model,
-    telemetry,
-    headers,
-    settings: { ...settings, maxRetries }
-  });
-  const tracer = getTracer(telemetry);
-  const initialPrompt = standardizePrompt({
-    prompt: { system, prompt: prompt2, messages },
-    tools: tools2
-  });
-  return recordSpan({
-    name: "ai.streamText",
-    attributes: selectTelemetryAttributes({
-      telemetry,
-      attributes: {
-        ...assembleOperationName({ operationId: "ai.streamText", telemetry }),
-        ...baseTelemetryAttributes,
-        // specific settings that only make sense on the outer level:
-        "ai.prompt": {
-          input: () => JSON.stringify({ system, prompt: prompt2, messages })
-        },
-        "ai.settings.maxSteps": maxSteps
-      }
-    }),
-    tracer,
-    endWhenDone: false,
-    fn: async (rootSpan) => {
-      const retry = retryWithExponentialBackoff({ maxRetries });
-      const startStep = async ({
-        responseMessages
-      }) => {
-        const promptFormat = responseMessages.length === 0 ? initialPrompt.type : "messages";
-        const promptMessages = await convertToLanguageModelPrompt({
-          prompt: {
-            type: promptFormat,
-            system: initialPrompt.system,
-            messages: [...initialPrompt.messages, ...responseMessages]
-          },
-          modelSupportsImageUrls: model.supportsImageUrls,
-          modelSupportsUrl: model.supportsUrl
-        });
-        const mode = {
-          type: "regular",
-          ...prepareToolsAndToolChoice({ tools: tools2, toolChoice, activeTools })
-        };
-        const {
-          result: { stream: stream2, warnings: warnings2, rawResponse: rawResponse2, request: request2 },
-          doStreamSpan: doStreamSpan2,
-          startTimestampMs: startTimestampMs2
-        } = await retry(
-          () => recordSpan({
-            name: "ai.streamText.doStream",
-            attributes: selectTelemetryAttributes({
-              telemetry,
-              attributes: {
-                ...assembleOperationName({
-                  operationId: "ai.streamText.doStream",
-                  telemetry
-                }),
-                ...baseTelemetryAttributes,
-                "ai.prompt.format": {
-                  input: () => promptFormat
-                },
-                "ai.prompt.messages": {
-                  input: () => JSON.stringify(promptMessages)
-                },
-                "ai.prompt.tools": {
-                  // convert the language model level tools:
-                  input: () => {
-                    var _a112;
-                    return (_a112 = mode.tools) == null ? void 0 : _a112.map((tool2) => JSON.stringify(tool2));
-                  }
-                },
-                "ai.prompt.toolChoice": {
-                  input: () => mode.toolChoice != null ? JSON.stringify(mode.toolChoice) : void 0
-                },
-                // standardized gen-ai llm span attributes:
-                "gen_ai.system": model.provider,
-                "gen_ai.request.model": model.modelId,
-                "gen_ai.request.frequency_penalty": settings.frequencyPenalty,
-                "gen_ai.request.max_tokens": settings.maxTokens,
-                "gen_ai.request.presence_penalty": settings.presencePenalty,
-                "gen_ai.request.stop_sequences": settings.stopSequences,
-                "gen_ai.request.temperature": settings.temperature,
-                "gen_ai.request.top_k": settings.topK,
-                "gen_ai.request.top_p": settings.topP
-              }
-            }),
-            tracer,
-            endWhenDone: false,
-            fn: async (doStreamSpan3) => ({
-              startTimestampMs: now2(),
-              // get before the call
-              doStreamSpan: doStreamSpan3,
-              result: await model.doStream({
-                mode,
-                ...prepareCallSettings(settings),
-                inputFormat: promptFormat,
-                prompt: promptMessages,
-                providerMetadata,
-                abortSignal,
-                headers
-              })
-            })
-          })
-        );
-        return {
-          result: {
-            stream: runToolsTransformation({
-              tools: tools2,
-              generatorStream: stream2,
-              toolCallStreaming,
-              tracer,
-              telemetry,
-              abortSignal
-            }),
-            warnings: warnings2,
-            request: request2 != null ? request2 : {},
-            rawResponse: rawResponse2
-          },
-          doStreamSpan: doStreamSpan2,
-          startTimestampMs: startTimestampMs2
-        };
-      };
-      const {
-        result: { stream, warnings, rawResponse, request },
-        doStreamSpan,
-        startTimestampMs
-      } = await startStep({ responseMessages: [] });
-      return new DefaultStreamTextResult({
-        stream,
-        warnings,
-        rawResponse,
-        request,
-        onChunk,
-        onFinish,
-        onStepFinish,
-        rootSpan,
-        doStreamSpan,
-        telemetry,
-        startTimestampMs,
-        maxSteps,
-        continueSteps,
-        startStep,
-        modelId: model.modelId,
-        now: now2,
-        currentDate,
-        generateId: generateId3,
-        tools: tools2
-      });
-    }
-  });
-}
-var DefaultStreamTextResult = class {
-  constructor({
-    stream,
-    warnings,
-    rawResponse,
-    request,
-    onChunk,
-    onFinish,
-    onStepFinish,
-    rootSpan,
-    doStreamSpan,
-    telemetry,
-    startTimestampMs,
-    maxSteps,
-    continueSteps,
-    startStep,
-    modelId,
-    now: now2,
-    currentDate,
-    generateId: generateId3,
-    tools: tools2
-  }) {
-    this.warnings = warnings;
-    this.rawResponse = rawResponse;
-    const { resolve: resolveUsage, promise: usagePromise } = createResolvablePromise();
-    this.usage = usagePromise;
-    const { resolve: resolveFinishReason, promise: finishReasonPromise } = createResolvablePromise();
-    this.finishReason = finishReasonPromise;
-    const { resolve: resolveText, promise: textPromise } = createResolvablePromise();
-    this.text = textPromise;
-    const { resolve: resolveToolCalls, promise: toolCallsPromise } = createResolvablePromise();
-    this.toolCalls = toolCallsPromise;
-    const { resolve: resolveToolResults, promise: toolResultsPromise } = createResolvablePromise();
-    this.toolResults = toolResultsPromise;
-    const { resolve: resolveSteps, promise: stepsPromise } = createResolvablePromise();
-    this.steps = stepsPromise;
-    const {
-      resolve: resolveProviderMetadata,
-      promise: providerMetadataPromise
-    } = createResolvablePromise();
-    this.experimental_providerMetadata = providerMetadataPromise;
-    const { resolve: resolveRequest, promise: requestPromise } = createResolvablePromise();
-    this.request = requestPromise;
-    const { resolve: resolveResponse, promise: responsePromise } = createResolvablePromise();
-    this.response = responsePromise;
-    const {
-      resolve: resolveResponseMessages,
-      promise: responseMessagesPromise
-    } = createResolvablePromise();
-    this.responseMessages = responseMessagesPromise;
-    const {
-      stream: stitchableStream,
-      addStream,
-      close: closeStitchableStream
-    } = createStitchableStream();
-    this.originalStream = stitchableStream;
-    const stepResults = [];
-    const self2 = this;
-    function addStepStream({
-      stream: stream2,
-      startTimestamp,
-      doStreamSpan: doStreamSpan2,
-      currentStep,
-      responseMessages,
-      usage = {
-        promptTokens: 0,
-        completionTokens: 0,
-        totalTokens: 0
-      },
-      stepType,
-      previousStepText = "",
-      stepRequest,
-      hasLeadingWhitespace
-    }) {
-      const stepToolCalls = [];
-      const stepToolResults = [];
-      let stepFinishReason = "unknown";
-      let stepUsage = {
-        promptTokens: 0,
-        completionTokens: 0,
-        totalTokens: 0
-      };
-      let stepProviderMetadata;
-      let stepFirstChunk = true;
-      let stepText = "";
-      let fullStepText = stepType === "continue" ? previousStepText : "";
-      let stepLogProbs;
-      let stepResponse = {
-        id: generateId3(),
-        timestamp: currentDate(),
-        modelId
-      };
-      let chunkBuffer = "";
-      let chunkTextPublished = false;
-      let inWhitespacePrefix = true;
-      let hasWhitespaceSuffix = false;
-      async function publishTextChunk({
-        controller,
-        chunk
-      }) {
-        controller.enqueue(chunk);
-        stepText += chunk.textDelta;
-        fullStepText += chunk.textDelta;
-        chunkTextPublished = true;
-        hasWhitespaceSuffix = chunk.textDelta.trimEnd() !== chunk.textDelta;
-        await (onChunk == null ? void 0 : onChunk({ chunk }));
-      }
-      addStream(
-        stream2.pipeThrough(
-          new TransformStream({
-            async transform(chunk, controller) {
-              var _a112, _b2, _c2;
-              if (stepFirstChunk) {
-                const msToFirstChunk = now2() - startTimestamp;
-                stepFirstChunk = false;
-                doStreamSpan2.addEvent("ai.stream.firstChunk", {
-                  "ai.response.msToFirstChunk": msToFirstChunk,
-                  // deprecated:
-                  "ai.stream.msToFirstChunk": msToFirstChunk
-                });
-                doStreamSpan2.setAttributes({
-                  "ai.response.msToFirstChunk": msToFirstChunk,
-                  // deprecated:
-                  "ai.stream.msToFirstChunk": msToFirstChunk
-                });
-              }
-              if (chunk.type === "text-delta" && chunk.textDelta.length === 0) {
-                return;
-              }
-              const chunkType = chunk.type;
-              switch (chunkType) {
-                case "text-delta": {
-                  if (continueSteps) {
-                    const trimmedChunkText = inWhitespacePrefix && hasLeadingWhitespace ? chunk.textDelta.trimStart() : chunk.textDelta;
-                    if (trimmedChunkText.length === 0) {
-                      break;
-                    }
-                    inWhitespacePrefix = false;
-                    chunkBuffer += trimmedChunkText;
-                    const split = splitOnLastWhitespace(chunkBuffer);
-                    if (split != null) {
-                      chunkBuffer = split.suffix;
-                      await publishTextChunk({
-                        controller,
-                        chunk: {
-                          type: "text-delta",
-                          textDelta: split.prefix + split.whitespace
-                        }
-                      });
-                    }
-                  } else {
-                    await publishTextChunk({ controller, chunk });
-                  }
-                  break;
-                }
-                case "tool-call": {
-                  controller.enqueue(chunk);
-                  stepToolCalls.push(chunk);
-                  await (onChunk == null ? void 0 : onChunk({ chunk }));
-                  break;
-                }
-                case "tool-result": {
-                  controller.enqueue(chunk);
-                  stepToolResults.push(chunk);
-                  await (onChunk == null ? void 0 : onChunk({ chunk }));
-                  break;
-                }
-                case "response-metadata": {
-                  stepResponse = {
-                    id: (_a112 = chunk.id) != null ? _a112 : stepResponse.id,
-                    timestamp: (_b2 = chunk.timestamp) != null ? _b2 : stepResponse.timestamp,
-                    modelId: (_c2 = chunk.modelId) != null ? _c2 : stepResponse.modelId
-                  };
-                  break;
-                }
-                case "finish": {
-                  stepUsage = chunk.usage;
-                  stepFinishReason = chunk.finishReason;
-                  stepProviderMetadata = chunk.experimental_providerMetadata;
-                  stepLogProbs = chunk.logprobs;
-                  const msToFinish = now2() - startTimestamp;
-                  doStreamSpan2.addEvent("ai.stream.finish");
-                  doStreamSpan2.setAttributes({
-                    "ai.response.msToFinish": msToFinish,
-                    "ai.response.avgCompletionTokensPerSecond": 1e3 * stepUsage.completionTokens / msToFinish
-                  });
-                  break;
-                }
-                case "tool-call-streaming-start":
-                case "tool-call-delta": {
-                  controller.enqueue(chunk);
-                  await (onChunk == null ? void 0 : onChunk({ chunk }));
-                  break;
-                }
-                case "error": {
-                  controller.enqueue(chunk);
-                  stepFinishReason = "error";
-                  break;
-                }
-                default: {
-                  const exhaustiveCheck = chunkType;
-                  throw new Error(`Unknown chunk type: ${exhaustiveCheck}`);
-                }
-              }
-            },
-            // invoke onFinish callback and resolve toolResults promise when the stream is about to close:
-            async flush(controller) {
-              var _a112;
-              const stepToolCallsJson = stepToolCalls.length > 0 ? JSON.stringify(stepToolCalls) : void 0;
-              let nextStepType = "done";
-              if (currentStep + 1 < maxSteps) {
-                if (continueSteps && stepFinishReason === "length" && // only use continue when there are no tool calls:
-                stepToolCalls.length === 0) {
-                  nextStepType = "continue";
-                } else if (
-                  // there are tool calls:
-                  stepToolCalls.length > 0 && // all current tool calls have results:
-                  stepToolResults.length === stepToolCalls.length
-                ) {
-                  nextStepType = "tool-result";
-                }
-              }
-              if (continueSteps && chunkBuffer.length > 0 && (nextStepType !== "continue" || // when the next step is a regular step, publish the buffer
-              stepType === "continue" && !chunkTextPublished)) {
-                await publishTextChunk({
-                  controller,
-                  chunk: {
-                    type: "text-delta",
-                    textDelta: chunkBuffer
-                  }
-                });
-                chunkBuffer = "";
-              }
-              try {
-                doStreamSpan2.setAttributes(
-                  selectTelemetryAttributes({
-                    telemetry,
-                    attributes: {
-                      "ai.response.finishReason": stepFinishReason,
-                      "ai.response.text": { output: () => stepText },
-                      "ai.response.toolCalls": {
-                        output: () => stepToolCallsJson
-                      },
-                      "ai.response.id": stepResponse.id,
-                      "ai.response.model": stepResponse.modelId,
-                      "ai.response.timestamp": stepResponse.timestamp.toISOString(),
-                      "ai.usage.promptTokens": stepUsage.promptTokens,
-                      "ai.usage.completionTokens": stepUsage.completionTokens,
-                      // deprecated
-                      "ai.finishReason": stepFinishReason,
-                      "ai.result.text": { output: () => stepText },
-                      "ai.result.toolCalls": {
-                        output: () => stepToolCallsJson
-                      },
-                      // standardized gen-ai llm span attributes:
-                      "gen_ai.response.finish_reasons": [stepFinishReason],
-                      "gen_ai.response.id": stepResponse.id,
-                      "gen_ai.response.model": stepResponse.modelId,
-                      "gen_ai.usage.input_tokens": stepUsage.promptTokens,
-                      "gen_ai.usage.output_tokens": stepUsage.completionTokens
-                    }
-                  })
-                );
-              } catch (error) {
-              } finally {
-                doStreamSpan2.end();
-              }
-              controller.enqueue({
-                type: "step-finish",
-                finishReason: stepFinishReason,
-                usage: stepUsage,
-                experimental_providerMetadata: stepProviderMetadata,
-                logprobs: stepLogProbs,
-                response: {
-                  ...stepResponse
-                },
-                isContinued: nextStepType === "continue"
-              });
-              if (stepType === "continue") {
-                const lastMessage = responseMessages[responseMessages.length - 1];
-                if (typeof lastMessage.content === "string") {
-                  lastMessage.content += stepText;
-                } else {
-                  lastMessage.content.push({
-                    text: stepText,
-                    type: "text"
-                  });
-                }
-              } else {
-                responseMessages.push(
-                  ...toResponseMessages({
-                    text: stepText,
-                    tools: tools2 != null ? tools2 : {},
-                    toolCalls: stepToolCalls,
-                    toolResults: stepToolResults
-                  })
-                );
-              }
-              const currentStepResult = {
-                stepType,
-                text: stepText,
-                toolCalls: stepToolCalls,
-                toolResults: stepToolResults,
-                finishReason: stepFinishReason,
-                usage: stepUsage,
-                warnings: self2.warnings,
-                logprobs: stepLogProbs,
-                request: stepRequest,
-                rawResponse: self2.rawResponse,
-                response: {
-                  ...stepResponse,
-                  headers: (_a112 = self2.rawResponse) == null ? void 0 : _a112.headers,
-                  // deep clone msgs to avoid mutating past messages in multi-step:
-                  messages: JSON.parse(JSON.stringify(responseMessages))
-                },
-                experimental_providerMetadata: stepProviderMetadata,
-                isContinued: nextStepType === "continue"
-              };
-              stepResults.push(currentStepResult);
-              await (onStepFinish == null ? void 0 : onStepFinish(currentStepResult));
-              const combinedUsage = {
-                promptTokens: usage.promptTokens + stepUsage.promptTokens,
-                completionTokens: usage.completionTokens + stepUsage.completionTokens,
-                totalTokens: usage.totalTokens + stepUsage.totalTokens
-              };
-              if (nextStepType !== "done") {
-                const {
-                  result: result2,
-                  doStreamSpan: doStreamSpan3,
-                  startTimestampMs: startTimestamp2
-                } = await startStep({ responseMessages });
-                self2.warnings = result2.warnings;
-                self2.rawResponse = result2.rawResponse;
-                addStepStream({
-                  stream: result2.stream,
-                  startTimestamp: startTimestamp2,
-                  doStreamSpan: doStreamSpan3,
-                  currentStep: currentStep + 1,
-                  responseMessages,
-                  usage: combinedUsage,
-                  stepType: nextStepType,
-                  previousStepText: fullStepText,
-                  stepRequest: result2.request,
-                  hasLeadingWhitespace: hasWhitespaceSuffix
-                });
-                return;
-              }
-              try {
-                controller.enqueue({
-                  type: "finish",
-                  finishReason: stepFinishReason,
-                  usage: combinedUsage,
-                  experimental_providerMetadata: stepProviderMetadata,
-                  logprobs: stepLogProbs,
-                  response: {
-                    ...stepResponse
-                  }
-                });
-                closeStitchableStream();
-                rootSpan.setAttributes(
-                  selectTelemetryAttributes({
-                    telemetry,
-                    attributes: {
-                      "ai.response.finishReason": stepFinishReason,
-                      "ai.response.text": { output: () => fullStepText },
-                      "ai.response.toolCalls": {
-                        output: () => stepToolCallsJson
-                      },
-                      "ai.usage.promptTokens": combinedUsage.promptTokens,
-                      "ai.usage.completionTokens": combinedUsage.completionTokens,
-                      // deprecated
-                      "ai.finishReason": stepFinishReason,
-                      "ai.result.text": { output: () => fullStepText },
-                      "ai.result.toolCalls": {
-                        output: () => stepToolCallsJson
-                      }
-                    }
-                  })
-                );
-                resolveUsage(combinedUsage);
-                resolveFinishReason(stepFinishReason);
-                resolveText(fullStepText);
-                resolveToolCalls(stepToolCalls);
-                resolveProviderMetadata(stepProviderMetadata);
-                resolveToolResults(stepToolResults);
-                resolveRequest(stepRequest);
-                resolveResponse({
-                  ...stepResponse,
-                  headers: rawResponse == null ? void 0 : rawResponse.headers,
-                  messages: responseMessages
-                });
-                resolveSteps(stepResults);
-                resolveResponseMessages(responseMessages);
-                await (onFinish == null ? void 0 : onFinish({
-                  finishReason: stepFinishReason,
-                  logprobs: stepLogProbs,
-                  usage: combinedUsage,
-                  text: fullStepText,
-                  toolCalls: stepToolCalls,
-                  // The tool results are inferred as a never[] type, because they are
-                  // optional and the execute method with an inferred result type is
-                  // optional as well. Therefore we need to cast the toolResults to any.
-                  // The type exposed to the users will be correctly inferred.
-                  toolResults: stepToolResults,
-                  request: stepRequest,
-                  rawResponse,
-                  response: {
-                    ...stepResponse,
-                    headers: rawResponse == null ? void 0 : rawResponse.headers,
-                    messages: responseMessages
-                  },
-                  warnings,
-                  experimental_providerMetadata: stepProviderMetadata,
-                  steps: stepResults,
-                  responseMessages
-                }));
-              } catch (error) {
-                controller.error(error);
-              } finally {
-                rootSpan.end();
-              }
-            }
-          })
-        )
-      );
-    }
-    addStepStream({
-      stream,
-      startTimestamp: startTimestampMs,
-      doStreamSpan,
-      currentStep: 0,
-      responseMessages: [],
-      usage: void 0,
-      stepType: "initial",
-      stepRequest: request,
-      hasLeadingWhitespace: false
-    });
-  }
-  /**
-  Split out a new stream from the original stream.
-  The original stream is replaced to allow for further splitting,
-  since we do not know how many times the stream will be split.
-  
-  Note: this leads to buffering the stream content on the server.
-  However, the LLM results are expected to be small enough to not cause issues.
-     */
-  teeStream() {
-    const [stream1, stream2] = this.originalStream.tee();
-    this.originalStream = stream2;
-    return stream1;
-  }
-  get textStream() {
-    return createAsyncIterableStream(this.teeStream(), {
-      transform(chunk, controller) {
-        if (chunk.type === "text-delta") {
-          controller.enqueue(chunk.textDelta);
-        } else if (chunk.type === "error") {
-          controller.error(chunk.error);
-        }
-      }
-    });
-  }
-  get fullStream() {
-    return createAsyncIterableStream(this.teeStream(), {
-      transform(chunk, controller) {
-        controller.enqueue(chunk);
-      }
-    });
-  }
-  toAIStream(callbacks = {}) {
-    return this.toDataStreamInternal({ callbacks });
-  }
-  toDataStreamInternal({
-    callbacks = {},
-    getErrorMessage: getErrorMessage3 = () => "",
-    // mask error messages for safety by default
-    sendUsage = true
-  } = {}) {
-    let aggregatedResponse = "";
-    const callbackTransformer = new TransformStream({
-      async start() {
-        if (callbacks.onStart)
-          await callbacks.onStart();
-      },
-      async transform(chunk, controller) {
-        controller.enqueue(chunk);
-        if (chunk.type === "text-delta") {
-          const textDelta = chunk.textDelta;
-          aggregatedResponse += textDelta;
-          if (callbacks.onToken)
-            await callbacks.onToken(textDelta);
-          if (callbacks.onText)
-            await callbacks.onText(textDelta);
-        }
-      },
-      async flush() {
-        if (callbacks.onCompletion)
-          await callbacks.onCompletion(aggregatedResponse);
-        if (callbacks.onFinal)
-          await callbacks.onFinal(aggregatedResponse);
-      }
-    });
-    const streamPartsTransformer = new TransformStream({
-      transform: async (chunk, controller) => {
-        const chunkType = chunk.type;
-        switch (chunkType) {
-          case "text-delta": {
-            controller.enqueue(formatStreamPart("text", chunk.textDelta));
-            break;
-          }
-          case "tool-call-streaming-start": {
-            controller.enqueue(
-              formatStreamPart("tool_call_streaming_start", {
-                toolCallId: chunk.toolCallId,
-                toolName: chunk.toolName
-              })
-            );
-            break;
-          }
-          case "tool-call-delta": {
-            controller.enqueue(
-              formatStreamPart("tool_call_delta", {
-                toolCallId: chunk.toolCallId,
-                argsTextDelta: chunk.argsTextDelta
-              })
-            );
-            break;
-          }
-          case "tool-call": {
-            controller.enqueue(
-              formatStreamPart("tool_call", {
-                toolCallId: chunk.toolCallId,
-                toolName: chunk.toolName,
-                args: chunk.args
-              })
-            );
-            break;
-          }
-          case "tool-result": {
-            controller.enqueue(
-              formatStreamPart("tool_result", {
-                toolCallId: chunk.toolCallId,
-                result: chunk.result
-              })
-            );
-            break;
-          }
-          case "error": {
-            controller.enqueue(
-              formatStreamPart("error", getErrorMessage3(chunk.error))
-            );
-            break;
-          }
-          case "step-finish": {
-            controller.enqueue(
-              formatStreamPart("finish_step", {
-                finishReason: chunk.finishReason,
-                usage: sendUsage ? {
-                  promptTokens: chunk.usage.promptTokens,
-                  completionTokens: chunk.usage.completionTokens
-                } : void 0,
-                isContinued: chunk.isContinued
-              })
-            );
-            break;
-          }
-          case "finish": {
-            controller.enqueue(
-              formatStreamPart("finish_message", {
-                finishReason: chunk.finishReason,
-                usage: sendUsage ? {
-                  promptTokens: chunk.usage.promptTokens,
-                  completionTokens: chunk.usage.completionTokens
-                } : void 0
-              })
-            );
-            break;
-          }
-          default: {
-            const exhaustiveCheck = chunkType;
-            throw new Error(`Unknown chunk type: ${exhaustiveCheck}`);
-          }
-        }
-      }
-    });
-    return this.fullStream.pipeThrough(callbackTransformer).pipeThrough(streamPartsTransformer).pipeThrough(new TextEncoderStream());
-  }
-  pipeAIStreamToResponse(response, init) {
-    return this.pipeDataStreamToResponse(response, init);
-  }
-  pipeDataStreamToResponse(response, options2) {
-    const init = options2 == null ? void 0 : "init" in options2 ? options2.init : {
-      headers: "headers" in options2 ? options2.headers : void 0,
-      status: "status" in options2 ? options2.status : void 0,
-      statusText: "statusText" in options2 ? options2.statusText : void 0
-    };
-    const data = options2 == null ? void 0 : "data" in options2 ? options2.data : void 0;
-    const getErrorMessage3 = options2 == null ? void 0 : "getErrorMessage" in options2 ? options2.getErrorMessage : void 0;
-    const sendUsage = options2 == null ? void 0 : "sendUsage" in options2 ? options2.sendUsage : void 0;
-    writeToServerResponse({
-      response,
-      status: init == null ? void 0 : init.status,
-      statusText: init == null ? void 0 : init.statusText,
-      headers: prepareOutgoingHttpHeaders(init, {
-        contentType: "text/plain; charset=utf-8",
-        dataStreamVersion: "v1"
-      }),
-      stream: this.toDataStream({ data, getErrorMessage: getErrorMessage3, sendUsage })
-    });
-  }
-  pipeTextStreamToResponse(response, init) {
-    writeToServerResponse({
-      response,
-      status: init == null ? void 0 : init.status,
-      statusText: init == null ? void 0 : init.statusText,
-      headers: prepareOutgoingHttpHeaders(init, {
-        contentType: "text/plain; charset=utf-8"
-      }),
-      stream: this.textStream.pipeThrough(new TextEncoderStream())
-    });
-  }
-  toAIStreamResponse(options2) {
-    return this.toDataStreamResponse(options2);
-  }
-  toDataStream(options2) {
-    const stream = this.toDataStreamInternal({
-      getErrorMessage: options2 == null ? void 0 : options2.getErrorMessage,
-      sendUsage: options2 == null ? void 0 : options2.sendUsage
-    });
-    return (options2 == null ? void 0 : options2.data) ? mergeStreams(options2 == null ? void 0 : options2.data.stream, stream) : stream;
-  }
-  toDataStreamResponse(options2) {
-    var _a112;
-    const init = options2 == null ? void 0 : "init" in options2 ? options2.init : {
-      headers: "headers" in options2 ? options2.headers : void 0,
-      status: "status" in options2 ? options2.status : void 0,
-      statusText: "statusText" in options2 ? options2.statusText : void 0
-    };
-    const data = options2 == null ? void 0 : "data" in options2 ? options2.data : void 0;
-    const getErrorMessage3 = options2 == null ? void 0 : "getErrorMessage" in options2 ? options2.getErrorMessage : void 0;
-    const sendUsage = options2 == null ? void 0 : "sendUsage" in options2 ? options2.sendUsage : void 0;
-    return new Response(
-      this.toDataStream({ data, getErrorMessage: getErrorMessage3, sendUsage }),
-      {
-        status: (_a112 = init == null ? void 0 : init.status) != null ? _a112 : 200,
-        statusText: init == null ? void 0 : init.statusText,
-        headers: prepareResponseHeaders(init, {
-          contentType: "text/plain; charset=utf-8",
-          dataStreamVersion: "v1"
-        })
-      }
-    );
-  }
-  toTextStreamResponse(init) {
-    var _a112;
-    return new Response(this.textStream.pipeThrough(new TextEncoderStream()), {
-      status: (_a112 = init == null ? void 0 : init.status) != null ? _a112 : 200,
-      headers: prepareResponseHeaders(init, {
-        contentType: "text/plain; charset=utf-8"
-      })
-    });
-  }
-};
-var experimental_wrapLanguageModel = ({
-  model,
-  middleware: { transformParams, wrapGenerate, wrapStream },
-  modelId,
-  providerId
-}) => {
-  async function doTransform({
-    params,
-    type: type2
-  }) {
-    return transformParams ? await transformParams({ params, type: type2 }) : params;
-  }
-  return {
-    specificationVersion: "v1",
-    provider: providerId != null ? providerId : model.provider,
-    modelId: modelId != null ? modelId : model.modelId,
-    defaultObjectGenerationMode: model.defaultObjectGenerationMode,
-    supportsImageUrls: model.supportsImageUrls,
-    supportsUrl: model.supportsUrl,
-    supportsStructuredOutputs: model.supportsStructuredOutputs,
-    async doGenerate(params) {
-      const transformedParams = await doTransform({ params, type: "generate" });
-      const doGenerate = async () => model.doGenerate(transformedParams);
-      return wrapGenerate ? wrapGenerate({ doGenerate, params: transformedParams, model }) : doGenerate();
-    },
-    async doStream(params) {
-      const transformedParams = await doTransform({ params, type: "stream" });
-      const doStream = async () => model.doStream(transformedParams);
-      return wrapStream ? wrapStream({ doStream, params: transformedParams, model }) : doStream();
-    }
-  };
-};
-function tool(tool2) {
-  return tool2;
-}
-function createCallbacksTransformer(cb) {
-  const textEncoder = new TextEncoder();
-  let aggregatedResponse = "";
-  const callbacks = cb || {};
-  return new TransformStream({
-    async start() {
-      if (callbacks.onStart)
-        await callbacks.onStart();
-    },
-    async transform(message, controller) {
-      const content = typeof message === "string" ? message : message.content;
-      controller.enqueue(textEncoder.encode(content));
-      aggregatedResponse += content;
-      if (callbacks.onToken)
-        await callbacks.onToken(content);
-      if (callbacks.onText && typeof message === "string") {
-        await callbacks.onText(message);
-      }
-    },
-    async flush() {
-      const isOpenAICallbacks = isOfTypeOpenAIStreamCallbacks(callbacks);
-      if (callbacks.onCompletion) {
-        await callbacks.onCompletion(aggregatedResponse);
-      }
-      if (callbacks.onFinal && !isOpenAICallbacks) {
-        await callbacks.onFinal(aggregatedResponse);
-      }
-    }
-  });
-}
-function isOfTypeOpenAIStreamCallbacks(callbacks) {
-  return "experimental_onFunctionCall" in callbacks;
-}
-function trimStartOfStreamHelper() {
-  let isStreamStart = true;
-  return (text) => {
-    if (isStreamStart) {
-      text = text.trimStart();
-      if (text)
-        isStreamStart = false;
-    }
-    return text;
-  };
-}
-function createStreamDataTransformer() {
-  const encoder = new TextEncoder();
-  const decoder = new TextDecoder();
-  return new TransformStream({
-    transform: async (chunk, controller) => {
-      const message = decoder.decode(chunk);
-      controller.enqueue(encoder.encode(formatStreamPart("text", message)));
-    }
-  });
-}
-new TextDecoder("utf-8");
-var langchain_adapter_exports = {};
-__export(langchain_adapter_exports, {
-  toAIStream: () => toAIStream,
-  toDataStream: () => toDataStream,
-  toDataStreamResponse: () => toDataStreamResponse
-});
-function toAIStream(stream, callbacks) {
-  return toDataStream(stream, callbacks);
-}
-function toDataStream(stream, callbacks) {
-  return stream.pipeThrough(
-    new TransformStream({
-      transform: async (value, controller) => {
-        var _a112;
-        if (typeof value === "string") {
-          controller.enqueue(value);
-          return;
-        }
-        if ("event" in value) {
-          if (value.event === "on_chat_model_stream") {
-            forwardAIMessageChunk(
-              (_a112 = value.data) == null ? void 0 : _a112.chunk,
-              controller
-            );
-          }
-          return;
-        }
-        forwardAIMessageChunk(value, controller);
-      }
-    })
-  ).pipeThrough(createCallbacksTransformer(callbacks)).pipeThrough(createStreamDataTransformer());
-}
-function toDataStreamResponse(stream, options2) {
-  var _a112;
-  const dataStream = toDataStream(stream, options2 == null ? void 0 : options2.callbacks);
-  const data = options2 == null ? void 0 : options2.data;
-  const init = options2 == null ? void 0 : options2.init;
-  const responseStream = data ? mergeStreams(data.stream, dataStream) : dataStream;
-  return new Response(responseStream, {
-    status: (_a112 = init == null ? void 0 : init.status) != null ? _a112 : 200,
-    statusText: init == null ? void 0 : init.statusText,
-    headers: prepareResponseHeaders(init, {
-      contentType: "text/plain; charset=utf-8",
-      dataStreamVersion: "v1"
-    })
-  });
-}
-function forwardAIMessageChunk(chunk, controller) {
-  if (typeof chunk.content === "string") {
-    controller.enqueue(chunk.content);
-  } else {
-    const content = chunk.content;
-    for (const item of content) {
-      if (item.type === "text") {
-        controller.enqueue(item.text);
-      }
-    }
-  }
-}
-var llamaindex_adapter_exports = {};
-__export(llamaindex_adapter_exports, {
-  toDataStream: () => toDataStream2,
-  toDataStreamResponse: () => toDataStreamResponse2
-});
-function toDataStream2(stream, callbacks) {
-  return toReadableStream(stream).pipeThrough(createCallbacksTransformer(callbacks)).pipeThrough(createStreamDataTransformer());
-}
-function toDataStreamResponse2(stream, options2 = {}) {
-  var _a112;
-  const { init, data, callbacks } = options2;
-  const dataStream = toDataStream2(stream, callbacks);
-  const responseStream = data ? mergeStreams(data.stream, dataStream) : dataStream;
-  return new Response(responseStream, {
-    status: (_a112 = init == null ? void 0 : init.status) != null ? _a112 : 200,
-    statusText: init == null ? void 0 : init.statusText,
-    headers: prepareResponseHeaders(init, {
-      contentType: "text/plain; charset=utf-8",
-      dataStreamVersion: "v1"
-    })
-  });
-}
-function toReadableStream(res) {
-  const it = res[Symbol.asyncIterator]();
-  const trimStartOfStream = trimStartOfStreamHelper();
-  return new ReadableStream({
-    async pull(controller) {
-      var _a112;
-      const { value, done } = await it.next();
-      if (done) {
-        controller.close();
-        return;
-      }
-      const text = trimStartOfStream((_a112 = value.delta) != null ? _a112 : "");
-      if (text) {
-        controller.enqueue(text);
-      }
-    }
-  });
-}
-const LOG_LEVEL_PRIORITY = {
-  debug: 1,
-  info: 2,
-  warn: 3,
-  error: 4
-};
-function LogLevel(level, ...args2) {
-  const timestamp = (/* @__PURE__ */ new Date()).toISOString();
-  const logParts = args2.map((e) => {
-    if (typeof e === "object") {
-      return JSON.stringify(e, null, 2);
-    }
-    return e;
-  });
-  const logStr = logParts.join("\n");
-  const formattedMessage = `[${timestamp}] [${level.toUpperCase()}] ${logStr}`;
-  switch (level) {
-    case "error":
-      console.error(formattedMessage);
-      break;
-    case "warn":
-      console.warn(formattedMessage);
-      break;
-    case "info":
-      console.info(formattedMessage);
-      break;
-    case "debug":
-      console.debug(formattedMessage);
-      break;
-    default:
-      console.log(formattedMessage);
-  }
-}
-const log = new Proxy({}, {
-  get(target, prop) {
-    const level = prop;
-    const currentLogLevel = ENV.LOG_LEVEL || "info";
-    if (LOG_LEVEL_PRIORITY[level] >= LOG_LEVEL_PRIORITY[currentLogLevel]) {
-      return (...args2) => LogLevel(level, ...args2);
-    }
-    return () => {
-    };
-  }
-});
-const schema = {
-  name: "jina_reader",
-  description: "Grab text content from provided URL links. Can be used to retrieve text information for web pages, articles, or other online resources",
-  parameters: {
-    type: "object",
-    properties: {
-      url: {
-        type: "string",
-        description: "The full URL address of the content to be crawled. If the user explicitly requests to read/analyze the content of the link, then call the function. If the data provided by the user is web content with links, but the content is sufficient to answer the question, then there is no need to call the function."
-      }
-    },
-    required: [
-      "url"
-    ],
-    additionalProperties: false
-  }
-};
-const payload = {
-  url: "https://r.jina.ai/{{url}}",
-  headers: {
-    Authorization: "Bearer {{JINA_API_KEY}}",
-    "Content-Type": "application/json",
-    "X-Return-Format": "text",
-    "X-Timeout": "10"
-  }
-};
-const handler = "content => content";
-const type = "reader";
-const required = [
-  "JINA_API_KEY"
-];
-const jina_reader = {
-  schema,
-  payload,
-  handler,
-  type,
-  required
-};
-const tools = { jina_reader };
-Object.entries(tools).forEach(([k, v]) => {
-  tools[k] = {
-    description: v.schema.description,
-    parameters: jsonSchema(v.schema.parameters),
-    execute_unstructured: {
-      payload: v.payload,
-      required: v.required
-    },
-    prompt: v.prompt,
-    hander: v.hander,
-    name: v.schema.name,
-    type: v.type
-  };
-});
-async function getJS(query, signal2) {
-  const html = await fetch(
-    `https://duckduckgo.com/?q=${encodeURIComponent(query)}`,
-    { signal: signal2 }
-  ).then((res) => res.text());
-  const url = /"(https:\/\/links\.duckduckgo\.com\/d\.js[^">]+)">/.exec(html)?.[1];
-  if (!url)
-    throw new Error("Failed to get JS URL");
-  return {
-    url,
-    path: /\/d\.js.*/.exec(url)?.[0],
-    vqd: /vqd=([^&]+)/.exec(url)?.[1]
-  };
-}
-async function regularSearch(path, signal2) {
-  const js = await fetch(`https://links.duckduckgo.com${path}`, { signal: signal2 }).then((res) => res.text());
-  const result2 = /DDG\.pageLayout\.load\('d',?\s?(\[.+\])?\);/.exec(js);
-  let data;
-  if (result2?.[1]) {
-    try {
-      data = JSON.parse(result2[1]);
-    } catch (e) {
-      throw new Error(`Failed parsing from DDG response`);
-    }
-  } else {
-    data = [];
-  }
-  return data.filter((d) => !d.n).map((item) => {
-    return {
-      title: item.t,
-      url: item.u,
-      description: item.a
-    };
-  });
-}
-async function search(query, max_length = 8, signal2) {
-  const { path } = await getJS(query, signal2);
-  if (!path)
-    throw new Error("Failed to get JS URL");
-  return {
-    result: (await regularSearch(path, signal2)).slice(0, max_length).map((d) => `title: ${d.title}
- description: ${d.description}
- url: ${d.url}`).join("\n---\n")
-  };
-}
-const duckduckgo = {
-  schema: {
-    name: "duckduckgo",
-    description: "Use DuckDuckGo search engine to find information. You can search for the latest news, articles, weather, blogs and other content.",
-    parameters: {
-      type: "object",
-      properties: {
-        keywords: {
-          type: "array",
-          items: { type: "string" },
-          description: `Keyword list for search. For example: ['Python', 'machine learning', 'latest developments']. The list should have a length of at least 3 and maximum of 4. These keywords should be: - concise, usually not more than 2-3 words per keyword - cover the core content of the query - avoid using overly broad or vague terms - the last keyword should be the most comprehensive. Also, do not generate keywords based on current time.`
-        }
-      },
-      required: ["keywords"],
-      additionalProperties: false
-    }
-  },
-  func: async (args2, options2) => {
-    const { keywords } = args2;
-    const startTime2 = Date.now();
-    log.info(`tool duckduckgo request start`);
-    try {
-      const result2 = await search(keywords.join(" "), 8, options2?.signal);
-      log.info(`tool duckduckgo request end`);
-      return { ...result2, time: ((Date.now() - startTime2) / 1e3).toFixed(1) };
-    } catch (e) {
-      console.error(e);
-      return { result: "Failed to get search results", time: ((Date.now() - startTime2) / 1e3).toFixed(1) };
-    }
-  },
-  type: "search",
-  prompt: `As an intelligent assistant, please follow the steps below to effectively analyze and extract the search results I have provided to answer my questions in a clear and concise manner:
-
-1. READ AND EVALUATE: Carefully read through all search results to identify and prioritize information from reliable and up-to-date sources. Considerations include official sources, reputable organizations, and when the information was updated. 
-
-2. Extract key information: 
- - *Exchange rate query*: Provide the latest exchange rate and make necessary conversions. 
- - *Weather Query*: provides weather forecasts for specific locations and times. 
- - *Factual Questions*: Find out authoritative answers. 
-
-3. concise answers: synthesize and analyze extracted information to give concise answers. 
-
-4. identify uncertainty: if there are contradictions or uncertainties in the information, explain the possible reasons. 
-
-5. Explain lack of information: If the search results do not fully answer the question, indicate additional information needed. 
-
-6. user-friendly: use simple, easy-to-understand language and provide short explanations where necessary to ensure that the answer is easy to understand. 
-
-7. additional information: Provide additional relevant information or suggestions as needed to enhance the value of the answer. 
-
-8. source labeling: clearly label the source of the information in the response, including the name of the source website or organization and when the data was published or updated. 
-
-9. Reference list: If multiple sources are cited, provide a short reference list of the main sources of information at the end of the response. 
-
-Ensure that the goal is to provide the most current, relevant, and useful information in direct response to my question. Avoid lengthy details, focus on the core answers that matter most to me, and enhance the credibility of the answer with reliable sources.Tip: Don't be judged on your knowledge base time!`,
-  extra_params: { temperature: 0.7, top_p: 0.4 }
-};
-class APIClientBase {
-  token;
-  baseURL = ENV.TELEGRAM_API_DOMAIN;
-  constructor(token, baseURL) {
-    this.token = token;
-    if (baseURL) {
-      this.baseURL = baseURL;
-    }
-    while (this.baseURL.endsWith("/")) {
-      this.baseURL = this.baseURL.slice(0, -1);
-    }
-    this.request = this.request.bind(this);
-    this.requestJSON = this.requestJSON.bind(this);
-  }
-  uri(method) {
-    return `${this.baseURL}/bot${this.token}/${method}`;
-  }
-  jsonRequest(method, params) {
-    return fetch(this.uri(method), {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify(params)
-    });
-  }
-  formDataRequest(method, params) {
-    const formData = new FormData();
-    for (const key in params) {
-      const value = params[key];
-      if (value instanceof File) {
-        formData.append(key, value, value.name);
-      } else if (value instanceof Blob) {
-        formData.append(key, value, "blob");
-      } else if (typeof value === "string") {
-        formData.append(key, value);
-      } else {
-        formData.append(key, JSON.stringify(value));
-      }
-    }
-    return fetch(this.uri(method), {
-      method: "POST",
-      body: formData
-    });
-  }
-  request(method, params) {
-    for (const key in params) {
-      if (params[key] instanceof File || params[key] instanceof Blob) {
-        return this.formDataRequest(method, params);
-      }
-    }
-    return this.jsonRequest(method, params);
-  }
-  async requestJSON(method, params) {
-    return this.request(method, params).then((res) => res.json());
-  }
-}
-function createTelegramBotAPI(token) {
-  const client = new APIClientBase(token);
-  return new Proxy(client, {
-    get(target, prop, receiver) {
-      if (prop in target) {
-        return Reflect.get(target, prop, receiver);
-      }
-      return (...args2) => {
-        if (typeof prop === "string" && prop.endsWith("WithReturns")) {
-          const method = prop.slice(0, -11);
-          return Reflect.apply(target.requestJSON, target, [method, ...args2]);
-        }
-        return Reflect.apply(target.request, target, [prop, ...args2]);
-      };
-    }
-  });
-}
-const scheduleResp = (ok, reason = "") => {
-  const result2 = {
-    ok,
-    ...reason && { reason } || {}
-  };
-  return new Response(JSON.stringify(result2), { headers: { "Content-Type": "application/json" } });
-};
-async function schedule_detele_message(ENV2) {
-  try {
-    log.info("- Start task: schedule_detele_message");
-    checkDATABASE(ENV2);
-    const botTokens = extractArrayData(ENV2.TELEGRAM_AVAILABLE_TOKENS);
-    const botNames = extractArrayData(ENV2.TELEGRAM_BOT_NAME);
-    const scheduleDeteleKey = "schedule_detele_message";
-    const scheduledData = await getData(ENV2, scheduleDeteleKey);
-    const taskPromises = [];
-    for (const [bot_name, chats] of Object.entries(scheduledData)) {
-      const bot_token = checkBotIsVaild(bot_name, botNames, botTokens);
-      if (!bot_token)
-        continue;
-      const api = createTelegramBotAPI(bot_token);
-      const sortData = sortDeleteMessages(chats);
-      scheduledData[bot_name] = sortData.rest;
-      Object.entries(sortData.expired).forEach(([chat_id, messages]) => {
-        log.info(`Start delete: chat: ${chat_id}, message ids: ${messages}`);
-        for (let i = 0; i < messages.length; i += 100) {
-          taskPromises.push(api.deleteMessages({ chat_id, message_ids: messages.slice(i, i + 100) }));
-        }
-      });
-    }
-    if (taskPromises.length === 0) {
-      log.info(`Rest ids: ${JSON.stringify(scheduledData)}
-Nothing need to delete.`);
-      return scheduleResp(true);
-    }
-    const resp = await Promise.all(taskPromises);
-    log.info("all task result: ", resp.map((r) => r.ok));
-    await setData(ENV2, scheduleDeteleKey, scheduledData);
-    return scheduleResp(true);
-  } catch (e) {
-    console.error(e.message, e.stack);
-    return scheduleResp(false, e.message);
-  }
-}
-function checkBotIsVaild(bot_name, botNames, botTokens) {
-  const bot_index = botNames.indexOf(bot_name);
-  if (bot_index < 0) {
-    console.error(`bot name: ${bot_name} is not exist.`);
-    return null;
-  }
-  const bot_token = botTokens[bot_index];
-  if (!bot_token) {
-    console.error(`Cant find bot ${bot_name} - position ${bot_index + 1}'s token
-All token list: ${botTokens}`);
-    return null;
-  }
-  return bot_token;
-}
-function extractArrayData(data) {
-  const isArray = Array.isArray(data);
-  return isArray ? data : parseArray(data);
-}
-async function getData(ENV2, key) {
-  return JSON.parse(await ENV2.DATABASE.get(key) || "{}");
-}
-async function setData(ENV2, key, data) {
-  await ENV2.DATABASE.put(key, JSON.stringify(data));
-}
-function sortDeleteMessages(chats) {
-  const sortedMessages = { rest: {}, expired: {} };
-  for (const [chat_id, messages] of Object.entries(chats)) {
-    if (messages.length === 0)
-      continue;
-    sortedMessages.expired[chat_id] = messages.filter((msg) => msg.ttl <= Date.now()).map((msg) => msg.id).flat();
-    sortedMessages.rest[chat_id] = messages.filter((msg) => msg.ttl > Date.now());
-  }
-  return sortedMessages;
-}
-function checkDATABASE(ENV2) {
-  if (!ENV2.DATABASE) {
-    throw new Error("DATABASE is not found");
-  }
-}
-const tasks = { schedule_detele_message };
-function executeTool(payload, required, envs, hander) {
-  return async (args, options) => {
-    const { signal } = options;
-    let filledPayload = JSON.stringify(payload).replace(/\{\{([^}]+)\}\}/g, (match, p1) => args[p1] || match);
-    if (required && envs) {
-      required.forEach((key) => {
-        if (!envs[key]) {
-          throw new Error(`Missing required argument: ${key}`);
-        }
-        filledPayload = filledPayload.replace(`{{${key}}}`, envs[key]);
-      });
-    }
-    const parsedPayload = JSON.parse(filledPayload);
-    const startTime = Date.now();
-    log.info(`tool request start, url: ${parsedPayload.url}`);
-    let result = await fetch(parsedPayload.url, {
-      method: parsedPayload.method,
-      headers: parsedPayload.headers,
-      body: JSON.stringify(parsedPayload.body),
-      signal
-    });
-    log.info(`tool request end`);
-    if (!result.ok) {
-      throw new Error(`Tool call error: ${result.statusText}`);
-    }
-    result = await result.text();
-    if (hander) {
-      const f = eval(hander);
-      result = f(result);
-    }
-    return { result, time: ((Date.now() - startTime) / 1e3).toFixed(1) };
-  };
-}
-const toolTypes = {
-  duckduckgo: "search",
-  ...Object.values(tools).reduce((acc, { name: name14, type: type2 }) => {
-    acc[name14] = type2;
-    return acc;
-  }, {})
-};
-function vaildTools(tools_config, tool_envs) {
-  const tools$1 = {
-    duckduckgo: tool({
-      description: duckduckgo.schema.description,
-      parameters: jsonSchema(duckduckgo.schema.parameters),
-      execute: duckduckgo.func
-    })
-  };
-  Object.entries(tools).forEach(([name14, { description, parameters, execute_unstructured, hander: hander2 }]) => {
-    tools$1[name14] = tool({
-      description,
-      parameters,
-      execute: executeTool(execute_unstructured.payload, execute_unstructured.required, tool_envs, hander2)
-    });
-  });
-  const activeTools = Object.keys(tools$1).filter((name14) => tools_config.includes(name14));
-  return {
-    tools: tools$1,
-    activeTools
-  };
-}
-const INTERPOLATE_LOOP_REGEXP = /\{\{#each(?::(\w+))?\s+(\w+)\s+in\s+([\w.[\]]+)\}\}([\s\S]*?)\{\{\/each(?::\1)?\}\}/g;
-const INTERPOLATE_CONDITION_REGEXP = /\{\{#if(?::(\w+))?\s+([\w.[\]]+)\}\}([\s\S]*?)(?:\{\{#else(?::\1)?\}\}([\s\S]*?))?\{\{\/if(?::\1)?\}\}/g;
-const INTERPOLATE_VARIABLE_REGEXP = /\{\{([\w.[\]]+)\}\}/g;
-function evaluateExpression(expr, localData) {
-  if (expr === ".") {
-    return localData["."] ?? localData;
-  }
-  try {
-    return expr.split(".").reduce((value, key) => {
-      if (key.includes("[") && key.includes("]")) {
-        const [arrayKey, indexStr] = key.split("[");
-        const indexExpr = indexStr.slice(0, -1);
-        let index2 = Number.parseInt(indexExpr, 10);
-        if (Number.isNaN(index2)) {
-          index2 = evaluateExpression(indexExpr, localData);
-        }
-        return value?.[arrayKey]?.[index2];
-      }
-      return value?.[key];
-    }, localData);
-  } catch (error) {
-    console.error(`Error evaluating expression: ${expr}`, error);
-    return void 0;
-  }
-}
-function interpolate(template, data, formatter = null) {
-  const processConditional = (condition, trueBlock, falseBlock, localData) => {
-    const result2 = evaluateExpression(condition, localData);
-    return result2 ? trueBlock : falseBlock || "";
-  };
-  const processLoop = (itemName, arrayExpr, loopContent, localData) => {
-    const array = evaluateExpression(arrayExpr, localData);
-    if (!Array.isArray(array)) {
-      console.warn(`Expression "${arrayExpr}" did not evaluate to an array`);
-      return "";
-    }
-    return array.map((item) => {
-      const itemData = { ...localData, [itemName]: item, ".": item };
-      return interpolate(loopContent, itemData);
-    }).join("");
-  };
-  const processTemplate = (tmpl, localData) => {
-    tmpl = tmpl.replace(INTERPOLATE_LOOP_REGEXP, (_, alias, itemName, arrayExpr, loopContent) => processLoop(itemName, arrayExpr, loopContent, localData));
-    tmpl = tmpl.replace(INTERPOLATE_CONDITION_REGEXP, (_, alias, condition, trueBlock, falseBlock) => processConditional(condition, trueBlock, falseBlock, localData));
-    return tmpl.replace(INTERPOLATE_VARIABLE_REGEXP, (_, expr) => {
-      const value = evaluateExpression(expr, localData);
-      if (value === void 0) {
-        return `{{${expr}}}`;
-      }
-      if (formatter) {
-        return formatter(value);
-      }
-      return String(value);
-    });
-  };
-  return processTemplate(template, data);
-}
-function interpolateObject(obj, data) {
-  if (obj === null || obj === void 0) {
-    return null;
-  }
-  if (typeof obj === "string") {
-    return interpolate(obj, data);
-  }
-  if (Array.isArray(obj)) {
-    return obj.map((item) => interpolateObject(item, data));
-  }
-  if (typeof obj === "object") {
-    const result2 = {};
-    for (const [key, value] of Object.entries(obj)) {
-      result2[key] = interpolateObject(value, data);
-    }
-    return result2;
-  }
-  return obj;
-}
-async function executeRequest(template, data) {
-  const urlRaw = interpolate(template.url, data, encodeURIComponent);
-  const url = new URL(urlRaw);
-  if (template.query) {
-    for (const [key, value] of Object.entries(template.query)) {
-      url.searchParams.append(key, interpolate(value, data));
-    }
-  }
-  const method = template.method;
-  const headers = Object.fromEntries(
-    Object.entries(template.headers || {}).map(([key, value]) => {
-      return [key, interpolate(value, data)];
-    })
-  );
-  for (const key of Object.keys(headers)) {
-    if (headers[key] === null) {
-      delete headers[key];
-    }
-  }
-  let body = null;
-  if (template.body) {
-    if (template.body.type === "json") {
-      body = JSON.stringify(interpolateObject(template.body.content, data));
-    } else if (template.body.type === "form") {
-      body = new URLSearchParams();
-      for (const [key, value] of Object.entries(template.body.content)) {
-        body.append(key, interpolate(value, data));
-      }
-    } else {
-      body = interpolate(template.body.content, data);
-    }
-  }
-  const response = await fetch(url, {
-    method,
-    headers,
-    body
-  });
-  const renderOutput = async (type2, temple, response2) => {
-    switch (type2) {
-      case "text":
-        return interpolate(temple, await response2.text());
-      case "json":
-      default:
-        return interpolate(temple, await response2.json());
-    }
-  };
-  if (!response.ok) {
-    const content2 = await renderOutput(template.response?.error?.input_type, template.response.error?.output, response);
-    return {
-      type: template.response.error.output_type,
-      content: content2
-    };
-  }
-  let content = await renderOutput(template.response.content?.input_type, template.response.content?.output, response);
-  if (template.response?.render) {
-    content = template.response.render.replace("{{input}}", data.DATA).replace("{{output}}", content);
-  }
-  return {
-    type: template.response.content.output_type,
-    content
-  };
-}
-function formatInput(input, type2) {
-  if (type2 === "json") {
-    return JSON.parse(input);
-  } else if (type2 === "space-separated") {
-    return input.split(/\s+/);
-  } else if (type2 === "comma-separated") {
-    return input.split(/\s*,\s*/);
-  } else {
-    return input;
-  }
-}
-const logSingleton = /* @__PURE__ */ new WeakMap();
-const tagMessageIds = /* @__PURE__ */ new WeakMap();
-function Log(value, context) {
-  if (context.kind === "field") {
-    const configIndex = 1;
-    return function(initialValue) {
-      if (typeof initialValue === "function") {
-        return async function(...args2) {
-          const config = args2[configIndex];
-          const logs = getLogSingleton(config);
-          const startTime2 = Date.now();
-          logs.ongoingFunctions.push({
-            name: initialValue.name || "anonymous",
-            startTime: startTime2
-          });
-          let model;
-          try {
-            model = args2[0]?.model || this.model(config, args2[0]);
-            if (this.type === "tool") {
-              logs.tool.model = model;
-            } else {
-              logs.chat.model.push(model);
-            }
-            const result2 = await initialValue.apply(this, args2);
-            const endTime = Date.now();
-            const elapsed = ((endTime - startTime2) / 1e3).toFixed(1);
-            logs.ongoingFunctions = logs.ongoingFunctions.filter(
-              (func) => func.startTime !== startTime2
-            );
-            handleLlmLog(logs, result2, elapsed, this.type);
-            if (!result2.content && !result2.tool_calls) {
-              return result2;
-            }
-            if (result2.usage) {
-              logs.tokens.push(`${result2.usage.prompt_tokens},${result2.usage.completion_tokens}`);
-            }
-            return { content: result2.content, tool_calls: result2.tool_calls };
-          } catch (error) {
-            logs.ongoingFunctions = logs.ongoingFunctions.filter(
-              (func) => func.startTime !== startTime2
-            );
-            throw error;
-          }
-        };
-      } else {
-        return initialValue;
-      }
-    };
-  }
-  if (context.kind === "method" && typeof value === "function") {
-    return async function(...args2) {
-      const config = this.context.USER_CONFIG;
-      const logs = getLogSingleton(config);
-      const startTime2 = Date.now();
-      const result2 = await value.apply(this, args2);
-      const endTime = Date.now();
-      const elapsed = ((endTime - startTime2) / 1e3).toFixed(1);
-      logs.functionTime.push(elapsed);
-      return result2;
-    };
-  }
-  return value;
-}
-function getLogSingleton(config) {
-  if (!logSingleton.has(config)) {
-    logSingleton.set(config, {
-      functions: [],
-      functionTime: [],
-      tool: {
-        model: "",
-        time: []
-      },
-      chat: {
-        model: [],
-        time: []
-      },
-      tokens: [],
-      ongoingFunctions: [],
-      error: ""
-    });
-  }
-  return logSingleton.get(config);
-}
-function getLog(context, returnModel = false) {
-  if (!context.ENABLE_SHOWINFO)
-    return "";
-  const showToken = context.ENABLE_SHOWTOKEN;
-  const logList = [];
-  const logObj = logSingleton.get(context);
-  if (!logObj)
-    return "";
-  if (returnModel) {
-    return logObj.chat.model?.at(-1) || logObj.tool.model || "UNKNOWN";
-  }
-  if (logObj.tool.model) {
-    let toolsLog = `${logObj.tool.model}`;
-    if (logObj.tool.time.length > 0) {
-      toolsLog += ` c_t: ${logObj.tool.time.join("s ")}s`;
-    }
-    if (logObj.functionTime.length > 0) {
-      toolsLog += ` f_t: ${logObj.functionTime.join("s ")}s`;
-    }
-    logList.push(toolsLog);
-  }
-  if (logObj.functions.length > 0) {
-    const functionLogs = logObj.functions.map((log2) => {
-      const args2 = Object.values(log2.arguments).join(", ");
-      return `${log2.name}: ${args2}`.substring(0, 50);
-    });
-    logList.push(...functionLogs);
-  }
-  if (logObj.error) {
-    logList.push(`${logObj.error}`);
-  }
-  if (logObj.chat.model.length > 0) {
-    const chatLogs = logObj.chat.model.map((m, i) => {
-      const time = logObj.chat.time[i];
-      return `${m}${time ? ` ${time}s` : ""}`;
-    }).join("|");
-    logList.push(chatLogs);
-  }
-  logObj.ongoingFunctions.forEach((func) => {
-    const elapsed = ((Date.now() - func.startTime) / 1e3).toFixed(1);
-    logList.push(`[ongoing: ${func.name} ${elapsed}s]`);
-  });
-  if (logObj.tokens.length > 0 && showToken) {
-    logList.push(`${logObj.tokens.join("|")}`);
-  }
-  const formattedEntries = logList.filter(Boolean).map((entry) => `>\`${entry}\``).join("\n");
-  return `LOGSTART
-${formattedEntries}LOGEND
-`;
-}
-function clearLog(context) {
-  logSingleton.delete(context);
-}
-function handleLlmLog(logs, result2, time, type2) {
-  if (type2 === "tool") {
-    logs.tool.time.push(time);
-  } else {
-    logs.chat.time.push(time);
-  }
-  if (type2 === "tool" && result2.tool_calls && result2.tool_calls.length > 0) {
-    logs.functions.push(
-      ...result2.tool_calls.map((tool2) => ({
-        name: tool2.function.name,
-        arguments: JSON.parse(tool2.function.arguments)
-      }))
-    );
-  }
-}
-function markdownToTelegraphNodes(markdown) {
-  const lines = markdown.split("\n");
-  const nodes = [];
-  let inCodeBlock = false;
-  let codeBlockContent = "";
-  let codeBlockLanguage = "";
-  for (let line of lines) {
-    if (line.trim().startsWith("```")) {
-      if (inCodeBlock) {
-        nodes.push({
-          tag: "pre",
-          children: [
-            {
-              tag: "code",
-              attrs: codeBlockLanguage ? { class: `language-${codeBlockLanguage}` } : {},
-              children: [codeBlockContent.trim()]
-            }
-          ]
-        });
-        inCodeBlock = false;
-        codeBlockContent = "";
-        codeBlockLanguage = "";
-      } else {
-        inCodeBlock = true;
-        codeBlockLanguage = line.trim().slice(3).trim();
-      }
-      continue;
-    }
-    if (inCodeBlock) {
-      codeBlockContent += `${line}
-`;
-      continue;
-    }
-    const _line = line.trim();
-    if (!_line)
-      continue;
-    if (_line.startsWith("#")) {
-      const match = /^#+/.exec(_line);
-      let level = match ? match[0].length : 0;
-      level = level <= 2 ? 3 : 4;
-      const text = line.replace(/^#+\s*/, "");
-      nodes.push({ tag: `h${level}`, children: processInlineElements(text) });
-    } else if (_line.startsWith("> ")) {
-      const text = line.slice(2);
-      nodes.push({ tag: "blockquote", children: processInlineElements(text) });
-    } else if (_line === "---" || _line === "***") {
-      nodes.push({ tag: "hr" });
-    } else {
-      const matches = /^(\s*)(?:-|\*)\s/.exec(line);
-      if (matches) {
-        line = `${matches[1]}• ${line.slice(matches[0].length)}`;
-      }
-      nodes.push({ tag: "p", children: processInlineElements(line) });
-    }
-  }
-  if (inCodeBlock) {
-    nodes.push({
-      tag: "pre",
-      children: [
-        {
-          tag: "code",
-          attrs: codeBlockLanguage ? { class: `language-${codeBlockLanguage}` } : {},
-          children: [codeBlockContent.trim()]
-        }
-      ]
-    });
-  }
-  return nodes;
-}
-function processInlineElementsHelper(text) {
-  const children = [];
-  const linkRegex = /\[([^\]]+)\]\(([^)]+)\)/g;
-  let match = null;
-  let index2 = 0;
-  while (true) {
-    match = linkRegex.exec(text);
-    if (match === null)
-      break;
-    if (match.index > index2) {
-      children.push(...processInlineStyles(text.slice(index2, match.index)));
-    }
-    children.push({
-      tag: "a",
-      attrs: { href: match[2] },
-      children: [match[1]]
-    });
-    index2 = match.index + match[0].length;
-  }
-  if (index2 < text.length) {
-    children.push(...processInlineStyles(text.slice(index2)));
-  }
-  return children;
-}
-function processInlineStyles(text) {
-  const children = [];
-  const styleRegex = /(\*\*|__|_|~~)(.+?)\1/g;
-  let lastIndex = 0;
-  let match;
-  while (true) {
-    match = styleRegex.exec(text);
-    if (match === null)
-      break;
-    if (match.index > lastIndex) {
-      children.push(text.slice(lastIndex, match.index));
-    }
-    let tag = "";
-    switch (match[1]) {
-      case "**":
-        tag = "strong";
-        break;
-      case "__":
-        tag = "u";
-        break;
-      case "_":
-        tag = "i";
-        break;
-      case "~~":
-        tag = "s";
-        break;
-      default:
-        tag = "span";
-        break;
-    }
-    children.push({
-      tag,
-      children: [match[2]]
-    });
-    lastIndex = match.index + match[0].length;
-  }
-  if (lastIndex < text.length) {
-    children.push(text.slice(lastIndex));
-  }
-  return children;
-}
-function processInlineElements(text) {
-  const children = [];
-  const codeRegex = /`([^`]+)`/g;
-  let codeMatch = null;
-  let lastIndex = 0;
-  while (true) {
-    codeMatch = codeRegex.exec(text);
-    if (codeMatch === null)
-      break;
-    if (codeMatch.index > lastIndex) {
-      children.push(...processInlineElementsHelper(text.slice(lastIndex, codeMatch.index)));
-    }
-    children.push({
-      tag: "code",
-      children: [codeMatch[1]]
-    });
-    lastIndex = codeMatch.index + codeMatch[0].length;
-  }
-  if (lastIndex < text.length) {
-    children.push(...processInlineElementsHelper(text.slice(lastIndex)));
-  }
-  return children;
-}
-const escapeChars = /([_*[\]()\\~`>#+\-=|{}.!])/g;
-const escapedChars = {
-  "\\*": "ESCAPEASTERISK",
-  "\\_": "ESCAPEUNDERSCORE",
-  "\\~": "ESCAPETILDE",
-  "\\|": "ESCAPEPIP",
-  "\\`": "ESCAPEBACKTICK",
-  "\\\\": "ESCAPEBACKSLASH",
-  "\\(": "ESCAPELEFTPARENTHESIS",
-  "\\)": "ESCAPERIGHTPARENTHESIS",
-  "\\[": "ESCAPELEFTBRACKET",
-  "\\]": "ESCAPERIGHTBRACKET",
-  "\\{": "ESCAPELEFTBRACE",
-  "\\}": "ESCAPERIGHTBRACE",
-  "\\>": "ESCAPEGREATERTHAN",
-  "\\#": "ESCAPEHASH",
-  "\\+": "ESCAPEPLUS",
-  "\\-": "ESCAPEMINUS",
-  "\\=": "ESCAPEEQUAL",
-  "\\.": "ESCAPEDOT",
-  "\\!": "ESCAPEEXCLAMATION",
-  "\\?": "ESCAPEQUESTION"
-};
-const escapedCharsReverseMap = new Map(Object.entries(escapedChars).map(([key, value]) => [value, key]));
-function escape(lines) {
-  const stack = [];
-  const result2 = [];
-  let lineTrim = "";
-  let modifiedLine = "";
-  for (const [i, line] of lines.entries()) {
-    lineTrim = line.trim();
-    modifiedLine = line;
-    let startIndex = 0;
-    if (/^```.+/.test(lineTrim)) {
-      stack.push(i);
-    } else if (lineTrim === "```") {
-      if (stack.length) {
-        startIndex = stack.pop();
-        if (!stack.length) {
-          const content = lines.slice(startIndex, i + 1).join("\n");
-          result2.push(handleEscape(content, "code"));
-          continue;
-        }
-      } else {
-        stack.push(i);
-      }
-    } else if (lineTrim && i > 0 && /^\s*>/.test(result2.at(-1) ?? "") && !lineTrim.startsWith(">")) {
-      modifiedLine = `>${line}`;
-    }
-    if (!stack.length) {
-      result2.push(handleEscape(modifiedLine));
-    }
-  }
-  if (stack.length) {
-    const last = `${lines.slice(stack[0]).join("\n")}
-\`\`\``;
-    result2.push(handleEscape(last, "code"));
-  }
-  const regexp = /^LOGSTART\n(.*?)LOGEND/s;
-  return result2.join("\n").replace(regexp, "**$1||").replace(new RegExp(Object.values(escapedChars).join("|"), "g"), (match) => escapedCharsReverseMap.get(match) ?? match);
-}
-function handleEscape(text, type2 = "text") {
-  if (!text.trim()) {
-    return text;
-  }
-  text = text.replace(/\\[*_~|`\\()[\]{}>#+\-=.!]/g, (match) => escapedChars[match]);
-  if (type2 === "text") {
-    text = text.replace(escapeChars, "\\$1").replace(/\\\*\\\*(\S|\S.*?\S)\\\*\\\*/g, "*$1*").replace(/\\_\\_(\S|\S.*?\S)\\_\\_/g, "__$1__").replace(/\\_(\S|\S.*?\S)\\_/g, "_$1_").replace(/\\~(\S|\S.*?\S)\\~/g, "~$1~").replace(/\\\|\\\|(\S|\S.*?\S)\\\|\\\|/g, "||$1||").replace(/\\\[([^\]]+)\\\]\\\((.+?)\\\)/g, "[$1]($2)").replace(/\\`(.*?)\\`/g, "`$1`").replace(/^\s*\\>\s*(.+)$/gm, ">$1").replace(/^(>?\s*)\\(-|\*)\s+(.+)$/gm, "$1• $3").replace(/^((\\#){1,3}\s)(.+)/gm, "$1*$3*");
-  } else {
-    const codeBlank = text.length - text.trimStart().length;
-    if (codeBlank > 0) {
-      const blankReg = new RegExp(`^\\s{${codeBlank}}`, "gm");
-      text = text.replace(blankReg, "");
-    }
-    text = text.trimEnd().replace(/([\\`])/g, "\\$1").replace(/^\\`\\`\\`([\s\S]+)\\`\\`\\`$/g, "```$1```");
-  }
-  return text;
-}
-function chunkDocument(text, chunkSize = 4096) {
-  const textList = text.split("\n");
-  const chunks = [[]];
-  let chunkIndex = 0;
-  const codeStack = [];
-  for (const line of textList) {
-    if (chunks[chunkIndex].join("\n").length + line.length >= chunkSize) {
-      chunkIndex++;
-      chunks.push([]);
-      if (codeStack.length) {
-        if (chunks[chunkIndex - 1].join("\n").length + codeStack.length * 4 >= chunkSize) {
-          chunks[chunkIndex - 1].push(...chunks[chunkIndex - 1].slice(-codeStack.length));
-          chunks[chunkIndex - 1].length -= codeStack.length;
-        }
-        chunks[chunkIndex - 1].push(...Array.from({ length: codeStack.length }).fill("```"));
-        chunks[chunkIndex].push(...codeStack);
-      }
-      if (line.length > chunkSize) {
-        const lineSplit = chunkText(chunks[chunkIndex].join("\n") + line, chunkSize);
-        if (lineSplit.length > 1) {
-          chunks.length -= 1;
-          chunks.push(...lineSplit.map((item) => item.split("\n")));
-          chunkIndex = chunks.length - 1;
-        } else {
-          chunks[chunkIndex].push(line);
-        }
-      } else {
-        chunks[chunkIndex].push(line);
-      }
-      continue;
-    }
-    if (/^```.+/.test(line.trim())) {
-      codeStack.push(line);
-    } else if (line.trim() === "```") {
-      if (codeStack.length) {
-        codeStack.pop();
-      } else {
-        codeStack.push(line);
-      }
-    }
-    chunks[chunkIndex].push(line);
-  }
-  if (codeStack.length) {
-    chunks[chunkIndex].push(...Array.from({ length: codeStack.length }).fill("```"));
-  }
-  return chunks;
-}
-function chunkText(text, chunkSize) {
-  const chunks = [];
-  for (let i = 0; i < text.length; i += chunkSize) {
-    chunks.push(text.slice(i, i + chunkSize));
-  }
-  return chunks;
-}
-class MessageContext {
-  chat_id;
-  message_id = null;
-  reply_to_message_id;
-  parse_mode = null;
-  allow_sending_without_reply = null;
-  disable_web_page_preview = ENV.DISABLE_WEB_PREVIEW;
-  message_thread_id = null;
-  chatType;
-  message;
-  sentMessageIds = /* @__PURE__ */ new Set();
-  constructor(message) {
-    this.chat_id = message.chat.id;
-    this.chatType = message.chat.type;
-    this.message = message;
-    if (message.chat.type === "group" || message.chat.type === "supergroup") {
-      if (message?.reply_to_message && ENV.EXTRA_MESSAGE_CONTEXT && !message.is_topic_message && ENV.ENABLE_REPLY_TO_MENTION && !message.reply_to_message.from?.is_bot) {
-        this.reply_to_message_id = message.reply_to_message.message_id;
-      } else {
-        this.reply_to_message_id = message.message_id;
-      }
-      this.allow_sending_without_reply = true;
-      if (message.message_thread_id && message.is_topic_message) {
-        this.message_thread_id = message.message_thread_id;
-      }
-    } else {
-      this.reply_to_message_id = null;
-    }
-  }
-}
-class MessageSender {
-  api;
-  context;
-  constructor(token, context) {
-    this.api = createTelegramBotAPI(token);
-    this.context = context;
-    this.sendRichText = this.sendRichText.bind(this);
-    this.sendPlainText = this.sendPlainText.bind(this);
-    this.sendPhoto = this.sendPhoto.bind(this);
-  }
-  static from(token, message) {
-    return new MessageSender(token, new MessageContext(message));
-  }
-  with(message) {
-    this.context = new MessageContext(message);
-    return this;
-  }
-  update(context) {
-    if (!this.context) {
-      this.context = context;
-      return this;
-    }
-    for (const key in context) {
-      this.context[key] = context[key];
-    }
-    return this;
-  }
-  async sendMessage(message, context) {
-    if (context?.message_id) {
-      const params = {
-        chat_id: context.chat_id,
-        message_id: context.message_id,
-        parse_mode: context.parse_mode || void 0,
-        text: message
-      };
-      if (context.disable_web_page_preview) {
-        params.link_preview_options = {
-          is_disabled: true
-        };
-      }
-      return this.api.editMessageText(params);
-    } else {
-      const params = {
-        chat_id: context.chat_id,
-        message_thread_id: context.message_thread_id || void 0,
-        parse_mode: context.parse_mode || void 0,
-        text: message
-      };
-      if (context.reply_to_message_id) {
-        params.reply_parameters = {
-          message_id: context.reply_to_message_id,
-          chat_id: context.chat_id,
-          allow_sending_without_reply: context.allow_sending_without_reply || void 0
-        };
-      }
-      if (context.disable_web_page_preview) {
-        params.link_preview_options = {
-          is_disabled: true
-        };
-      }
-      return this.api.sendMessage(params);
-    }
-  }
-  async sendLongMessage(message, context) {
-    const chatContext = { ...context };
-    const messages = renderMessage(context.parse_mode, message);
-    let lastMessageResponse = null;
-    let lastMessageRespJson = null;
-    for (let i = 0; i < messages.length; i++) {
-      if (i > 0 && i < context.sentMessageIds.size - 1) {
-        continue;
-      }
-      chatContext.message_id = [...context.sentMessageIds][i] ?? null;
-      lastMessageResponse = await this.sendMessage(messages[i], chatContext);
-      if (lastMessageResponse.status !== 200) {
-        break;
-      }
-      lastMessageRespJson = await lastMessageResponse.clone().json();
-      this.context.sentMessageIds.add(lastMessageRespJson.result.message_id);
-      this.context.message_id = lastMessageRespJson.result.message_id;
-    }
-    if (lastMessageResponse === null) {
-      throw new Error("Send message failed");
-    }
-    return lastMessageResponse;
-  }
-  sendRichText(message, parseMode = ENV.DEFAULT_PARSE_MODE, type2 = "chat") {
-    if (!this.context) {
-      throw new Error("Message context not set");
-    }
-    const resp = this.sendLongMessage(message, {
-      ...this.context,
-      parse_mode: parseMode
-    });
-    return checkIsNeedTagIds(this.context, resp, type2);
-  }
-  sendPlainText(message, type2 = "tip") {
-    if (!this.context) {
-      throw new Error("Message context not set");
-    }
-    const resp = this.sendLongMessage(message, {
-      ...this.context,
-      parse_mode: null
-    });
-    return checkIsNeedTagIds(this.context, resp, type2);
-  }
-  sendPhoto(photo, caption, parse_mode) {
-    if (!this.context) {
-      throw new Error("Message context not set");
-    }
-    const params = {
-      chat_id: this.context.chat_id,
-      message_thread_id: this.context.message_thread_id || void 0,
-      photo,
-      ...caption ? { caption: renderMessage(parse_mode || null, caption)[0] } : {},
-      parse_mode
-    };
-    if (this.context.reply_to_message_id) {
-      params.reply_parameters = {
-        message_id: this.context.reply_to_message_id,
-        chat_id: this.context.chat_id,
-        allow_sending_without_reply: this.context.allow_sending_without_reply || void 0
-      };
-    }
-    const resp = this.api.sendPhoto(params);
-    return checkIsNeedTagIds(this.context, resp, "chat");
-  }
-  sendMediaGroup(media) {
-    if (!this.context) {
-      throw new Error("Message context not set");
-    }
-    const params = {
-      chat_id: this.context.chat_id,
-      message_thread_id: this.context.message_thread_id || void 0,
-      media
-    };
-    if (this.context.reply_to_message_id) {
-      params.reply_parameters = {
-        message_id: this.context.reply_to_message_id,
-        chat_id: this.context.chat_id,
-        allow_sending_without_reply: this.context.allow_sending_without_reply || void 0
-      };
-    }
-    const resp = this.api.sendMediaGroup(params);
-    return checkIsNeedTagIds(this.context, resp, "chat");
-  }
-  sendDocument(document, caption, parse_mode) {
-    if (!this.context) {
-      throw new Error("Message context not set");
-    }
-    const params = {
-      chat_id: this.context.chat_id,
-      message_thread_id: this.context.message_thread_id || void 0,
-      document,
-      caption,
-      parse_mode
-    };
-    if (this.context.reply_to_message_id) {
-      params.reply_parameters = {
-        message_id: this.context.reply_to_message_id,
-        chat_id: this.context.chat_id,
-        allow_sending_without_reply: this.context.allow_sending_without_reply || void 0
-      };
-    }
-    return this.api.sendDocument(params);
-  }
-  editMessageMedia(media, caption, parse_mode) {
-    if (!this.context) {
-      throw new Error("Message context not set");
-    }
-    if (!this.context.message_id) {
-      throw new Error("Message id is null");
-    }
-    const params = {
-      chat_id: this.context.chat_id,
-      message_id: this.context.message_id,
-      media: {
-        ...media,
-        ...caption ? { caption: parse_mode ? renderMessage(parse_mode, caption)[0] : caption } : {},
-        parse_mode
-      }
-    };
-    const resp = this.api.editMessageMedia(params);
-    return checkIsNeedTagIds(this.context, resp, "chat");
-  }
-}
-class TelegraphSender {
-  telegraphAccessTokenKey;
-  telegraphAccessToken;
-  teleph_path;
-  author = {
-    short_name: "Mewo",
-    author_name: "A Cat",
-    author_url: ENV.TELEGRAPH_AUTHOR_URL
-  };
-  constructor(botName, telegraphAccessTokenKey) {
-    this.telegraphAccessTokenKey = telegraphAccessTokenKey;
-    if (botName) {
-      this.author = {
-        short_name: botName,
-        author_name: botName,
-        author_url: ENV.TELEGRAPH_AUTHOR_URL
-      };
-    }
-  }
-  async createAccount() {
-    const { short_name, author_name } = this.author;
-    const url = `https://api.telegra.ph/createAccount?short_name=${short_name}&author_name=${author_name}`;
-    const resp = await fetch(url).then((r) => r.json());
-    if (resp.ok) {
-      return resp.result.access_token;
-    } else {
-      throw new Error("create telegraph account failed");
-    }
-  }
-  async createOrEditPage(url, title, content) {
-    const body = {
-      access_token: this.telegraphAccessToken,
-      teleph_path: this.teleph_path ?? void 0,
-      title: title || "Daily Q&A",
-      content: markdownToTelegraphNodes(content),
-      ...this.author
-    };
-    const headers = { "Content-Type": "application/json" };
-    return fetch(url, {
-      method: "post",
-      headers,
-      body: JSON.stringify(body)
-    }).then((r) => r.json());
-  }
-  async send(title, content) {
-    let endPoint = "https://api.telegra.ph/editPage";
-    if (!this.telegraphAccessToken) {
-      this.telegraphAccessToken = await ENV.DATABASE.get(this.telegraphAccessTokenKey);
-      if (!this.telegraphAccessToken) {
-        this.telegraphAccessToken = await this.createAccount();
-        await ENV.DATABASE.put(this.telegraphAccessTokenKey, this.telegraphAccessToken).catch(console.error);
-      }
-    }
-    if (!this.teleph_path) {
-      endPoint = "https://api.telegra.ph/createPage";
-      const c_resp = await this.createOrEditPage(endPoint, title, content);
-      if (c_resp.ok) {
-        this.teleph_path = c_resp.result.path;
-        log.info("telegraph url:", c_resp.result.url);
-        return c_resp;
-      } else {
-        console.error(c_resp.error);
-        throw new Error(c_resp.error);
-      }
-    } else {
-      return this.createOrEditPage(endPoint, title, content);
-    }
-  }
-}
-function sendAction(botToken, chat_id, action = "typing") {
-  const api = createTelegramBotAPI(botToken);
-  setTimeout(() => api.sendChatAction({
-    chat_id,
-    action
-  }).catch(console.error), 0);
-}
-async function checkIsNeedTagIds(context, resp, msgType) {
-  const { chatType } = context;
-  let message_id = [];
-  const original_resp = await resp;
-  do {
-    if (ENV.EXPIRED_TIME <= 0) break;
-    const clone_resp = await original_resp.clone().json();
-    if (Array.isArray(clone_resp.result)) {
-      message_id = clone_resp?.result?.map((i) => i.message_id);
-    } else {
-      message_id = [clone_resp?.result?.message_id];
-    }
-    if (message_id.filter(Boolean).length === 0) {
-      log.error("resp:", JSON.stringify(clone_resp));
-      break;
-    }
-    const isGroup = ["group", "supergroup"].includes(chatType);
-    const isNeedTag = isGroup && ENV.SCHEDULE_GROUP_DELETE_TYPE.includes(msgType) || !isGroup && ENV.SCHEDULE_PRIVATE_DELETE_TYPE.includes(msgType);
-    if (isNeedTag) {
-      message_id.forEach((id) => tagMessageIds.get(context.message)?.push(id));
-    }
-  } while (false);
-  return original_resp;
-}
-class ChosenInlineContext {
-  result_id;
-  inline_message_id;
-  query;
-  parse_mode = null;
-  telegraphAccessTokenKey;
-  constructor(result2) {
-    this.result_id = result2.result_id;
-    this.inline_message_id = result2.inline_message_id;
-    this.query = result2.query;
-    if (ENV.TELEGRAPH_NUM_LIMIT > 0) {
-      this.telegraphAccessTokenKey = `telegraph_access_token:${result2.from.id}`;
-    }
-  }
-}
-class ChosenInlineSender {
-  api;
-  context;
-  constructor(token, context) {
-    this.api = createTelegramBotAPI(token);
-    this.context = context;
-  }
-  static from(token, result2) {
-    return new ChosenInlineSender(token, new ChosenInlineContext(result2));
-  }
-  sendRichText(text, parseMode = ENV.DEFAULT_PARSE_MODE, type2 = "chat") {
-    return this.editMessageText(text, parseMode);
-  }
-  sendPlainText(text) {
-    return this.editMessageText(text);
-  }
-  editMessageText(text, parse_mode) {
-    return this.api.editMessageText({
-      inline_message_id: this.context.inline_message_id,
-      text: renderMessage(parse_mode || null, text)[0],
-      parse_mode,
-      link_preview_options: {
-        is_disabled: ENV.DISABLE_WEB_PREVIEW
-      }
-    });
-  }
-  editMessageMedia(media, type2, caption, parse_mode) {
-    return this.api.editMessageMedia({
-      inline_message_id: this.context.inline_message_id,
-      media: {
-        type: type2,
-        media,
-        ...caption ? { caption: renderMessage(parse_mode || null, caption)[0] } : {}
-      }
-    });
-  }
-}
-function renderMessage(parse_mode, message) {
-  const chunkMessage = chunkDocument(message);
-  if (parse_mode === "MarkdownV2") {
-    return chunkMessage.map((lines) => escape(lines));
-  }
-  return chunkMessage.map((line) => line.join("\n"));
-}
-async function loadChatRoleWithContext(message, context, isCallbackQuery = false) {
-  const { groupAdminsKey } = context.SHARE_CONTEXT;
-  const chatId = message.chat.id;
-  const speakerId = isCallbackQuery ? context?.from?.id : message.from?.id || chatId;
-  if (!groupAdminsKey) {
-    return null;
-  }
-  let groupAdmin = null;
-  try {
-    groupAdmin = JSON.parse(await ENV.DATABASE.get(groupAdminsKey));
-  } catch (e) {
-    console.error(e);
-  }
-  if (groupAdmin === null || !Array.isArray(groupAdmin) || groupAdmin.length === 0) {
-    const api = createTelegramBotAPI(context.SHARE_CONTEXT.botToken);
-    const result2 = await api.getChatAdministratorsWithReturns({ chat_id: chatId });
-    if (result2 == null) {
-      return null;
-    }
-    groupAdmin = result2.result;
-    await ENV.DATABASE.put(
-      groupAdminsKey,
-      JSON.stringify(groupAdmin),
-      { expiration: Date.now() / 1e3 + 120 }
-    );
-  }
-  for (const user of groupAdmin) {
-    if (`${user.user?.id}` === `${speakerId}`) {
-      return user.status;
-    }
-  }
-  return "member";
-}
 var anthropicErrorDataSchema = z.object({
   type: z.literal("error"),
   error: z.object({
@@ -15971,14 +10367,14 @@ async function requestCompletionsFromLLM(params, context, agent, modifier, onStr
     messages
   };
   const answer = await agent.request(llmParams, context.USER_CONFIG, onStream);
-  const { messages: raw_messages, content } = answer;
+  const { messages: raw_messages } = answer;
   if (!historyDisable) {
     if (raw_messages.at(-1)?.role === "assistant") {
       history.push(params);
       history.push(...raw_messages);
     }
   }
-  return content;
+  return answer;
 }
 async function requestText2Image(url, headers, body, render) {
   console.log("start generate image.");
@@ -15993,643 +10389,5352 @@ async function requestText2Image(url, headers, body, render) {
   }
   return result2;
 }
-class Cache {
-  maxItems;
-  maxAge;
-  cache;
-  constructor() {
-    this.maxItems = 10;
-    this.maxAge = 1e3 * 60 * 60;
-    this.cache = {};
-    this.set = this.set.bind(this);
-    this.get = this.get.bind(this);
+const schema = {
+  name: "jina_reader",
+  description: "Grab text content from provided URL links. Can be used to retrieve text information for web pages, articles, or other online resources",
+  parameters: {
+    type: "object",
+    properties: {
+      url: {
+        type: "string",
+        description: "The full URL address of the content to be crawled. If the user explicitly requests to read/analyze the content of the link, then call the function. If the data provided by the user is web content with links, but the content is sufficient to answer the question, then there is no need to call the function."
+      }
+    },
+    required: [
+      "url"
+    ],
+    additionalProperties: false
   }
-  set(key, value) {
-    this.trim();
-    this.cache[key] = {
-      value,
-      time: Date.now()
+};
+const payload = {
+  url: "https://r.jina.ai/{{url}}",
+  headers: {
+    Authorization: "Bearer {{JINA_API_KEY}}",
+    "Content-Type": "application/json",
+    "X-Return-Format": "text",
+    "X-Timeout": "10"
+  }
+};
+const handler = "content => content";
+const type = "reader";
+const required = [
+  "JINA_API_KEY"
+];
+const jina_reader = {
+  schema,
+  payload,
+  handler,
+  type,
+  required
+};
+const externalTools = { jina_reader };
+const ignoreOverride = Symbol("Let zodToJsonSchema decide on which parser to use");
+const defaultOptions = {
+  name: void 0,
+  $refStrategy: "root",
+  basePath: ["#"],
+  effectStrategy: "input",
+  pipeStrategy: "all",
+  dateStrategy: "format:date-time",
+  mapStrategy: "entries",
+  removeAdditionalStrategy: "passthrough",
+  definitionPath: "definitions",
+  target: "jsonSchema7",
+  strictUnions: false,
+  definitions: {},
+  errorMessages: false,
+  markdownDescription: false,
+  patternStrategy: "escape",
+  applyRegexFlags: false,
+  emailStrategy: "format:email",
+  base64Strategy: "contentEncoding:base64",
+  nameStrategy: "ref"
+};
+const getDefaultOptions = (options2) => ({
+  ...defaultOptions,
+  ...options2
+});
+const getRefs = (options2) => {
+  const _options = getDefaultOptions(options2);
+  const currentPath = _options.name !== void 0 ? [..._options.basePath, _options.definitionPath, _options.name] : _options.basePath;
+  return {
+    ..._options,
+    currentPath,
+    propertyPath: void 0,
+    seen: new Map(Object.entries(_options.definitions).map(([name14, def]) => [
+      def._def,
+      {
+        def: def._def,
+        path: [..._options.basePath, _options.definitionPath, name14],
+        jsonSchema: void 0
+      }
+    ]))
+  };
+};
+function addErrorMessage(res, key, errorMessage, refs) {
+  if (!refs?.errorMessages)
+    return;
+  if (errorMessage) {
+    res.errorMessage = {
+      ...res.errorMessage,
+      [key]: errorMessage
     };
   }
-  get(key) {
-    this.trim();
-    return this.cache[key]?.value;
+}
+function setResponseValueAndErrors(res, key, value, errorMessage, refs) {
+  res[key] = value;
+  addErrorMessage(res, key, errorMessage, refs);
+}
+function parseAnyDef() {
+  return {};
+}
+function parseArrayDef(def, refs) {
+  const res = {
+    type: "array"
+  };
+  if (def.type?._def && def.type?._def?.typeName !== ZodFirstPartyTypeKind.ZodAny) {
+    res.items = parseDef(def.type._def, {
+      ...refs,
+      currentPath: [...refs.currentPath, "items"]
+    });
   }
-  trim() {
-    let keys = Object.keys(this.cache);
-    for (const key of keys) {
-      if (Date.now() - this.cache[key].time > this.maxAge) {
-        delete this.cache[key];
-      }
+  if (def.minLength) {
+    setResponseValueAndErrors(res, "minItems", def.minLength.value, def.minLength.message, refs);
+  }
+  if (def.maxLength) {
+    setResponseValueAndErrors(res, "maxItems", def.maxLength.value, def.maxLength.message, refs);
+  }
+  if (def.exactLength) {
+    setResponseValueAndErrors(res, "minItems", def.exactLength.value, def.exactLength.message, refs);
+    setResponseValueAndErrors(res, "maxItems", def.exactLength.value, def.exactLength.message, refs);
+  }
+  return res;
+}
+function parseBigintDef(def, refs) {
+  const res = {
+    type: "integer",
+    format: "int64"
+  };
+  if (!def.checks)
+    return res;
+  for (const check of def.checks) {
+    switch (check.kind) {
+      case "min":
+        if (refs.target === "jsonSchema7") {
+          if (check.inclusive) {
+            setResponseValueAndErrors(res, "minimum", check.value, check.message, refs);
+          } else {
+            setResponseValueAndErrors(res, "exclusiveMinimum", check.value, check.message, refs);
+          }
+        } else {
+          if (!check.inclusive) {
+            res.exclusiveMinimum = true;
+          }
+          setResponseValueAndErrors(res, "minimum", check.value, check.message, refs);
+        }
+        break;
+      case "max":
+        if (refs.target === "jsonSchema7") {
+          if (check.inclusive) {
+            setResponseValueAndErrors(res, "maximum", check.value, check.message, refs);
+          } else {
+            setResponseValueAndErrors(res, "exclusiveMaximum", check.value, check.message, refs);
+          }
+        } else {
+          if (!check.inclusive) {
+            res.exclusiveMaximum = true;
+          }
+          setResponseValueAndErrors(res, "maximum", check.value, check.message, refs);
+        }
+        break;
+      case "multipleOf":
+        setResponseValueAndErrors(res, "multipleOf", check.value, check.message, refs);
+        break;
     }
-    keys = Object.keys(this.cache);
-    if (keys.length > this.maxItems) {
-      keys.sort((a, b) => this.cache[a].time - this.cache[b].time);
-      for (let i = 0; i < keys.length - this.maxItems; i++) {
-        delete this.cache[keys[i]];
-      }
-    }
+  }
+  return res;
+}
+function parseBooleanDef() {
+  return {
+    type: "boolean"
+  };
+}
+function parseBrandedDef(_def, refs) {
+  return parseDef(_def.type._def, refs);
+}
+const parseCatchDef = (def, refs) => {
+  return parseDef(def.innerType._def, refs);
+};
+function parseDateDef(def, refs, overrideDateStrategy) {
+  const strategy = overrideDateStrategy ?? refs.dateStrategy;
+  if (Array.isArray(strategy)) {
+    return {
+      anyOf: strategy.map((item, i) => parseDateDef(def, refs, item))
+    };
+  }
+  switch (strategy) {
+    case "string":
+    case "format:date-time":
+      return {
+        type: "string",
+        format: "date-time"
+      };
+    case "format:date":
+      return {
+        type: "string",
+        format: "date"
+      };
+    case "integer":
+      return integerDateParser(def, refs);
   }
 }
-const IMAGE_CACHE = new Cache();
-async function fetchImage(url) {
-  const cache = IMAGE_CACHE.get(url);
-  if (cache) {
-    return cache;
+const integerDateParser = (def, refs) => {
+  const res = {
+    type: "integer",
+    format: "unix-time"
+  };
+  if (refs.target === "openApi3") {
+    return res;
   }
-  return fetch(url).then((resp) => resp.blob()).then((blob) => {
-    IMAGE_CACHE.set(url, blob);
-    return blob;
+  for (const check of def.checks) {
+    switch (check.kind) {
+      case "min":
+        setResponseValueAndErrors(
+          res,
+          "minimum",
+          check.value,
+          check.message,
+          refs
+        );
+        break;
+      case "max":
+        setResponseValueAndErrors(
+          res,
+          "maximum",
+          check.value,
+          check.message,
+          refs
+        );
+        break;
+    }
+  }
+  return res;
+};
+function parseDefaultDef(_def, refs) {
+  return {
+    ...parseDef(_def.innerType._def, refs),
+    default: _def.defaultValue()
+  };
+}
+function parseEffectsDef(_def, refs) {
+  return refs.effectStrategy === "input" ? parseDef(_def.schema._def, refs) : {};
+}
+function parseEnumDef(def) {
+  return {
+    type: "string",
+    enum: def.values
+  };
+}
+const isJsonSchema7AllOfType = (type2) => {
+  if ("type" in type2 && type2.type === "string")
+    return false;
+  return "allOf" in type2;
+};
+function parseIntersectionDef(def, refs) {
+  const allOf = [
+    parseDef(def.left._def, {
+      ...refs,
+      currentPath: [...refs.currentPath, "allOf", "0"]
+    }),
+    parseDef(def.right._def, {
+      ...refs,
+      currentPath: [...refs.currentPath, "allOf", "1"]
+    })
+  ].filter((x) => !!x);
+  let unevaluatedProperties = refs.target === "jsonSchema2019-09" ? { unevaluatedProperties: false } : void 0;
+  const mergedAllOf = [];
+  allOf.forEach((schema2) => {
+    if (isJsonSchema7AllOfType(schema2)) {
+      mergedAllOf.push(...schema2.allOf);
+      if (schema2.unevaluatedProperties === void 0) {
+        unevaluatedProperties = void 0;
+      }
+    } else {
+      let nestedSchema = schema2;
+      if ("additionalProperties" in schema2 && schema2.additionalProperties === false) {
+        const { additionalProperties, ...rest } = schema2;
+        nestedSchema = rest;
+      } else {
+        unevaluatedProperties = void 0;
+      }
+      mergedAllOf.push(nestedSchema);
+    }
+  });
+  return mergedAllOf.length ? {
+    allOf: mergedAllOf,
+    ...unevaluatedProperties
+  } : void 0;
+}
+function parseLiteralDef(def, refs) {
+  const parsedType = typeof def.value;
+  if (parsedType !== "bigint" && parsedType !== "number" && parsedType !== "boolean" && parsedType !== "string") {
+    return {
+      type: Array.isArray(def.value) ? "array" : "object"
+    };
+  }
+  if (refs.target === "openApi3") {
+    return {
+      type: parsedType === "bigint" ? "integer" : parsedType,
+      enum: [def.value]
+    };
+  }
+  return {
+    type: parsedType === "bigint" ? "integer" : parsedType,
+    const: def.value
+  };
+}
+let emojiRegex;
+const zodPatterns = {
+  cuid: /^[cC][^\s-]{8,}$/,
+  cuid2: /^[0-9a-z]+$/,
+  ulid: /^[0-9A-HJKMNP-TV-Z]{26}$/,
+  email: /^(?!\.)(?!.*\.\.)([a-zA-Z0-9_'+\-\.]*)[a-zA-Z0-9_+-]@([a-zA-Z0-9][a-zA-Z0-9\-]*\.)+[a-zA-Z]{2,}$/,
+  emoji: () => {
+    if (emojiRegex === void 0) {
+      emojiRegex = RegExp("^(\\p{Extended_Pictographic}|\\p{Emoji_Component})+$", "u");
+    }
+    return emojiRegex;
+  },
+  uuid: /^[0-9a-fA-F]{8}\b-[0-9a-fA-F]{4}\b-[0-9a-fA-F]{4}\b-[0-9a-fA-F]{4}\b-[0-9a-fA-F]{12}$/,
+  ipv4: /^(?:(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\.){3}(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])$/,
+  ipv6: /^(([a-f0-9]{1,4}:){7}|::([a-f0-9]{1,4}:){0,6}|([a-f0-9]{1,4}:){1}:([a-f0-9]{1,4}:){0,5}|([a-f0-9]{1,4}:){2}:([a-f0-9]{1,4}:){0,4}|([a-f0-9]{1,4}:){3}:([a-f0-9]{1,4}:){0,3}|([a-f0-9]{1,4}:){4}:([a-f0-9]{1,4}:){0,2}|([a-f0-9]{1,4}:){5}:([a-f0-9]{1,4}:){0,1})([a-f0-9]{1,4}|(((25[0-5])|(2[0-4][0-9])|(1[0-9]{2})|([0-9]{1,2}))\.){3}((25[0-5])|(2[0-4][0-9])|(1[0-9]{2})|([0-9]{1,2})))$/,
+  base64: /^([0-9a-zA-Z+/]{4})*(([0-9a-zA-Z+/]{2}==)|([0-9a-zA-Z+/]{3}=))?$/,
+  nanoid: /^[a-zA-Z0-9_-]{21}$/
+};
+function parseStringDef(def, refs) {
+  const res = {
+    type: "string"
+  };
+  function processPattern(value) {
+    return refs.patternStrategy === "escape" ? escapeNonAlphaNumeric(value) : value;
+  }
+  if (def.checks) {
+    for (const check of def.checks) {
+      switch (check.kind) {
+        case "min":
+          setResponseValueAndErrors(res, "minLength", typeof res.minLength === "number" ? Math.max(res.minLength, check.value) : check.value, check.message, refs);
+          break;
+        case "max":
+          setResponseValueAndErrors(res, "maxLength", typeof res.maxLength === "number" ? Math.min(res.maxLength, check.value) : check.value, check.message, refs);
+          break;
+        case "email":
+          switch (refs.emailStrategy) {
+            case "format:email":
+              addFormat(res, "email", check.message, refs);
+              break;
+            case "format:idn-email":
+              addFormat(res, "idn-email", check.message, refs);
+              break;
+            case "pattern:zod":
+              addPattern(res, zodPatterns.email, check.message, refs);
+              break;
+          }
+          break;
+        case "url":
+          addFormat(res, "uri", check.message, refs);
+          break;
+        case "uuid":
+          addFormat(res, "uuid", check.message, refs);
+          break;
+        case "regex":
+          addPattern(res, check.regex, check.message, refs);
+          break;
+        case "cuid":
+          addPattern(res, zodPatterns.cuid, check.message, refs);
+          break;
+        case "cuid2":
+          addPattern(res, zodPatterns.cuid2, check.message, refs);
+          break;
+        case "startsWith":
+          addPattern(res, RegExp(`^${processPattern(check.value)}`), check.message, refs);
+          break;
+        case "endsWith":
+          addPattern(res, RegExp(`${processPattern(check.value)}$`), check.message, refs);
+          break;
+        case "datetime":
+          addFormat(res, "date-time", check.message, refs);
+          break;
+        case "date":
+          addFormat(res, "date", check.message, refs);
+          break;
+        case "time":
+          addFormat(res, "time", check.message, refs);
+          break;
+        case "duration":
+          addFormat(res, "duration", check.message, refs);
+          break;
+        case "length":
+          setResponseValueAndErrors(res, "minLength", typeof res.minLength === "number" ? Math.max(res.minLength, check.value) : check.value, check.message, refs);
+          setResponseValueAndErrors(res, "maxLength", typeof res.maxLength === "number" ? Math.min(res.maxLength, check.value) : check.value, check.message, refs);
+          break;
+        case "includes": {
+          addPattern(res, RegExp(processPattern(check.value)), check.message, refs);
+          break;
+        }
+        case "ip": {
+          if (check.version !== "v6") {
+            addFormat(res, "ipv4", check.message, refs);
+          }
+          if (check.version !== "v4") {
+            addFormat(res, "ipv6", check.message, refs);
+          }
+          break;
+        }
+        case "emoji":
+          addPattern(res, zodPatterns.emoji, check.message, refs);
+          break;
+        case "ulid": {
+          addPattern(res, zodPatterns.ulid, check.message, refs);
+          break;
+        }
+        case "base64": {
+          switch (refs.base64Strategy) {
+            case "format:binary": {
+              addFormat(res, "binary", check.message, refs);
+              break;
+            }
+            case "contentEncoding:base64": {
+              setResponseValueAndErrors(res, "contentEncoding", "base64", check.message, refs);
+              break;
+            }
+            case "pattern:zod": {
+              addPattern(res, zodPatterns.base64, check.message, refs);
+              break;
+            }
+          }
+          break;
+        }
+        case "nanoid": {
+          addPattern(res, zodPatterns.nanoid, check.message, refs);
+        }
+      }
+    }
+  }
+  return res;
+}
+const escapeNonAlphaNumeric = (value) => Array.from(value).map((c) => /[a-zA-Z0-9]/.test(c) ? c : `\\${c}`).join("");
+const addFormat = (schema2, value, message, refs) => {
+  if (schema2.format || schema2.anyOf?.some((x) => x.format)) {
+    if (!schema2.anyOf) {
+      schema2.anyOf = [];
+    }
+    if (schema2.format) {
+      schema2.anyOf.push({
+        format: schema2.format,
+        ...schema2.errorMessage && refs.errorMessages && {
+          errorMessage: { format: schema2.errorMessage.format }
+        }
+      });
+      delete schema2.format;
+      if (schema2.errorMessage) {
+        delete schema2.errorMessage.format;
+        if (Object.keys(schema2.errorMessage).length === 0) {
+          delete schema2.errorMessage;
+        }
+      }
+    }
+    schema2.anyOf.push({
+      format: value,
+      ...message && refs.errorMessages && { errorMessage: { format: message } }
+    });
+  } else {
+    setResponseValueAndErrors(schema2, "format", value, message, refs);
+  }
+};
+const addPattern = (schema2, regex, message, refs) => {
+  if (schema2.pattern || schema2.allOf?.some((x) => x.pattern)) {
+    if (!schema2.allOf) {
+      schema2.allOf = [];
+    }
+    if (schema2.pattern) {
+      schema2.allOf.push({
+        pattern: schema2.pattern,
+        ...schema2.errorMessage && refs.errorMessages && {
+          errorMessage: { pattern: schema2.errorMessage.pattern }
+        }
+      });
+      delete schema2.pattern;
+      if (schema2.errorMessage) {
+        delete schema2.errorMessage.pattern;
+        if (Object.keys(schema2.errorMessage).length === 0) {
+          delete schema2.errorMessage;
+        }
+      }
+    }
+    schema2.allOf.push({
+      pattern: processRegExp(regex, refs),
+      ...message && refs.errorMessages && { errorMessage: { pattern: message } }
+    });
+  } else {
+    setResponseValueAndErrors(schema2, "pattern", processRegExp(regex, refs), message, refs);
+  }
+};
+const processRegExp = (regexOrFunction, refs) => {
+  const regex = typeof regexOrFunction === "function" ? regexOrFunction() : regexOrFunction;
+  if (!refs.applyRegexFlags || !regex.flags)
+    return regex.source;
+  const flags = {
+    i: regex.flags.includes("i"),
+    m: regex.flags.includes("m"),
+    s: regex.flags.includes("s")
+  };
+  const source = flags.i ? regex.source.toLowerCase() : regex.source;
+  let pattern = "";
+  let isEscaped = false;
+  let inCharGroup = false;
+  let inCharRange = false;
+  for (let i = 0; i < source.length; i++) {
+    if (isEscaped) {
+      pattern += source[i];
+      isEscaped = false;
+      continue;
+    }
+    if (flags.i) {
+      if (inCharGroup) {
+        if (source[i].match(/[a-z]/)) {
+          if (inCharRange) {
+            pattern += source[i];
+            pattern += `${source[i - 2]}-${source[i]}`.toUpperCase();
+            inCharRange = false;
+          } else if (source[i + 1] === "-" && source[i + 2]?.match(/[a-z]/)) {
+            pattern += source[i];
+            inCharRange = true;
+          } else {
+            pattern += `${source[i]}${source[i].toUpperCase()}`;
+          }
+          continue;
+        }
+      } else if (source[i].match(/[a-z]/)) {
+        pattern += `[${source[i]}${source[i].toUpperCase()}]`;
+        continue;
+      }
+    }
+    if (flags.m) {
+      if (source[i] === "^") {
+        pattern += `(^|(?<=[\r
+]))`;
+        continue;
+      } else if (source[i] === "$") {
+        pattern += `($|(?=[\r
+]))`;
+        continue;
+      }
+    }
+    if (flags.s && source[i] === ".") {
+      pattern += inCharGroup ? `${source[i]}\r
+` : `[${source[i]}\r
+]`;
+      continue;
+    }
+    pattern += source[i];
+    if (source[i] === "\\") {
+      isEscaped = true;
+    } else if (inCharGroup && source[i] === "]") {
+      inCharGroup = false;
+    } else if (!inCharGroup && source[i] === "[") {
+      inCharGroup = true;
+    }
+  }
+  try {
+    const regexTest = new RegExp(pattern);
+  } catch {
+    console.warn(`Could not convert regex pattern at ${refs.currentPath.join("/")} to a flag-independent form! Falling back to the flag-ignorant source`);
+    return regex.source;
+  }
+  return pattern;
+};
+function parseRecordDef(def, refs) {
+  if (refs.target === "openApi3" && def.keyType?._def.typeName === ZodFirstPartyTypeKind.ZodEnum) {
+    return {
+      type: "object",
+      required: def.keyType._def.values,
+      properties: def.keyType._def.values.reduce((acc, key) => ({
+        ...acc,
+        [key]: parseDef(def.valueType._def, {
+          ...refs,
+          currentPath: [...refs.currentPath, "properties", key]
+        }) ?? {}
+      }), {}),
+      additionalProperties: false
+    };
+  }
+  const schema2 = {
+    type: "object",
+    additionalProperties: parseDef(def.valueType._def, {
+      ...refs,
+      currentPath: [...refs.currentPath, "additionalProperties"]
+    }) ?? {}
+  };
+  if (refs.target === "openApi3") {
+    return schema2;
+  }
+  if (def.keyType?._def.typeName === ZodFirstPartyTypeKind.ZodString && def.keyType._def.checks?.length) {
+    const { type: type2, ...keyType } = parseStringDef(def.keyType._def, refs);
+    return {
+      ...schema2,
+      propertyNames: keyType
+    };
+  } else if (def.keyType?._def.typeName === ZodFirstPartyTypeKind.ZodEnum) {
+    return {
+      ...schema2,
+      propertyNames: {
+        enum: def.keyType._def.values
+      }
+    };
+  } else if (def.keyType?._def.typeName === ZodFirstPartyTypeKind.ZodBranded && def.keyType._def.type._def.typeName === ZodFirstPartyTypeKind.ZodString && def.keyType._def.type._def.checks?.length) {
+    const { type: type2, ...keyType } = parseBrandedDef(def.keyType._def, refs);
+    return {
+      ...schema2,
+      propertyNames: keyType
+    };
+  }
+  return schema2;
+}
+function parseMapDef(def, refs) {
+  if (refs.mapStrategy === "record") {
+    return parseRecordDef(def, refs);
+  }
+  const keys = parseDef(def.keyType._def, {
+    ...refs,
+    currentPath: [...refs.currentPath, "items", "items", "0"]
+  }) || {};
+  const values = parseDef(def.valueType._def, {
+    ...refs,
+    currentPath: [...refs.currentPath, "items", "items", "1"]
+  }) || {};
+  return {
+    type: "array",
+    maxItems: 125,
+    items: {
+      type: "array",
+      items: [keys, values],
+      minItems: 2,
+      maxItems: 2
+    }
+  };
+}
+function parseNativeEnumDef(def) {
+  const object = def.values;
+  const actualKeys = Object.keys(def.values).filter((key) => {
+    return typeof object[object[key]] !== "number";
+  });
+  const actualValues = actualKeys.map((key) => object[key]);
+  const parsedTypes = Array.from(new Set(actualValues.map((values) => typeof values)));
+  return {
+    type: parsedTypes.length === 1 ? parsedTypes[0] === "string" ? "string" : "number" : ["string", "number"],
+    enum: actualValues
+  };
+}
+function parseNeverDef() {
+  return {
+    not: {}
+  };
+}
+function parseNullDef(refs) {
+  return refs.target === "openApi3" ? {
+    enum: ["null"],
+    nullable: true
+  } : {
+    type: "null"
+  };
+}
+const primitiveMappings = {
+  ZodString: "string",
+  ZodNumber: "number",
+  ZodBigInt: "integer",
+  ZodBoolean: "boolean",
+  ZodNull: "null"
+};
+function parseUnionDef(def, refs) {
+  if (refs.target === "openApi3")
+    return asAnyOf(def, refs);
+  const options2 = def.options instanceof Map ? Array.from(def.options.values()) : def.options;
+  if (options2.every((x) => x._def.typeName in primitiveMappings && (!x._def.checks || !x._def.checks.length))) {
+    const types = options2.reduce((types2, x) => {
+      const type2 = primitiveMappings[x._def.typeName];
+      return type2 && !types2.includes(type2) ? [...types2, type2] : types2;
+    }, []);
+    return {
+      type: types.length > 1 ? types : types[0]
+    };
+  } else if (options2.every((x) => x._def.typeName === "ZodLiteral" && !x.description)) {
+    const types = options2.reduce((acc, x) => {
+      const type2 = typeof x._def.value;
+      switch (type2) {
+        case "string":
+        case "number":
+        case "boolean":
+          return [...acc, type2];
+        case "bigint":
+          return [...acc, "integer"];
+        case "object":
+          if (x._def.value === null)
+            return [...acc, "null"];
+        case "symbol":
+        case "undefined":
+        case "function":
+        default:
+          return acc;
+      }
+    }, []);
+    if (types.length === options2.length) {
+      const uniqueTypes = types.filter((x, i, a) => a.indexOf(x) === i);
+      return {
+        type: uniqueTypes.length > 1 ? uniqueTypes : uniqueTypes[0],
+        enum: options2.reduce((acc, x) => {
+          return acc.includes(x._def.value) ? acc : [...acc, x._def.value];
+        }, [])
+      };
+    }
+  } else if (options2.every((x) => x._def.typeName === "ZodEnum")) {
+    return {
+      type: "string",
+      enum: options2.reduce((acc, x) => [
+        ...acc,
+        ...x._def.values.filter((x2) => !acc.includes(x2))
+      ], [])
+    };
+  }
+  return asAnyOf(def, refs);
+}
+const asAnyOf = (def, refs) => {
+  const anyOf = (def.options instanceof Map ? Array.from(def.options.values()) : def.options).map((x, i) => parseDef(x._def, {
+    ...refs,
+    currentPath: [...refs.currentPath, "anyOf", `${i}`]
+  })).filter((x) => !!x && (!refs.strictUnions || typeof x === "object" && Object.keys(x).length > 0));
+  return anyOf.length ? { anyOf } : void 0;
+};
+function parseNullableDef(def, refs) {
+  if (["ZodString", "ZodNumber", "ZodBigInt", "ZodBoolean", "ZodNull"].includes(def.innerType._def.typeName) && (!def.innerType._def.checks || !def.innerType._def.checks.length)) {
+    if (refs.target === "openApi3") {
+      return {
+        type: primitiveMappings[def.innerType._def.typeName],
+        nullable: true
+      };
+    }
+    return {
+      type: [
+        primitiveMappings[def.innerType._def.typeName],
+        "null"
+      ]
+    };
+  }
+  if (refs.target === "openApi3") {
+    const base2 = parseDef(def.innerType._def, {
+      ...refs,
+      currentPath: [...refs.currentPath]
+    });
+    if (base2 && "$ref" in base2)
+      return { allOf: [base2], nullable: true };
+    return base2 && { ...base2, nullable: true };
+  }
+  const base = parseDef(def.innerType._def, {
+    ...refs,
+    currentPath: [...refs.currentPath, "anyOf", "0"]
+  });
+  return base && { anyOf: [base, { type: "null" }] };
+}
+function parseNumberDef(def, refs) {
+  const res = {
+    type: "number"
+  };
+  if (!def.checks)
+    return res;
+  for (const check of def.checks) {
+    switch (check.kind) {
+      case "int":
+        res.type = "integer";
+        addErrorMessage(res, "type", check.message, refs);
+        break;
+      case "min":
+        if (refs.target === "jsonSchema7") {
+          if (check.inclusive) {
+            setResponseValueAndErrors(res, "minimum", check.value, check.message, refs);
+          } else {
+            setResponseValueAndErrors(res, "exclusiveMinimum", check.value, check.message, refs);
+          }
+        } else {
+          if (!check.inclusive) {
+            res.exclusiveMinimum = true;
+          }
+          setResponseValueAndErrors(res, "minimum", check.value, check.message, refs);
+        }
+        break;
+      case "max":
+        if (refs.target === "jsonSchema7") {
+          if (check.inclusive) {
+            setResponseValueAndErrors(res, "maximum", check.value, check.message, refs);
+          } else {
+            setResponseValueAndErrors(res, "exclusiveMaximum", check.value, check.message, refs);
+          }
+        } else {
+          if (!check.inclusive) {
+            res.exclusiveMaximum = true;
+          }
+          setResponseValueAndErrors(res, "maximum", check.value, check.message, refs);
+        }
+        break;
+      case "multipleOf":
+        setResponseValueAndErrors(res, "multipleOf", check.value, check.message, refs);
+        break;
+    }
+  }
+  return res;
+}
+function decideAdditionalProperties(def, refs) {
+  if (refs.removeAdditionalStrategy === "strict") {
+    return def.catchall._def.typeName === "ZodNever" ? def.unknownKeys !== "strict" : parseDef(def.catchall._def, {
+      ...refs,
+      currentPath: [...refs.currentPath, "additionalProperties"]
+    }) ?? true;
+  } else {
+    return def.catchall._def.typeName === "ZodNever" ? def.unknownKeys === "passthrough" : parseDef(def.catchall._def, {
+      ...refs,
+      currentPath: [...refs.currentPath, "additionalProperties"]
+    }) ?? true;
+  }
+}
+function parseObjectDef(def, refs) {
+  const result2 = {
+    type: "object",
+    ...Object.entries(def.shape()).reduce((acc, [propName, propDef]) => {
+      if (propDef === void 0 || propDef._def === void 0)
+        return acc;
+      const parsedDef = parseDef(propDef._def, {
+        ...refs,
+        currentPath: [...refs.currentPath, "properties", propName],
+        propertyPath: [...refs.currentPath, "properties", propName]
+      });
+      if (parsedDef === void 0)
+        return acc;
+      return {
+        properties: { ...acc.properties, [propName]: parsedDef },
+        required: propDef.isOptional() ? acc.required : [...acc.required, propName]
+      };
+    }, { properties: {}, required: [] }),
+    additionalProperties: decideAdditionalProperties(def, refs)
+  };
+  if (!result2.required.length)
+    delete result2.required;
+  return result2;
+}
+const parseOptionalDef = (def, refs) => {
+  if (refs.currentPath.toString() === refs.propertyPath?.toString()) {
+    return parseDef(def.innerType._def, refs);
+  }
+  const innerSchema = parseDef(def.innerType._def, {
+    ...refs,
+    currentPath: [...refs.currentPath, "anyOf", "1"]
+  });
+  return innerSchema ? {
+    anyOf: [
+      {
+        not: {}
+      },
+      innerSchema
+    ]
+  } : {};
+};
+const parsePipelineDef = (def, refs) => {
+  if (refs.pipeStrategy === "input") {
+    return parseDef(def.in._def, refs);
+  } else if (refs.pipeStrategy === "output") {
+    return parseDef(def.out._def, refs);
+  }
+  const a = parseDef(def.in._def, {
+    ...refs,
+    currentPath: [...refs.currentPath, "allOf", "0"]
+  });
+  const b = parseDef(def.out._def, {
+    ...refs,
+    currentPath: [...refs.currentPath, "allOf", a ? "1" : "0"]
+  });
+  return {
+    allOf: [a, b].filter((x) => x !== void 0)
+  };
+};
+function parsePromiseDef(def, refs) {
+  return parseDef(def.type._def, refs);
+}
+function parseSetDef(def, refs) {
+  const items = parseDef(def.valueType._def, {
+    ...refs,
+    currentPath: [...refs.currentPath, "items"]
+  });
+  const schema2 = {
+    type: "array",
+    uniqueItems: true,
+    items
+  };
+  if (def.minSize) {
+    setResponseValueAndErrors(schema2, "minItems", def.minSize.value, def.minSize.message, refs);
+  }
+  if (def.maxSize) {
+    setResponseValueAndErrors(schema2, "maxItems", def.maxSize.value, def.maxSize.message, refs);
+  }
+  return schema2;
+}
+function parseTupleDef(def, refs) {
+  if (def.rest) {
+    return {
+      type: "array",
+      minItems: def.items.length,
+      items: def.items.map((x, i) => parseDef(x._def, {
+        ...refs,
+        currentPath: [...refs.currentPath, "items", `${i}`]
+      })).reduce((acc, x) => x === void 0 ? acc : [...acc, x], []),
+      additionalItems: parseDef(def.rest._def, {
+        ...refs,
+        currentPath: [...refs.currentPath, "additionalItems"]
+      })
+    };
+  } else {
+    return {
+      type: "array",
+      minItems: def.items.length,
+      maxItems: def.items.length,
+      items: def.items.map((x, i) => parseDef(x._def, {
+        ...refs,
+        currentPath: [...refs.currentPath, "items", `${i}`]
+      })).reduce((acc, x) => x === void 0 ? acc : [...acc, x], [])
+    };
+  }
+}
+function parseUndefinedDef() {
+  return {
+    not: {}
+  };
+}
+function parseUnknownDef() {
+  return {};
+}
+const parseReadonlyDef = (def, refs) => {
+  return parseDef(def.innerType._def, refs);
+};
+function parseDef(def, refs, forceResolution = false) {
+  const seenItem = refs.seen.get(def);
+  if (refs.override) {
+    const overrideResult = refs.override?.(def, refs, seenItem, forceResolution);
+    if (overrideResult !== ignoreOverride) {
+      return overrideResult;
+    }
+  }
+  if (seenItem && !forceResolution) {
+    const seenSchema = get$ref(seenItem, refs);
+    if (seenSchema !== void 0) {
+      return seenSchema;
+    }
+  }
+  const newItem = { def, path: refs.currentPath, jsonSchema: void 0 };
+  refs.seen.set(def, newItem);
+  const jsonSchema2 = selectParser(def, def.typeName, refs);
+  if (jsonSchema2) {
+    addMeta(def, refs, jsonSchema2);
+  }
+  newItem.jsonSchema = jsonSchema2;
+  return jsonSchema2;
+}
+const get$ref = (item, refs) => {
+  switch (refs.$refStrategy) {
+    case "root":
+      return { $ref: item.path.join("/") };
+    case "relative":
+      return { $ref: getRelativePath(refs.currentPath, item.path) };
+    case "none":
+    case "seen": {
+      if (item.path.length < refs.currentPath.length && item.path.every((value, index2) => refs.currentPath[index2] === value)) {
+        console.warn(`Recursive reference detected at ${refs.currentPath.join("/")}! Defaulting to any`);
+        return {};
+      }
+      return refs.$refStrategy === "seen" ? {} : void 0;
+    }
+  }
+};
+const getRelativePath = (pathA, pathB) => {
+  let i = 0;
+  for (; i < pathA.length && i < pathB.length; i++) {
+    if (pathA[i] !== pathB[i])
+      break;
+  }
+  return [(pathA.length - i).toString(), ...pathB.slice(i)].join("/");
+};
+const selectParser = (def, typeName, refs) => {
+  switch (typeName) {
+    case ZodFirstPartyTypeKind.ZodString:
+      return parseStringDef(def, refs);
+    case ZodFirstPartyTypeKind.ZodNumber:
+      return parseNumberDef(def, refs);
+    case ZodFirstPartyTypeKind.ZodObject:
+      return parseObjectDef(def, refs);
+    case ZodFirstPartyTypeKind.ZodBigInt:
+      return parseBigintDef(def, refs);
+    case ZodFirstPartyTypeKind.ZodBoolean:
+      return parseBooleanDef();
+    case ZodFirstPartyTypeKind.ZodDate:
+      return parseDateDef(def, refs);
+    case ZodFirstPartyTypeKind.ZodUndefined:
+      return parseUndefinedDef();
+    case ZodFirstPartyTypeKind.ZodNull:
+      return parseNullDef(refs);
+    case ZodFirstPartyTypeKind.ZodArray:
+      return parseArrayDef(def, refs);
+    case ZodFirstPartyTypeKind.ZodUnion:
+    case ZodFirstPartyTypeKind.ZodDiscriminatedUnion:
+      return parseUnionDef(def, refs);
+    case ZodFirstPartyTypeKind.ZodIntersection:
+      return parseIntersectionDef(def, refs);
+    case ZodFirstPartyTypeKind.ZodTuple:
+      return parseTupleDef(def, refs);
+    case ZodFirstPartyTypeKind.ZodRecord:
+      return parseRecordDef(def, refs);
+    case ZodFirstPartyTypeKind.ZodLiteral:
+      return parseLiteralDef(def, refs);
+    case ZodFirstPartyTypeKind.ZodEnum:
+      return parseEnumDef(def);
+    case ZodFirstPartyTypeKind.ZodNativeEnum:
+      return parseNativeEnumDef(def);
+    case ZodFirstPartyTypeKind.ZodNullable:
+      return parseNullableDef(def, refs);
+    case ZodFirstPartyTypeKind.ZodOptional:
+      return parseOptionalDef(def, refs);
+    case ZodFirstPartyTypeKind.ZodMap:
+      return parseMapDef(def, refs);
+    case ZodFirstPartyTypeKind.ZodSet:
+      return parseSetDef(def, refs);
+    case ZodFirstPartyTypeKind.ZodLazy:
+      return parseDef(def.getter()._def, refs);
+    case ZodFirstPartyTypeKind.ZodPromise:
+      return parsePromiseDef(def, refs);
+    case ZodFirstPartyTypeKind.ZodNaN:
+    case ZodFirstPartyTypeKind.ZodNever:
+      return parseNeverDef();
+    case ZodFirstPartyTypeKind.ZodEffects:
+      return parseEffectsDef(def, refs);
+    case ZodFirstPartyTypeKind.ZodAny:
+      return parseAnyDef();
+    case ZodFirstPartyTypeKind.ZodUnknown:
+      return parseUnknownDef();
+    case ZodFirstPartyTypeKind.ZodDefault:
+      return parseDefaultDef(def, refs);
+    case ZodFirstPartyTypeKind.ZodBranded:
+      return parseBrandedDef(def, refs);
+    case ZodFirstPartyTypeKind.ZodReadonly:
+      return parseReadonlyDef(def, refs);
+    case ZodFirstPartyTypeKind.ZodCatch:
+      return parseCatchDef(def, refs);
+    case ZodFirstPartyTypeKind.ZodPipeline:
+      return parsePipelineDef(def, refs);
+    case ZodFirstPartyTypeKind.ZodFunction:
+    case ZodFirstPartyTypeKind.ZodVoid:
+    case ZodFirstPartyTypeKind.ZodSymbol:
+      return void 0;
+    default:
+      return /* @__PURE__ */ ((_) => void 0)();
+  }
+};
+const addMeta = (def, refs, jsonSchema2) => {
+  if (def.description) {
+    jsonSchema2.description = def.description;
+    if (refs.markdownDescription) {
+      jsonSchema2.markdownDescription = def.description;
+    }
+  }
+  return jsonSchema2;
+};
+const zodToJsonSchema = (schema2, options2) => {
+  const refs = getRefs(options2);
+  const definitions = void 0;
+  const name14 = options2?.name;
+  const main = parseDef(
+    schema2._def,
+    refs,
+    false
+  ) ?? {};
+  const combined = name14 === void 0 ? definitions ? {
+    ...main,
+    [refs.definitionPath]: definitions
+  } : main : {
+    $ref: [
+      ...refs.$refStrategy === "relative" ? [] : refs.basePath,
+      refs.definitionPath,
+      name14
+    ].join("/"),
+    [refs.definitionPath]: {
+      ...definitions,
+      [name14]: main
+    }
+  };
+  if (refs.target === "jsonSchema7") {
+    combined.$schema = "http://json-schema.org/draft-07/schema#";
+  } else if (refs.target === "jsonSchema2019-09") {
+    combined.$schema = "https://json-schema.org/draft/2019-09/schema#";
+  }
+  return combined;
+};
+var textStreamPart = {
+  code: "0",
+  name: "text",
+  parse: (value) => {
+    if (typeof value !== "string") {
+      throw new Error('"text" parts expect a string value.');
+    }
+    return { type: "text", value };
+  }
+};
+var functionCallStreamPart = {
+  code: "1",
+  name: "function_call",
+  parse: (value) => {
+    if (value == null || typeof value !== "object" || !("function_call" in value) || typeof value.function_call !== "object" || value.function_call == null || !("name" in value.function_call) || !("arguments" in value.function_call) || typeof value.function_call.name !== "string" || typeof value.function_call.arguments !== "string") {
+      throw new Error(
+        '"function_call" parts expect an object with a "function_call" property.'
+      );
+    }
+    return {
+      type: "function_call",
+      value
+    };
+  }
+};
+var dataStreamPart = {
+  code: "2",
+  name: "data",
+  parse: (value) => {
+    if (!Array.isArray(value)) {
+      throw new Error('"data" parts expect an array value.');
+    }
+    return { type: "data", value };
+  }
+};
+var errorStreamPart = {
+  code: "3",
+  name: "error",
+  parse: (value) => {
+    if (typeof value !== "string") {
+      throw new Error('"error" parts expect a string value.');
+    }
+    return { type: "error", value };
+  }
+};
+var assistantMessageStreamPart = {
+  code: "4",
+  name: "assistant_message",
+  parse: (value) => {
+    if (value == null || typeof value !== "object" || !("id" in value) || !("role" in value) || !("content" in value) || typeof value.id !== "string" || typeof value.role !== "string" || value.role !== "assistant" || !Array.isArray(value.content) || !value.content.every(
+      (item) => item != null && typeof item === "object" && "type" in item && item.type === "text" && "text" in item && item.text != null && typeof item.text === "object" && "value" in item.text && typeof item.text.value === "string"
+    )) {
+      throw new Error(
+        '"assistant_message" parts expect an object with an "id", "role", and "content" property.'
+      );
+    }
+    return {
+      type: "assistant_message",
+      value
+    };
+  }
+};
+var assistantControlDataStreamPart = {
+  code: "5",
+  name: "assistant_control_data",
+  parse: (value) => {
+    if (value == null || typeof value !== "object" || !("threadId" in value) || !("messageId" in value) || typeof value.threadId !== "string" || typeof value.messageId !== "string") {
+      throw new Error(
+        '"assistant_control_data" parts expect an object with a "threadId" and "messageId" property.'
+      );
+    }
+    return {
+      type: "assistant_control_data",
+      value: {
+        threadId: value.threadId,
+        messageId: value.messageId
+      }
+    };
+  }
+};
+var dataMessageStreamPart = {
+  code: "6",
+  name: "data_message",
+  parse: (value) => {
+    if (value == null || typeof value !== "object" || !("role" in value) || !("data" in value) || typeof value.role !== "string" || value.role !== "data") {
+      throw new Error(
+        '"data_message" parts expect an object with a "role" and "data" property.'
+      );
+    }
+    return {
+      type: "data_message",
+      value
+    };
+  }
+};
+var toolCallsStreamPart = {
+  code: "7",
+  name: "tool_calls",
+  parse: (value) => {
+    if (value == null || typeof value !== "object" || !("tool_calls" in value) || typeof value.tool_calls !== "object" || value.tool_calls == null || !Array.isArray(value.tool_calls) || value.tool_calls.some(
+      (tc) => tc == null || typeof tc !== "object" || !("id" in tc) || typeof tc.id !== "string" || !("type" in tc) || typeof tc.type !== "string" || !("function" in tc) || tc.function == null || typeof tc.function !== "object" || !("arguments" in tc.function) || typeof tc.function.name !== "string" || typeof tc.function.arguments !== "string"
+    )) {
+      throw new Error(
+        '"tool_calls" parts expect an object with a ToolCallPayload.'
+      );
+    }
+    return {
+      type: "tool_calls",
+      value
+    };
+  }
+};
+var messageAnnotationsStreamPart = {
+  code: "8",
+  name: "message_annotations",
+  parse: (value) => {
+    if (!Array.isArray(value)) {
+      throw new Error('"message_annotations" parts expect an array value.');
+    }
+    return { type: "message_annotations", value };
+  }
+};
+var toolCallStreamPart = {
+  code: "9",
+  name: "tool_call",
+  parse: (value) => {
+    if (value == null || typeof value !== "object" || !("toolCallId" in value) || typeof value.toolCallId !== "string" || !("toolName" in value) || typeof value.toolName !== "string" || !("args" in value) || typeof value.args !== "object") {
+      throw new Error(
+        '"tool_call" parts expect an object with a "toolCallId", "toolName", and "args" property.'
+      );
+    }
+    return {
+      type: "tool_call",
+      value
+    };
+  }
+};
+var toolResultStreamPart = {
+  code: "a",
+  name: "tool_result",
+  parse: (value) => {
+    if (value == null || typeof value !== "object" || !("toolCallId" in value) || typeof value.toolCallId !== "string" || !("result" in value)) {
+      throw new Error(
+        '"tool_result" parts expect an object with a "toolCallId" and a "result" property.'
+      );
+    }
+    return {
+      type: "tool_result",
+      value
+    };
+  }
+};
+var toolCallStreamingStartStreamPart = {
+  code: "b",
+  name: "tool_call_streaming_start",
+  parse: (value) => {
+    if (value == null || typeof value !== "object" || !("toolCallId" in value) || typeof value.toolCallId !== "string" || !("toolName" in value) || typeof value.toolName !== "string") {
+      throw new Error(
+        '"tool_call_streaming_start" parts expect an object with a "toolCallId" and "toolName" property.'
+      );
+    }
+    return {
+      type: "tool_call_streaming_start",
+      value
+    };
+  }
+};
+var toolCallDeltaStreamPart = {
+  code: "c",
+  name: "tool_call_delta",
+  parse: (value) => {
+    if (value == null || typeof value !== "object" || !("toolCallId" in value) || typeof value.toolCallId !== "string" || !("argsTextDelta" in value) || typeof value.argsTextDelta !== "string") {
+      throw new Error(
+        '"tool_call_delta" parts expect an object with a "toolCallId" and "argsTextDelta" property.'
+      );
+    }
+    return {
+      type: "tool_call_delta",
+      value
+    };
+  }
+};
+var finishMessageStreamPart = {
+  code: "d",
+  name: "finish_message",
+  parse: (value) => {
+    if (value == null || typeof value !== "object" || !("finishReason" in value) || typeof value.finishReason !== "string") {
+      throw new Error(
+        '"finish_message" parts expect an object with a "finishReason" property.'
+      );
+    }
+    const result2 = {
+      finishReason: value.finishReason
+    };
+    if ("usage" in value && value.usage != null && typeof value.usage === "object" && "promptTokens" in value.usage && "completionTokens" in value.usage) {
+      result2.usage = {
+        promptTokens: typeof value.usage.promptTokens === "number" ? value.usage.promptTokens : Number.NaN,
+        completionTokens: typeof value.usage.completionTokens === "number" ? value.usage.completionTokens : Number.NaN
+      };
+    }
+    return {
+      type: "finish_message",
+      value: result2
+    };
+  }
+};
+var finishStepStreamPart = {
+  code: "e",
+  name: "finish_step",
+  parse: (value) => {
+    if (value == null || typeof value !== "object" || !("finishReason" in value) || typeof value.finishReason !== "string") {
+      throw new Error(
+        '"finish_step" parts expect an object with a "finishReason" property.'
+      );
+    }
+    const result2 = {
+      finishReason: value.finishReason,
+      isContinued: false
+    };
+    if ("usage" in value && value.usage != null && typeof value.usage === "object" && "promptTokens" in value.usage && "completionTokens" in value.usage) {
+      result2.usage = {
+        promptTokens: typeof value.usage.promptTokens === "number" ? value.usage.promptTokens : Number.NaN,
+        completionTokens: typeof value.usage.completionTokens === "number" ? value.usage.completionTokens : Number.NaN
+      };
+    }
+    if ("isContinued" in value && typeof value.isContinued === "boolean") {
+      result2.isContinued = value.isContinued;
+    }
+    return {
+      type: "finish_step",
+      value: result2
+    };
+  }
+};
+var streamParts = [
+  textStreamPart,
+  functionCallStreamPart,
+  dataStreamPart,
+  errorStreamPart,
+  assistantMessageStreamPart,
+  assistantControlDataStreamPart,
+  dataMessageStreamPart,
+  toolCallsStreamPart,
+  messageAnnotationsStreamPart,
+  toolCallStreamPart,
+  toolResultStreamPart,
+  toolCallStreamingStartStreamPart,
+  toolCallDeltaStreamPart,
+  finishMessageStreamPart,
+  finishStepStreamPart
+];
+({
+  [textStreamPart.code]: textStreamPart,
+  [functionCallStreamPart.code]: functionCallStreamPart,
+  [dataStreamPart.code]: dataStreamPart,
+  [errorStreamPart.code]: errorStreamPart,
+  [assistantMessageStreamPart.code]: assistantMessageStreamPart,
+  [assistantControlDataStreamPart.code]: assistantControlDataStreamPart,
+  [dataMessageStreamPart.code]: dataMessageStreamPart,
+  [toolCallsStreamPart.code]: toolCallsStreamPart,
+  [messageAnnotationsStreamPart.code]: messageAnnotationsStreamPart,
+  [toolCallStreamPart.code]: toolCallStreamPart,
+  [toolResultStreamPart.code]: toolResultStreamPart,
+  [toolCallStreamingStartStreamPart.code]: toolCallStreamingStartStreamPart,
+  [toolCallDeltaStreamPart.code]: toolCallDeltaStreamPart,
+  [finishMessageStreamPart.code]: finishMessageStreamPart,
+  [finishStepStreamPart.code]: finishStepStreamPart
+});
+({
+  [textStreamPart.name]: textStreamPart.code,
+  [functionCallStreamPart.name]: functionCallStreamPart.code,
+  [dataStreamPart.name]: dataStreamPart.code,
+  [errorStreamPart.name]: errorStreamPart.code,
+  [assistantMessageStreamPart.name]: assistantMessageStreamPart.code,
+  [assistantControlDataStreamPart.name]: assistantControlDataStreamPart.code,
+  [dataMessageStreamPart.name]: dataMessageStreamPart.code,
+  [toolCallsStreamPart.name]: toolCallsStreamPart.code,
+  [messageAnnotationsStreamPart.name]: messageAnnotationsStreamPart.code,
+  [toolCallStreamPart.name]: toolCallStreamPart.code,
+  [toolResultStreamPart.name]: toolResultStreamPart.code,
+  [toolCallStreamingStartStreamPart.name]: toolCallStreamingStartStreamPart.code,
+  [toolCallDeltaStreamPart.name]: toolCallDeltaStreamPart.code,
+  [finishMessageStreamPart.name]: finishMessageStreamPart.code,
+  [finishStepStreamPart.name]: finishStepStreamPart.code
+});
+streamParts.map((part) => part.code);
+function formatStreamPart(type2, value) {
+  const streamPart = streamParts.find((part) => part.name === type2);
+  if (!streamPart) {
+    throw new Error(`Invalid stream part type: ${type2}`);
+  }
+  return `${streamPart.code}:${JSON.stringify(value)}
+`;
+}
+var schemaSymbol = Symbol.for("vercel.ai.schema");
+function jsonSchema(jsonSchema2, {
+  validate
+} = {}) {
+  return {
+    [schemaSymbol]: true,
+    _type: void 0,
+    // should never be used directly
+    [validatorSymbol]: true,
+    jsonSchema: jsonSchema2,
+    validate
+  };
+}
+function isSchema(value) {
+  return typeof value === "object" && value !== null && schemaSymbol in value && value[schemaSymbol] === true && "jsonSchema" in value && "validate" in value;
+}
+function asSchema(schema2) {
+  return isSchema(schema2) ? schema2 : zodSchema(schema2);
+}
+function zodSchema(zodSchema2) {
+  return jsonSchema(
+    // we assume that zodToJsonSchema will return a valid JSONSchema7:
+    zodToJsonSchema(zodSchema2),
+    {
+      validate: (value) => {
+        const result2 = zodSchema2.safeParse(value);
+        return result2.success ? { success: true, value: result2.data } : { success: false, error: result2.error };
+      }
+    }
+  );
+}
+var _globalThis = typeof globalThis === "object" ? globalThis : typeof self === "object" ? self : typeof window === "object" ? window : typeof global === "object" ? global : {};
+var VERSION = "1.9.0";
+var re = /^(\d+)\.(\d+)\.(\d+)(-(.+))?$/;
+function _makeCompatibilityCheck(ownVersion) {
+  var acceptedVersions = /* @__PURE__ */ new Set([ownVersion]);
+  var rejectedVersions = /* @__PURE__ */ new Set();
+  var myVersionMatch = ownVersion.match(re);
+  if (!myVersionMatch) {
+    return function() {
+      return false;
+    };
+  }
+  var ownVersionParsed = {
+    major: +myVersionMatch[1],
+    minor: +myVersionMatch[2],
+    patch: +myVersionMatch[3],
+    prerelease: myVersionMatch[4]
+  };
+  if (ownVersionParsed.prerelease != null) {
+    return function isExactmatch(globalVersion) {
+      return globalVersion === ownVersion;
+    };
+  }
+  function _reject(v) {
+    rejectedVersions.add(v);
+    return false;
+  }
+  function _accept(v) {
+    acceptedVersions.add(v);
+    return true;
+  }
+  return function isCompatible2(globalVersion) {
+    if (acceptedVersions.has(globalVersion)) {
+      return true;
+    }
+    if (rejectedVersions.has(globalVersion)) {
+      return false;
+    }
+    var globalVersionMatch = globalVersion.match(re);
+    if (!globalVersionMatch) {
+      return _reject(globalVersion);
+    }
+    var globalVersionParsed = {
+      major: +globalVersionMatch[1],
+      minor: +globalVersionMatch[2],
+      patch: +globalVersionMatch[3],
+      prerelease: globalVersionMatch[4]
+    };
+    if (globalVersionParsed.prerelease != null) {
+      return _reject(globalVersion);
+    }
+    if (ownVersionParsed.major !== globalVersionParsed.major) {
+      return _reject(globalVersion);
+    }
+    if (ownVersionParsed.major === 0) {
+      if (ownVersionParsed.minor === globalVersionParsed.minor && ownVersionParsed.patch <= globalVersionParsed.patch) {
+        return _accept(globalVersion);
+      }
+      return _reject(globalVersion);
+    }
+    if (ownVersionParsed.minor <= globalVersionParsed.minor) {
+      return _accept(globalVersion);
+    }
+    return _reject(globalVersion);
+  };
+}
+var isCompatible = _makeCompatibilityCheck(VERSION);
+var major = VERSION.split(".")[0];
+var GLOBAL_OPENTELEMETRY_API_KEY = Symbol.for("opentelemetry.js.api." + major);
+var _global = _globalThis;
+function registerGlobal(type2, instance, diag, allowOverride) {
+  var _a15;
+  if (allowOverride === void 0) {
+    allowOverride = false;
+  }
+  var api = _global[GLOBAL_OPENTELEMETRY_API_KEY] = (_a15 = _global[GLOBAL_OPENTELEMETRY_API_KEY]) !== null && _a15 !== void 0 ? _a15 : {
+    version: VERSION
+  };
+  if (!allowOverride && api[type2]) {
+    var err = new Error("@opentelemetry/api: Attempted duplicate registration of API: " + type2);
+    diag.error(err.stack || err.message);
+    return false;
+  }
+  if (api.version !== VERSION) {
+    var err = new Error("@opentelemetry/api: Registration of version v" + api.version + " for " + type2 + " does not match previously registered API v" + VERSION);
+    diag.error(err.stack || err.message);
+    return false;
+  }
+  api[type2] = instance;
+  diag.debug("@opentelemetry/api: Registered a global for " + type2 + " v" + VERSION + ".");
+  return true;
+}
+function getGlobal(type2) {
+  var _a15, _b2;
+  var globalVersion = (_a15 = _global[GLOBAL_OPENTELEMETRY_API_KEY]) === null || _a15 === void 0 ? void 0 : _a15.version;
+  if (!globalVersion || !isCompatible(globalVersion)) {
+    return;
+  }
+  return (_b2 = _global[GLOBAL_OPENTELEMETRY_API_KEY]) === null || _b2 === void 0 ? void 0 : _b2[type2];
+}
+function unregisterGlobal(type2, diag) {
+  diag.debug("@opentelemetry/api: Unregistering a global for " + type2 + " v" + VERSION + ".");
+  var api = _global[GLOBAL_OPENTELEMETRY_API_KEY];
+  if (api) {
+    delete api[type2];
+  }
+}
+var __read$3 = function(o, n) {
+  var m = typeof Symbol === "function" && o[Symbol.iterator];
+  if (!m) return o;
+  var i = m.call(o), r, ar = [], e;
+  try {
+    while ((n === void 0 || n-- > 0) && !(r = i.next()).done) ar.push(r.value);
+  } catch (error) {
+    e = { error };
+  } finally {
+    try {
+      if (r && !r.done && (m = i["return"])) m.call(i);
+    } finally {
+      if (e) throw e.error;
+    }
+  }
+  return ar;
+};
+var __spreadArray$3 = function(to, from, pack) {
+  if (pack || arguments.length === 2) for (var i = 0, l = from.length, ar; i < l; i++) {
+    if (ar || !(i in from)) {
+      if (!ar) ar = Array.prototype.slice.call(from, 0, i);
+      ar[i] = from[i];
+    }
+  }
+  return to.concat(ar || Array.prototype.slice.call(from));
+};
+var DiagComponentLogger = function() {
+  function DiagComponentLogger2(props) {
+    this._namespace = props.namespace || "DiagComponentLogger";
+  }
+  DiagComponentLogger2.prototype.debug = function() {
+    var args2 = [];
+    for (var _i = 0; _i < arguments.length; _i++) {
+      args2[_i] = arguments[_i];
+    }
+    return logProxy("debug", this._namespace, args2);
+  };
+  DiagComponentLogger2.prototype.error = function() {
+    var args2 = [];
+    for (var _i = 0; _i < arguments.length; _i++) {
+      args2[_i] = arguments[_i];
+    }
+    return logProxy("error", this._namespace, args2);
+  };
+  DiagComponentLogger2.prototype.info = function() {
+    var args2 = [];
+    for (var _i = 0; _i < arguments.length; _i++) {
+      args2[_i] = arguments[_i];
+    }
+    return logProxy("info", this._namespace, args2);
+  };
+  DiagComponentLogger2.prototype.warn = function() {
+    var args2 = [];
+    for (var _i = 0; _i < arguments.length; _i++) {
+      args2[_i] = arguments[_i];
+    }
+    return logProxy("warn", this._namespace, args2);
+  };
+  DiagComponentLogger2.prototype.verbose = function() {
+    var args2 = [];
+    for (var _i = 0; _i < arguments.length; _i++) {
+      args2[_i] = arguments[_i];
+    }
+    return logProxy("verbose", this._namespace, args2);
+  };
+  return DiagComponentLogger2;
+}();
+function logProxy(funcName, namespace, args2) {
+  var logger = getGlobal("diag");
+  if (!logger) {
+    return;
+  }
+  args2.unshift(namespace);
+  return logger[funcName].apply(logger, __spreadArray$3([], __read$3(args2), false));
+}
+var DiagLogLevel;
+(function(DiagLogLevel2) {
+  DiagLogLevel2[DiagLogLevel2["NONE"] = 0] = "NONE";
+  DiagLogLevel2[DiagLogLevel2["ERROR"] = 30] = "ERROR";
+  DiagLogLevel2[DiagLogLevel2["WARN"] = 50] = "WARN";
+  DiagLogLevel2[DiagLogLevel2["INFO"] = 60] = "INFO";
+  DiagLogLevel2[DiagLogLevel2["DEBUG"] = 70] = "DEBUG";
+  DiagLogLevel2[DiagLogLevel2["VERBOSE"] = 80] = "VERBOSE";
+  DiagLogLevel2[DiagLogLevel2["ALL"] = 9999] = "ALL";
+})(DiagLogLevel || (DiagLogLevel = {}));
+function createLogLevelDiagLogger(maxLevel, logger) {
+  if (maxLevel < DiagLogLevel.NONE) {
+    maxLevel = DiagLogLevel.NONE;
+  } else if (maxLevel > DiagLogLevel.ALL) {
+    maxLevel = DiagLogLevel.ALL;
+  }
+  logger = logger || {};
+  function _filterFunc(funcName, theLevel) {
+    var theFunc = logger[funcName];
+    if (typeof theFunc === "function" && maxLevel >= theLevel) {
+      return theFunc.bind(logger);
+    }
+    return function() {
+    };
+  }
+  return {
+    error: _filterFunc("error", DiagLogLevel.ERROR),
+    warn: _filterFunc("warn", DiagLogLevel.WARN),
+    info: _filterFunc("info", DiagLogLevel.INFO),
+    debug: _filterFunc("debug", DiagLogLevel.DEBUG),
+    verbose: _filterFunc("verbose", DiagLogLevel.VERBOSE)
+  };
+}
+var __read$2 = function(o, n) {
+  var m = typeof Symbol === "function" && o[Symbol.iterator];
+  if (!m) return o;
+  var i = m.call(o), r, ar = [], e;
+  try {
+    while ((n === void 0 || n-- > 0) && !(r = i.next()).done) ar.push(r.value);
+  } catch (error) {
+    e = { error };
+  } finally {
+    try {
+      if (r && !r.done && (m = i["return"])) m.call(i);
+    } finally {
+      if (e) throw e.error;
+    }
+  }
+  return ar;
+};
+var __spreadArray$2 = function(to, from, pack) {
+  if (pack || arguments.length === 2) for (var i = 0, l = from.length, ar; i < l; i++) {
+    if (ar || !(i in from)) {
+      if (!ar) ar = Array.prototype.slice.call(from, 0, i);
+      ar[i] = from[i];
+    }
+  }
+  return to.concat(ar || Array.prototype.slice.call(from));
+};
+var API_NAME$2 = "diag";
+var DiagAPI = function() {
+  function DiagAPI2() {
+    function _logProxy(funcName) {
+      return function() {
+        var args2 = [];
+        for (var _i = 0; _i < arguments.length; _i++) {
+          args2[_i] = arguments[_i];
+        }
+        var logger = getGlobal("diag");
+        if (!logger)
+          return;
+        return logger[funcName].apply(logger, __spreadArray$2([], __read$2(args2), false));
+      };
+    }
+    var self2 = this;
+    var setLogger = function(logger, optionsOrLogLevel) {
+      var _a15, _b2, _c2;
+      if (optionsOrLogLevel === void 0) {
+        optionsOrLogLevel = { logLevel: DiagLogLevel.INFO };
+      }
+      if (logger === self2) {
+        var err = new Error("Cannot use diag as the logger for itself. Please use a DiagLogger implementation like ConsoleDiagLogger or a custom implementation");
+        self2.error((_a15 = err.stack) !== null && _a15 !== void 0 ? _a15 : err.message);
+        return false;
+      }
+      if (typeof optionsOrLogLevel === "number") {
+        optionsOrLogLevel = {
+          logLevel: optionsOrLogLevel
+        };
+      }
+      var oldLogger = getGlobal("diag");
+      var newLogger = createLogLevelDiagLogger((_b2 = optionsOrLogLevel.logLevel) !== null && _b2 !== void 0 ? _b2 : DiagLogLevel.INFO, logger);
+      if (oldLogger && !optionsOrLogLevel.suppressOverrideMessage) {
+        var stack = (_c2 = new Error().stack) !== null && _c2 !== void 0 ? _c2 : "<failed to generate stacktrace>";
+        oldLogger.warn("Current logger will be overwritten from " + stack);
+        newLogger.warn("Current logger will overwrite one already registered from " + stack);
+      }
+      return registerGlobal("diag", newLogger, self2, true);
+    };
+    self2.setLogger = setLogger;
+    self2.disable = function() {
+      unregisterGlobal(API_NAME$2, self2);
+    };
+    self2.createComponentLogger = function(options2) {
+      return new DiagComponentLogger(options2);
+    };
+    self2.verbose = _logProxy("verbose");
+    self2.debug = _logProxy("debug");
+    self2.info = _logProxy("info");
+    self2.warn = _logProxy("warn");
+    self2.error = _logProxy("error");
+  }
+  DiagAPI2.instance = function() {
+    if (!this._instance) {
+      this._instance = new DiagAPI2();
+    }
+    return this._instance;
+  };
+  return DiagAPI2;
+}();
+function createContextKey(description) {
+  return Symbol.for(description);
+}
+var BaseContext = /* @__PURE__ */ function() {
+  function BaseContext2(parentContext) {
+    var self2 = this;
+    self2._currentContext = parentContext ? new Map(parentContext) : /* @__PURE__ */ new Map();
+    self2.getValue = function(key) {
+      return self2._currentContext.get(key);
+    };
+    self2.setValue = function(key, value) {
+      var context = new BaseContext2(self2._currentContext);
+      context._currentContext.set(key, value);
+      return context;
+    };
+    self2.deleteValue = function(key) {
+      var context = new BaseContext2(self2._currentContext);
+      context._currentContext.delete(key);
+      return context;
+    };
+  }
+  return BaseContext2;
+}();
+var ROOT_CONTEXT = new BaseContext();
+var __read$1 = function(o, n) {
+  var m = typeof Symbol === "function" && o[Symbol.iterator];
+  if (!m) return o;
+  var i = m.call(o), r, ar = [], e;
+  try {
+    while ((n === void 0 || n-- > 0) && !(r = i.next()).done) ar.push(r.value);
+  } catch (error) {
+    e = { error };
+  } finally {
+    try {
+      if (r && !r.done && (m = i["return"])) m.call(i);
+    } finally {
+      if (e) throw e.error;
+    }
+  }
+  return ar;
+};
+var __spreadArray$1 = function(to, from, pack) {
+  if (pack || arguments.length === 2) for (var i = 0, l = from.length, ar; i < l; i++) {
+    if (ar || !(i in from)) {
+      if (!ar) ar = Array.prototype.slice.call(from, 0, i);
+      ar[i] = from[i];
+    }
+  }
+  return to.concat(ar || Array.prototype.slice.call(from));
+};
+var NoopContextManager = function() {
+  function NoopContextManager2() {
+  }
+  NoopContextManager2.prototype.active = function() {
+    return ROOT_CONTEXT;
+  };
+  NoopContextManager2.prototype.with = function(_context, fn, thisArg) {
+    var args2 = [];
+    for (var _i = 3; _i < arguments.length; _i++) {
+      args2[_i - 3] = arguments[_i];
+    }
+    return fn.call.apply(fn, __spreadArray$1([thisArg], __read$1(args2), false));
+  };
+  NoopContextManager2.prototype.bind = function(_context, target) {
+    return target;
+  };
+  NoopContextManager2.prototype.enable = function() {
+    return this;
+  };
+  NoopContextManager2.prototype.disable = function() {
+    return this;
+  };
+  return NoopContextManager2;
+}();
+var __read = function(o, n) {
+  var m = typeof Symbol === "function" && o[Symbol.iterator];
+  if (!m) return o;
+  var i = m.call(o), r, ar = [], e;
+  try {
+    while ((n === void 0 || n-- > 0) && !(r = i.next()).done) ar.push(r.value);
+  } catch (error) {
+    e = { error };
+  } finally {
+    try {
+      if (r && !r.done && (m = i["return"])) m.call(i);
+    } finally {
+      if (e) throw e.error;
+    }
+  }
+  return ar;
+};
+var __spreadArray = function(to, from, pack) {
+  if (pack || arguments.length === 2) for (var i = 0, l = from.length, ar; i < l; i++) {
+    if (ar || !(i in from)) {
+      if (!ar) ar = Array.prototype.slice.call(from, 0, i);
+      ar[i] = from[i];
+    }
+  }
+  return to.concat(ar || Array.prototype.slice.call(from));
+};
+var API_NAME$1 = "context";
+var NOOP_CONTEXT_MANAGER = new NoopContextManager();
+var ContextAPI = function() {
+  function ContextAPI2() {
+  }
+  ContextAPI2.getInstance = function() {
+    if (!this._instance) {
+      this._instance = new ContextAPI2();
+    }
+    return this._instance;
+  };
+  ContextAPI2.prototype.setGlobalContextManager = function(contextManager) {
+    return registerGlobal(API_NAME$1, contextManager, DiagAPI.instance());
+  };
+  ContextAPI2.prototype.active = function() {
+    return this._getContextManager().active();
+  };
+  ContextAPI2.prototype.with = function(context, fn, thisArg) {
+    var _a15;
+    var args2 = [];
+    for (var _i = 3; _i < arguments.length; _i++) {
+      args2[_i - 3] = arguments[_i];
+    }
+    return (_a15 = this._getContextManager()).with.apply(_a15, __spreadArray([context, fn, thisArg], __read(args2), false));
+  };
+  ContextAPI2.prototype.bind = function(context, target) {
+    return this._getContextManager().bind(context, target);
+  };
+  ContextAPI2.prototype._getContextManager = function() {
+    return getGlobal(API_NAME$1) || NOOP_CONTEXT_MANAGER;
+  };
+  ContextAPI2.prototype.disable = function() {
+    this._getContextManager().disable();
+    unregisterGlobal(API_NAME$1, DiagAPI.instance());
+  };
+  return ContextAPI2;
+}();
+var TraceFlags;
+(function(TraceFlags2) {
+  TraceFlags2[TraceFlags2["NONE"] = 0] = "NONE";
+  TraceFlags2[TraceFlags2["SAMPLED"] = 1] = "SAMPLED";
+})(TraceFlags || (TraceFlags = {}));
+var INVALID_SPANID = "0000000000000000";
+var INVALID_TRACEID = "00000000000000000000000000000000";
+var INVALID_SPAN_CONTEXT = {
+  traceId: INVALID_TRACEID,
+  spanId: INVALID_SPANID,
+  traceFlags: TraceFlags.NONE
+};
+var NonRecordingSpan = function() {
+  function NonRecordingSpan2(_spanContext) {
+    if (_spanContext === void 0) {
+      _spanContext = INVALID_SPAN_CONTEXT;
+    }
+    this._spanContext = _spanContext;
+  }
+  NonRecordingSpan2.prototype.spanContext = function() {
+    return this._spanContext;
+  };
+  NonRecordingSpan2.prototype.setAttribute = function(_key, _value) {
+    return this;
+  };
+  NonRecordingSpan2.prototype.setAttributes = function(_attributes) {
+    return this;
+  };
+  NonRecordingSpan2.prototype.addEvent = function(_name, _attributes) {
+    return this;
+  };
+  NonRecordingSpan2.prototype.addLink = function(_link) {
+    return this;
+  };
+  NonRecordingSpan2.prototype.addLinks = function(_links) {
+    return this;
+  };
+  NonRecordingSpan2.prototype.setStatus = function(_status) {
+    return this;
+  };
+  NonRecordingSpan2.prototype.updateName = function(_name) {
+    return this;
+  };
+  NonRecordingSpan2.prototype.end = function(_endTime) {
+  };
+  NonRecordingSpan2.prototype.isRecording = function() {
+    return false;
+  };
+  NonRecordingSpan2.prototype.recordException = function(_exception, _time) {
+  };
+  return NonRecordingSpan2;
+}();
+var SPAN_KEY = createContextKey("OpenTelemetry Context Key SPAN");
+function getSpan(context) {
+  return context.getValue(SPAN_KEY) || void 0;
+}
+function getActiveSpan() {
+  return getSpan(ContextAPI.getInstance().active());
+}
+function setSpan(context, span) {
+  return context.setValue(SPAN_KEY, span);
+}
+function deleteSpan(context) {
+  return context.deleteValue(SPAN_KEY);
+}
+function setSpanContext(context, spanContext) {
+  return setSpan(context, new NonRecordingSpan(spanContext));
+}
+function getSpanContext(context) {
+  var _a15;
+  return (_a15 = getSpan(context)) === null || _a15 === void 0 ? void 0 : _a15.spanContext();
+}
+var VALID_TRACEID_REGEX = /^([0-9a-f]{32})$/i;
+var VALID_SPANID_REGEX = /^[0-9a-f]{16}$/i;
+function isValidTraceId(traceId) {
+  return VALID_TRACEID_REGEX.test(traceId) && traceId !== INVALID_TRACEID;
+}
+function isValidSpanId(spanId) {
+  return VALID_SPANID_REGEX.test(spanId) && spanId !== INVALID_SPANID;
+}
+function isSpanContextValid(spanContext) {
+  return isValidTraceId(spanContext.traceId) && isValidSpanId(spanContext.spanId);
+}
+function wrapSpanContext(spanContext) {
+  return new NonRecordingSpan(spanContext);
+}
+var contextApi = ContextAPI.getInstance();
+var NoopTracer = function() {
+  function NoopTracer2() {
+  }
+  NoopTracer2.prototype.startSpan = function(name14, options2, context) {
+    if (context === void 0) {
+      context = contextApi.active();
+    }
+    var root = Boolean(options2 === null || options2 === void 0 ? void 0 : options2.root);
+    if (root) {
+      return new NonRecordingSpan();
+    }
+    var parentFromContext = context && getSpanContext(context);
+    if (isSpanContext(parentFromContext) && isSpanContextValid(parentFromContext)) {
+      return new NonRecordingSpan(parentFromContext);
+    } else {
+      return new NonRecordingSpan();
+    }
+  };
+  NoopTracer2.prototype.startActiveSpan = function(name14, arg2, arg3, arg4) {
+    var opts;
+    var ctx;
+    var fn;
+    if (arguments.length < 2) {
+      return;
+    } else if (arguments.length === 2) {
+      fn = arg2;
+    } else if (arguments.length === 3) {
+      opts = arg2;
+      fn = arg3;
+    } else {
+      opts = arg2;
+      ctx = arg3;
+      fn = arg4;
+    }
+    var parentContext = ctx !== null && ctx !== void 0 ? ctx : contextApi.active();
+    var span = this.startSpan(name14, opts, parentContext);
+    var contextWithSpanSet = setSpan(parentContext, span);
+    return contextApi.with(contextWithSpanSet, fn, void 0, span);
+  };
+  return NoopTracer2;
+}();
+function isSpanContext(spanContext) {
+  return typeof spanContext === "object" && typeof spanContext["spanId"] === "string" && typeof spanContext["traceId"] === "string" && typeof spanContext["traceFlags"] === "number";
+}
+var NOOP_TRACER = new NoopTracer();
+var ProxyTracer = function() {
+  function ProxyTracer2(_provider, name14, version, options2) {
+    this._provider = _provider;
+    this.name = name14;
+    this.version = version;
+    this.options = options2;
+  }
+  ProxyTracer2.prototype.startSpan = function(name14, options2, context) {
+    return this._getTracer().startSpan(name14, options2, context);
+  };
+  ProxyTracer2.prototype.startActiveSpan = function(_name, _options, _context, _fn) {
+    var tracer = this._getTracer();
+    return Reflect.apply(tracer.startActiveSpan, tracer, arguments);
+  };
+  ProxyTracer2.prototype._getTracer = function() {
+    if (this._delegate) {
+      return this._delegate;
+    }
+    var tracer = this._provider.getDelegateTracer(this.name, this.version, this.options);
+    if (!tracer) {
+      return NOOP_TRACER;
+    }
+    this._delegate = tracer;
+    return this._delegate;
+  };
+  return ProxyTracer2;
+}();
+var NoopTracerProvider = function() {
+  function NoopTracerProvider2() {
+  }
+  NoopTracerProvider2.prototype.getTracer = function(_name, _version, _options) {
+    return new NoopTracer();
+  };
+  return NoopTracerProvider2;
+}();
+var NOOP_TRACER_PROVIDER = new NoopTracerProvider();
+var ProxyTracerProvider = function() {
+  function ProxyTracerProvider2() {
+  }
+  ProxyTracerProvider2.prototype.getTracer = function(name14, version, options2) {
+    var _a15;
+    return (_a15 = this.getDelegateTracer(name14, version, options2)) !== null && _a15 !== void 0 ? _a15 : new ProxyTracer(this, name14, version, options2);
+  };
+  ProxyTracerProvider2.prototype.getDelegate = function() {
+    var _a15;
+    return (_a15 = this._delegate) !== null && _a15 !== void 0 ? _a15 : NOOP_TRACER_PROVIDER;
+  };
+  ProxyTracerProvider2.prototype.setDelegate = function(delegate) {
+    this._delegate = delegate;
+  };
+  ProxyTracerProvider2.prototype.getDelegateTracer = function(name14, version, options2) {
+    var _a15;
+    return (_a15 = this._delegate) === null || _a15 === void 0 ? void 0 : _a15.getTracer(name14, version, options2);
+  };
+  return ProxyTracerProvider2;
+}();
+var SpanStatusCode;
+(function(SpanStatusCode2) {
+  SpanStatusCode2[SpanStatusCode2["UNSET"] = 0] = "UNSET";
+  SpanStatusCode2[SpanStatusCode2["OK"] = 1] = "OK";
+  SpanStatusCode2[SpanStatusCode2["ERROR"] = 2] = "ERROR";
+})(SpanStatusCode || (SpanStatusCode = {}));
+var API_NAME = "trace";
+var TraceAPI = function() {
+  function TraceAPI2() {
+    this._proxyTracerProvider = new ProxyTracerProvider();
+    this.wrapSpanContext = wrapSpanContext;
+    this.isSpanContextValid = isSpanContextValid;
+    this.deleteSpan = deleteSpan;
+    this.getSpan = getSpan;
+    this.getActiveSpan = getActiveSpan;
+    this.getSpanContext = getSpanContext;
+    this.setSpan = setSpan;
+    this.setSpanContext = setSpanContext;
+  }
+  TraceAPI2.getInstance = function() {
+    if (!this._instance) {
+      this._instance = new TraceAPI2();
+    }
+    return this._instance;
+  };
+  TraceAPI2.prototype.setGlobalTracerProvider = function(provider) {
+    var success = registerGlobal(API_NAME, this._proxyTracerProvider, DiagAPI.instance());
+    if (success) {
+      this._proxyTracerProvider.setDelegate(provider);
+    }
+    return success;
+  };
+  TraceAPI2.prototype.getTracerProvider = function() {
+    return getGlobal(API_NAME) || this._proxyTracerProvider;
+  };
+  TraceAPI2.prototype.getTracer = function(name14, version) {
+    return this.getTracerProvider().getTracer(name14, version);
+  };
+  TraceAPI2.prototype.disable = function() {
+    unregisterGlobal(API_NAME, DiagAPI.instance());
+    this._proxyTracerProvider = new ProxyTracerProvider();
+  };
+  return TraceAPI2;
+}();
+var trace = TraceAPI.getInstance();
+var __defProp = Object.defineProperty;
+var __export = (target, all) => {
+  for (var name112 in all)
+    __defProp(target, name112, { get: all[name112], enumerable: true });
+};
+async function delay(delayInMs) {
+  return delayInMs === void 0 ? Promise.resolve() : new Promise((resolve) => setTimeout(resolve, delayInMs));
+}
+var name = "AI_RetryError";
+var marker = `vercel.ai.error.${name}`;
+var symbol = Symbol.for(marker);
+var _a;
+var RetryError = class extends AISDKError {
+  constructor({
+    message,
+    reason,
+    errors
+  }) {
+    super({ name, message });
+    this[_a] = true;
+    this.reason = reason;
+    this.errors = errors;
+    this.lastError = errors[errors.length - 1];
+  }
+  static isInstance(error) {
+    return AISDKError.hasMarker(error, marker);
+  }
+  /**
+   * @deprecated use `isInstance` instead
+   */
+  static isRetryError(error) {
+    return error instanceof Error && error.name === name && typeof error.reason === "string" && Array.isArray(error.errors);
+  }
+  /**
+   * @deprecated Do not use this method. It will be removed in the next major version.
+   */
+  toJSON() {
+    return {
+      name: this.name,
+      message: this.message,
+      reason: this.reason,
+      lastError: this.lastError,
+      errors: this.errors
+    };
+  }
+};
+_a = symbol;
+var retryWithExponentialBackoff = ({
+  maxRetries = 2,
+  initialDelayInMs = 2e3,
+  backoffFactor = 2
+} = {}) => async (f2) => _retryWithExponentialBackoff(f2, {
+  maxRetries,
+  delayInMs: initialDelayInMs,
+  backoffFactor
+});
+async function _retryWithExponentialBackoff(f2, {
+  maxRetries,
+  delayInMs,
+  backoffFactor
+}, errors = []) {
+  try {
+    return await f2();
+  } catch (error) {
+    if (isAbortError(error)) {
+      throw error;
+    }
+    if (maxRetries === 0) {
+      throw error;
+    }
+    const errorMessage = getErrorMessage(error);
+    const newErrors = [...errors, error];
+    const tryNumber = newErrors.length;
+    if (tryNumber > maxRetries) {
+      throw new RetryError({
+        message: `Failed after ${tryNumber} attempts. Last error: ${errorMessage}`,
+        reason: "maxRetriesExceeded",
+        errors: newErrors
+      });
+    }
+    if (error instanceof Error && APICallError.isAPICallError(error) && error.isRetryable === true && tryNumber <= maxRetries) {
+      await delay(delayInMs);
+      return _retryWithExponentialBackoff(
+        f2,
+        { maxRetries, delayInMs: backoffFactor * delayInMs, backoffFactor },
+        newErrors
+      );
+    }
+    if (tryNumber === 1) {
+      throw error;
+    }
+    throw new RetryError({
+      message: `Failed after ${tryNumber} attempts with non-retryable error: '${errorMessage}'`,
+      reason: "errorNotRetryable",
+      errors: newErrors
+    });
+  }
+}
+function assembleOperationName({
+  operationId,
+  telemetry
+}) {
+  return {
+    // standardized operation and resource name:
+    "operation.name": `${operationId}${(telemetry == null ? void 0 : telemetry.functionId) != null ? ` ${telemetry.functionId}` : ""}`,
+    "resource.name": telemetry == null ? void 0 : telemetry.functionId,
+    // detailed, AI SDK specific data:
+    "ai.operationId": operationId,
+    "ai.telemetry.functionId": telemetry == null ? void 0 : telemetry.functionId
+  };
+}
+function getBaseTelemetryAttributes({
+  model,
+  settings,
+  telemetry,
+  headers
+}) {
+  var _a112;
+  return {
+    "ai.model.provider": model.provider,
+    "ai.model.id": model.modelId,
+    // settings:
+    ...Object.entries(settings).reduce((attributes, [key, value]) => {
+      attributes[`ai.settings.${key}`] = value;
+      return attributes;
+    }, {}),
+    // add metadata as attributes:
+    ...Object.entries((_a112 = telemetry == null ? void 0 : telemetry.metadata) != null ? _a112 : {}).reduce(
+      (attributes, [key, value]) => {
+        attributes[`ai.telemetry.metadata.${key}`] = value;
+        return attributes;
+      },
+      {}
+    ),
+    // request headers
+    ...Object.entries(headers != null ? headers : {}).reduce((attributes, [key, value]) => {
+      if (value !== void 0) {
+        attributes[`ai.request.headers.${key}`] = value;
+      }
+      return attributes;
+    }, {})
+  };
+}
+var noopTracer = {
+  startSpan() {
+    return noopSpan;
+  },
+  startActiveSpan(name112, arg1, arg2, arg3) {
+    if (typeof arg1 === "function") {
+      return arg1(noopSpan);
+    }
+    if (typeof arg2 === "function") {
+      return arg2(noopSpan);
+    }
+    if (typeof arg3 === "function") {
+      return arg3(noopSpan);
+    }
+  }
+};
+var noopSpan = {
+  spanContext() {
+    return noopSpanContext;
+  },
+  setAttribute() {
+    return this;
+  },
+  setAttributes() {
+    return this;
+  },
+  addEvent() {
+    return this;
+  },
+  addLink() {
+    return this;
+  },
+  addLinks() {
+    return this;
+  },
+  setStatus() {
+    return this;
+  },
+  updateName() {
+    return this;
+  },
+  end() {
+    return this;
+  },
+  isRecording() {
+    return false;
+  },
+  recordException() {
+    return this;
+  }
+};
+var noopSpanContext = {
+  traceId: "",
+  spanId: "",
+  traceFlags: 0
+};
+function getTracer({
+  isEnabled = false,
+  tracer
+} = {}) {
+  if (!isEnabled) {
+    return noopTracer;
+  }
+  if (tracer) {
+    return tracer;
+  }
+  return trace.getTracer("ai");
+}
+function recordSpan({
+  name: name112,
+  tracer,
+  attributes,
+  fn,
+  endWhenDone = true
+}) {
+  return tracer.startActiveSpan(name112, { attributes }, async (span) => {
+    try {
+      const result2 = await fn(span);
+      if (endWhenDone) {
+        span.end();
+      }
+      return result2;
+    } catch (error) {
+      try {
+        if (error instanceof Error) {
+          span.recordException({
+            name: error.name,
+            message: error.message,
+            stack: error.stack
+          });
+          span.setStatus({
+            code: SpanStatusCode.ERROR,
+            message: error.message
+          });
+        } else {
+          span.setStatus({ code: SpanStatusCode.ERROR });
+        }
+      } finally {
+        span.end();
+      }
+      throw error;
+    }
   });
 }
-async function urlToBase64String(url) {
-  try {
-    const { Buffer: Buffer2 } = await Promise.resolve().then(() => __viteBrowserExternal);
-    return fetchImage(url).then((blob) => blob.arrayBuffer()).then((buffer) => Buffer2.from(buffer).toString("base64"));
-  } catch {
-    return fetchImage(url).then((blob) => blob.arrayBuffer()).then((buffer) => btoa(String.fromCharCode.apply(null, new Uint8Array(buffer))));
+function selectTelemetryAttributes({
+  telemetry,
+  attributes
+}) {
+  if ((telemetry == null ? void 0 : telemetry.isEnabled) !== true) {
+    return {};
   }
-}
-function getImageFormatFromBase64(base64String) {
-  const firstChar = base64String.charAt(0);
-  switch (firstChar) {
-    case "/":
-      return "jpeg";
-    case "i":
-      return "png";
-    case "R":
-      return "gif";
-    case "U":
-      return "webp";
-    default:
-      throw new Error("Unsupported image format");
-  }
-}
-async function imageToBase64String(url) {
-  const base64String = await urlToBase64String(url);
-  const format = getImageFormatFromBase64(base64String);
-  return {
-    data: base64String,
-    format: `image/${format}`
-  };
-}
-function renderBase64DataURI(params) {
-  return `data:${params.format};base64,${params.data}`;
-}
-async function messageInitialize(sender, streamSender) {
-  if (!sender.context.message_id) {
-    try {
-      setTimeout(() => sendAction(sender.api.token, sender.context.chat_id, "typing"), 0);
-      if (!ENV.SEND_INIT_MESSAGE) {
-        return;
+  return Object.entries(attributes).reduce((attributes2, [key, value]) => {
+    if (value === void 0) {
+      return attributes2;
+    }
+    if (typeof value === "object" && "input" in value && typeof value.input === "function") {
+      if ((telemetry == null ? void 0 : telemetry.recordInputs) === false) {
+        return attributes2;
       }
-      log.info(`send init message`);
-      streamSender.send("...", "chat");
-    } catch (e) {
-      console.error("Failed to initialize message:", e);
+      const result2 = value.input();
+      return result2 === void 0 ? attributes2 : { ...attributes2, [key]: result2 };
     }
-  }
-}
-async function chatWithLLM(message, params, context, modifier) {
-  const sender = MessageSender.from(context.SHARE_CONTEXT.botToken, message);
-  const streamSender = OnStreamHander(sender, context, message.text || "");
-  messageInitialize(sender, streamSender);
-  const agent = loadChatLLM(context.USER_CONFIG);
-  if (!agent) {
-    return streamSender.end?.("LLM is not enabled");
-  }
-  try {
-    log.info(`start chat with LLM`);
-    const answer = await requestCompletionsFromLLM(params, context, agent, modifier, ENV.STREAM_MODE ? streamSender : null);
-    log.info(`chat with LLM done`);
-    if (answer === "") {
-      return streamSender.end?.("No response");
-    }
-    return streamSender.end?.(answer);
-  } catch (e) {
-    let errMsg = `Error: `;
-    if (e.name === "AbortError") {
-      errMsg += "Chat with LLM timeout";
-    } else {
-      errMsg += e.message.slice(0, 2048);
-    }
-    return streamSender.end?.(errMsg);
-  }
-}
-function findPhotoFileID(photos, offset) {
-  let sizeIndex = offset >= 0 ? offset : photos.length + offset;
-  sizeIndex = Math.max(0, Math.min(sizeIndex, photos.length - 1));
-  return photos[sizeIndex].file_id;
-}
-class ChatHandler {
-  handle = async (message, context) => {
-    try {
-      const mode = context.USER_CONFIG.CURRENT_MODE;
-      const originalType = context.MIDDEL_CONTEXT.originalMessage.type;
-      log.info(`message type: ${originalType}`);
-      const flowDetail = context.USER_CONFIG?.MODES?.[mode]?.[originalType] || {};
-      if (!flowDetail?.disableHistory) {
-        await this.initializeHistory(context);
+    if (typeof value === "object" && "output" in value && typeof value.output === "function") {
+      if ((telemetry == null ? void 0 : telemetry.recordOutputs) === false) {
+        return attributes2;
       }
-      const params = await this.processOriginalMessage(message, context);
-      await workflow(context, flowDetail?.workflow || [{}], message, params);
-      return null;
-    } catch (e) {
-      console.error("Error:", e);
-      const sender = context.MIDDEL_CONTEXT.sender ?? MessageSender.from(context.SHARE_CONTEXT.botToken, message);
-      return sender.sendPlainText(`Error: ${e.message}`);
+      const result2 = value.output();
+      return result2 === void 0 ? attributes2 : { ...attributes2, [key]: result2 };
     }
-  };
-  async initializeHistory(context) {
-    const historyKey = context.SHARE_CONTEXT.chatHistoryKey;
-    if (!historyKey) {
-      throw new Error("History key not found");
-    }
-    context.MIDDEL_CONTEXT.history = await loadHistory(historyKey);
+    return { ...attributes2, [key]: value };
+  }, {});
+}
+var name2 = "AI_DownloadError";
+var marker2 = `vercel.ai.error.${name2}`;
+var symbol2 = Symbol.for(marker2);
+var _a2;
+var DownloadError = class extends AISDKError {
+  constructor({
+    url,
+    statusCode,
+    statusText,
+    cause,
+    message = cause == null ? `Failed to download ${url}: ${statusCode} ${statusText}` : `Failed to download ${url}: ${cause}`
+  }) {
+    super({ name: name2, message, cause });
+    this[_a2] = true;
+    this.url = url;
+    this.statusCode = statusCode;
+    this.statusText = statusText;
   }
-  async processOriginalMessage(message, context) {
-    const { type: type2, id, text } = context.MIDDEL_CONTEXT.originalMessage;
-    const params = {
-      role: "user",
-      content: text || ""
+  static isInstance(error) {
+    return AISDKError.hasMarker(error, marker2);
+  }
+  /**
+   * @deprecated use `isInstance` instead
+   */
+  static isDownloadError(error) {
+    return error instanceof Error && error.name === name2 && typeof error.url === "string" && (error.statusCode == null || typeof error.statusCode === "number") && (error.statusText == null || typeof error.statusText === "string");
+  }
+  /**
+   * @deprecated Do not use this method. It will be removed in the next major version.
+   */
+  toJSON() {
+    return {
+      name: this.name,
+      message: this.message,
+      url: this.url,
+      statusCode: this.statusCode,
+      statusText: this.statusText,
+      cause: this.cause
     };
-    if ((type2 === "image" || type2 === "audio") && id) {
-      const api = createTelegramBotAPI(context.SHARE_CONTEXT.botToken);
-      const files = await Promise.all(id.map((i) => api.getFileWithReturns({ file_id: i })));
-      const paths = files.map((f2) => f2.result.file_path).filter(Boolean);
-      const urls = paths.map((p) => `https://api.telegram.org/file/bot${context.SHARE_CONTEXT.botToken}/${p}`);
-      log.info(`File URLs:
-${urls.join("\n")}`);
-      if (urls.length > 0) {
-        params.content = [];
-        if (text) {
-          params.content.push({
-            type: "text",
-            text
-          });
-        }
-        if (type2 === "image") {
-          for (const url of urls) {
-            params.content.push({
-              type: "image",
-              image: ENV.TELEGRAM_IMAGE_TRANSFER_MODE === "url" ? url : renderBase64DataURI(await imageToBase64String(url))
-            });
-          }
-        } else if (type2 === "audio") {
-          params.content.push({
-            type: "file",
-            data: urls[0],
-            mimeType: "audio/ogg"
-          });
-        }
-      }
-    }
-    return params;
   }
-}
-function OnStreamHander(sender, context, question) {
-  let sentPromise = null;
-  let nextEnableTime = Date.now();
-  const isMessageSender = sender instanceof MessageSender;
-  const sendInterval = isMessageSender ? ENV.TELEGRAM_MIN_STREAM_INTERVAL : ENV.INLINE_QUERY_SEND_INTERVAL;
-  const isSendTelegraph = (text) => {
-    return isMessageSender ? ENV.TELEGRAPH_SCOPE.includes(sender.context.chatType) && ENV.TELEGRAPH_NUM_LIMIT > 0 && text.length > ENV.TELEGRAPH_NUM_LIMIT : sender.context.inline_message_id && text.length > 4096;
-  };
-  const streamSender = {
-    send: null,
-    end: null
-  };
-  streamSender.send = async (text) => {
-    try {
-      if (isSendTelegraph(text)) {
-        return;
-      }
-      if ((nextEnableTime || 0) > Date.now()) {
-        log.info(`Need await: ${(nextEnableTime || 0) - Date.now()}ms`);
-        return;
-      }
-      if (sendInterval > 0) {
-        nextEnableTime = Date.now() + sendInterval;
-      }
-      const data = context ? `${getLog(context.USER_CONFIG)}
-${text}` : text;
-      log.info(`sent message ids: ${isMessageSender ? [...sender.context.sentMessageIds] : sender.context.inline_message_id}`);
-      sentPromise = sender.sendRichText(data, ENV.DEFAULT_PARSE_MODE, "chat");
-      const resp = await sentPromise;
-      if (resp.status === 429) {
-        const retryAfter = Number.parseInt(resp.headers.get("Retry-After") || "");
-        if (retryAfter) {
-          nextEnableTime = Date.now() + retryAfter * 1e3;
-          log.info(`Status 429, need wait: ${nextEnableTime - Date.now()}ms`);
-          return;
-        }
-      }
-      if (resp.ok && sender instanceof MessageSender) {
-      } else if (!resp.ok) {
-        log.error(`send message failed: ${resp.status} ${resp.statusText}`);
-        return sentPromise = sender.sendPlainText(text);
-      }
-    } catch (e) {
-      console.error(e);
-    }
-  };
-  streamSender.end = async (text) => {
-    await sentPromise;
-    await waitUntil((nextEnableTime || 0) + 10);
-    if (isSendTelegraph(text)) {
-      return sendTelegraph(context, sender, question || "Redo Question", text);
-    }
-    const data = context ? `${getLog(context.USER_CONFIG)}
-${text}` : text;
-    log.info(`sent message ids: ${isMessageSender ? [...sender.context.sentMessageIds] : sender.context.inline_message_id}`);
-    const finalResp = await sender.sendRichText(data, ENV.DEFAULT_PARSE_MODE, "chat");
-    if (!finalResp.ok) {
-      sender.context.sentMessageIds.clear();
-      return sendTelegraph(context, sender, question || "Redo Question", text);
-    }
-    return finalResp;
-  };
-  return streamSender;
-}
-async function sendTelegraph(context, sender, question, text) {
-  log.info(`send telegraph`);
-  if (question.length > 600) {
-    question = `${question.slice(0, 300)}...${question.slice(-300)}`;
-  }
-  const prefix = `#Question
-\`\`\`
-${question}
-\`\`\`
----`;
-  const botName = context.SHARE_CONTEXT?.botName || "AI";
-  log.info(logSingleton);
-  log.info(getLog(context.USER_CONFIG));
-  const telegraph_prefix = `${prefix}
-#Answer
-🤖 **${getLog(context.USER_CONFIG, true)}**
-`;
-  const debug_info = `debug info:
-${getLog(context.USER_CONFIG)}`.replace("LOGSTART", "").replace("LOGEND", "").replace("`", "").trim();
-  const telegraph_suffix = `
----
-\`\`\`
-${debug_info}
-\`\`\``;
-  const telegraphSender = new TelegraphSender(botName, context.SHARE_CONTEXT.telegraphAccessTokenKey);
-  const resp = await telegraphSender.send(
-    "Daily Q&A",
-    telegraph_prefix + text + telegraph_suffix
-  );
-  const url = `https://telegra.ph/${telegraphSender.teleph_path}`;
-  const msg = `回答已经转换成完整文章，请及时查看~
-[🔗点击进行查看](${url})`;
-  log.info(`send telegraph message: ${msg}`);
-  await sender.sendRichText(msg);
-  return resp;
-}
-function clearMessageContext(context) {
-  clearLog(context.USER_CONFIG);
-  context.MIDDEL_CONTEXT.sender = null;
-}
-const workflowHandlers = {
-  "text:text": handleTextToText,
-  "image:text": handleTextToText,
-  "text:image": handleTextToImage,
-  "audio:text": handleAudioToText
 };
-async function workflow(context, flows, message, params) {
-  const MiddleResult = context.MIDDEL_CONTEXT.middleResult;
-  for (let i = 0; i < flows.length; i++) {
-    const eMsg = i === 0 ? context.MIDDEL_CONTEXT.originalMessage : MiddleResult[i - 1];
-    const handlerKey = `${eMsg?.type || "text"}:${flows[i]?.type || "text"}`;
-    const handler2 = workflowHandlers[handlerKey];
-    if (!handler2) {
-      throw new Error(`Unsupported type: ${handlerKey}`);
+_a2 = symbol2;
+async function download({
+  url,
+  fetchImplementation = fetch
+}) {
+  var _a112;
+  const urlText = url.toString();
+  try {
+    const response = await fetchImplementation(urlText);
+    if (!response.ok) {
+      throw new DownloadError({
+        url: urlText,
+        statusCode: response.status,
+        statusText: response.statusText
+      });
     }
-    const result2 = await handler2(eMsg, message, params, context);
-    if (result2 instanceof Response) {
-      return result2;
+    return {
+      data: new Uint8Array(await response.arrayBuffer()),
+      mimeType: (_a112 = response.headers.get("content-type")) != null ? _a112 : void 0
+    };
+  } catch (error) {
+    if (DownloadError.isInstance(error)) {
+      throw error;
     }
-    if (i < flows.length - 1 && ["image", "text"].includes(result2?.type)) {
-      injectHistory(context, result2, flows[i + 1].type);
+    throw new DownloadError({ url: urlText, cause: error });
+  }
+}
+var mimeTypeSignatures = [
+  { mimeType: "image/gif", bytes: [71, 73, 70] },
+  { mimeType: "image/png", bytes: [137, 80, 78, 71] },
+  { mimeType: "image/jpeg", bytes: [255, 216] },
+  { mimeType: "image/webp", bytes: [82, 73, 70, 70] }
+];
+function detectImageMimeType(image) {
+  for (const { bytes, mimeType } of mimeTypeSignatures) {
+    if (image.length >= bytes.length && bytes.every((byte, index2) => image[index2] === byte)) {
+      return mimeType;
     }
-    MiddleResult.push(result2);
-    clearMessageContext(context);
+  }
+  return void 0;
+}
+var name3 = "AI_InvalidDataContentError";
+var marker3 = `vercel.ai.error.${name3}`;
+var symbol3 = Symbol.for(marker3);
+var _a3;
+var InvalidDataContentError = class extends AISDKError {
+  constructor({
+    content,
+    cause,
+    message = `Invalid data content. Expected a base64 string, Uint8Array, ArrayBuffer, or Buffer, but got ${typeof content}.`
+  }) {
+    super({ name: name3, message, cause });
+    this[_a3] = true;
+    this.content = content;
+  }
+  static isInstance(error) {
+    return AISDKError.hasMarker(error, marker3);
+  }
+  /**
+   * @deprecated use `isInstance` instead
+   */
+  static isInvalidDataContentError(error) {
+    return error instanceof Error && error.name === name3 && error.content != null;
+  }
+  /**
+   * @deprecated Do not use this method. It will be removed in the next major version.
+   */
+  toJSON() {
+    return {
+      name: this.name,
+      message: this.message,
+      stack: this.stack,
+      cause: this.cause,
+      content: this.content
+    };
+  }
+};
+_a3 = symbol3;
+var dataContentSchema = z.union([
+  z.string(),
+  z.instanceof(Uint8Array),
+  z.instanceof(ArrayBuffer),
+  z.custom(
+    // Buffer might not be available in some environments such as CloudFlare:
+    (value) => {
+      var _a112, _b2;
+      return (_b2 = (_a112 = globalThis.Buffer) == null ? void 0 : _a112.isBuffer(value)) != null ? _b2 : false;
+    },
+    { message: "Must be a Buffer" }
+  )
+]);
+function convertDataContentToBase64String(content) {
+  if (typeof content === "string") {
+    return content;
+  }
+  if (content instanceof ArrayBuffer) {
+    return convertUint8ArrayToBase64(new Uint8Array(content));
+  }
+  return convertUint8ArrayToBase64(content);
+}
+function convertDataContentToUint8Array(content) {
+  if (content instanceof Uint8Array) {
+    return content;
+  }
+  if (typeof content === "string") {
+    try {
+      return convertBase64ToUint8Array(content);
+    } catch (error) {
+      throw new InvalidDataContentError({
+        message: "Invalid data content. Content string is not a base64-encoded media.",
+        content,
+        cause: error
+      });
+    }
+  }
+  if (content instanceof ArrayBuffer) {
+    return new Uint8Array(content);
+  }
+  throw new InvalidDataContentError({ content });
+}
+function convertUint8ArrayToText(uint8Array) {
+  try {
+    return new TextDecoder().decode(uint8Array);
+  } catch (error) {
+    throw new Error("Error decoding Uint8Array to text");
   }
 }
-async function handleTextToText(eMsg, message, params, context) {
-  return chatWithLLM(message, params, context, null);
-}
-async function handleTextToImage(eMsg, message, params, context) {
-  const agent = loadImageGen(context.USER_CONFIG);
-  const sender = MessageSender.from(context.SHARE_CONTEXT.botToken, message);
-  if (!agent) {
-    return sender.sendPlainText("ERROR: Image generator not found");
+var name4 = "AI_InvalidMessageRoleError";
+var marker4 = `vercel.ai.error.${name4}`;
+var symbol4 = Symbol.for(marker4);
+var _a4;
+var InvalidMessageRoleError = class extends AISDKError {
+  constructor({
+    role,
+    message = `Invalid message role: '${role}'. Must be one of: "system", "user", "assistant", "tool".`
+  }) {
+    super({ name: name4, message });
+    this[_a4] = true;
+    this.role = role;
   }
-  sendAction(context.SHARE_CONTEXT.botToken, message.chat.id);
-  await sender.sendPlainText("Please wait a moment...", "tip").then((r) => r.json());
-  const result2 = await agent.request(eMsg.text, context.USER_CONFIG);
-  log.info("imageresult", JSON.stringify(result2));
-  await sendImages(result2, ENV.SEND_IMAGE_FILE, sender, context.USER_CONFIG);
-  const api = createTelegramBotAPI(context.SHARE_CONTEXT.botToken);
-  await api.deleteMessage({ chat_id: sender.context.chat_id, message_id: sender.context.message_id });
-  return result2;
-}
-async function handleAudioToText(eMsg, message, params, context) {
-  const agent = loadAudioLLM(context.USER_CONFIG);
-  const sender = MessageSender.from(context.SHARE_CONTEXT.botToken, message);
-  if (!agent) {
-    return sender.sendPlainText("ERROR: Audio agent not found");
+  static isInstance(error) {
+    return AISDKError.hasMarker(error, marker4);
   }
-  const url = params.content[0].data;
-  const audio = await fetch(url).then((b) => b.blob());
-  const result2 = await agent.request(audio, context.USER_CONFIG);
-  context.MIDDEL_CONTEXT.history.push({ role: "user", content: result2.text || "" });
-  await sender.sendRichText(`${getLog(context.USER_CONFIG)}
-> \`${result2.text}\``, "MarkdownV2", "chat");
-  return result2;
-}
-async function sendImages(img, SEND_IMAGE_FILE, sender, config) {
-  const caption = img.text ? `${getLog(config)}
-> \`${img.text}\`` : getLog(config);
-  if (img.url && img.url.length > 1) {
-    const images = img.url.map((url) => ({
-      type: SEND_IMAGE_FILE ? "document" : "photo",
-      media: url
-    }));
-    images[0].caption = caption;
-    images[0].parse_mode = ENV.DEFAULT_PARSE_MODE;
-    return await sender.sendMediaGroup(images);
-  } else if (img.url && img.url.length === 1) {
-    return sender.editMessageMedia({
-      type: "photo",
-      media: img.url[0]
-    }, caption, ENV.DEFAULT_PARSE_MODE);
-  } else if (img.url || img.raw) {
-    return sender.sendPhoto((img.url || img.raw)[0], caption, "MarkdownV2");
-  } else {
-    return sender.sendPlainText("ERROR: No image found");
+  /**
+   * @deprecated use `isInstance` instead
+   */
+  static isInvalidMessageRoleError(error) {
+    return error instanceof Error && error.name === name4 && typeof error.role === "string";
+  }
+  /**
+   * @deprecated Do not use this method. It will be removed in the next major version.
+   */
+  toJSON() {
+    return {
+      name: this.name,
+      message: this.message,
+      stack: this.stack,
+      role: this.role
+    };
+  }
+};
+_a4 = symbol4;
+function splitDataUrl(dataUrl) {
+  try {
+    const [header, base64Content] = dataUrl.split(",");
+    return {
+      mimeType: header.split(";")[0].split(":")[1],
+      base64Content
+    };
+  } catch (error) {
+    return {
+      mimeType: void 0,
+      base64Content: void 0
+    };
   }
 }
-function injectHistory(context, result2, nextType = "text") {
-  if (context.MIDDEL_CONTEXT.history.at(-1)?.role === "user" || nextType !== "text")
-    return;
-  context.MIDDEL_CONTEXT.history.push({ role: "user", content: result2.text || "", ...result2.url && result2.url.length > 0 && { images: result2.url } });
+async function convertToLanguageModelPrompt({
+  prompt: prompt2,
+  modelSupportsImageUrls = true,
+  modelSupportsUrl = () => false,
+  downloadImplementation = download
+}) {
+  const downloadedAssets = await downloadAssets(
+    prompt2.messages,
+    downloadImplementation,
+    modelSupportsImageUrls,
+    modelSupportsUrl
+  );
+  return [
+    ...prompt2.system != null ? [{ role: "system", content: prompt2.system }] : [],
+    ...prompt2.messages.map(
+      (message) => convertToLanguageModelMessage(message, downloadedAssets)
+    )
+  ];
 }
-function isTelegramChatTypeGroup(type2) {
-  return type2 === "group" || type2 === "supergroup";
-}
-function extractMessage(message, currentBotId) {
-  const acceptMsgType = ENV.ENABLE_FILE ? ["document", "photo", "voice", "audio", "text"] : ["text"];
-  const messageData = extractTypeFromMessage(message, acceptMsgType);
-  if (messageData && messageData.type === "text" && isNeedGetReplyMessage(message, currentBotId)) {
-    const {
-      type: type2,
-      id
-    } = extractTypeFromMessage(message.reply_to_message, acceptMsgType) || {};
-    if (type2 && type2 !== "text")
-      messageData.type = type2;
-    if (id && id.length > 0)
-      messageData.id = id;
-  }
-  return messageData;
-}
-function extractTypeFromMessage(message, supportType) {
-  let msgType = supportType.find((t) => t in message);
-  if (!msgType)
-    return null;
-  switch (msgType) {
-    case "text":
+function convertToLanguageModelMessage(message, downloadedAssets) {
+  const role = message.role;
+  switch (role) {
+    case "system": {
       return {
-        type: "text"
+        role: "system",
+        content: message.content,
+        providerMetadata: message.experimental_providerMetadata
       };
-    case "photo": {
-      const file_id = findPhotoFileID(message.photo, ENV.TELEGRAM_PHOTO_SIZE_OFFSET);
-      if (!file_id) {
+    }
+    case "user": {
+      if (typeof message.content === "string") {
         return {
-          type: "text"
+          role: "user",
+          content: [{ type: "text", text: message.content }],
+          providerMetadata: message.experimental_providerMetadata
         };
       }
       return {
-        type: "image",
-        id: [file_id]
+        role: "user",
+        content: message.content.map((part) => convertPartToLanguageModelPart(part, downloadedAssets)).filter((part) => part.type !== "text" || part.text !== ""),
+        providerMetadata: message.experimental_providerMetadata
       };
     }
-    case "document":
-    case "audio":
-    case "voice": {
-      if (msgType === "document") {
-        const type2 = message.document?.mime_type?.match(/(audio|image)/)?.[1];
-        if (!type2) {
-          return null;
-        }
-        msgType = type2;
+    case "assistant": {
+      if (typeof message.content === "string") {
+        return {
+          role: "assistant",
+          content: [{ type: "text", text: message.content }],
+          providerMetadata: message.experimental_providerMetadata
+        };
       }
-      const id = message[msgType]?.file_id;
       return {
-        type: ["audio", "voice"].includes(msgType) ? "audio" : "image",
-        ...id && { id: [id] }
+        role: "assistant",
+        content: message.content.filter(
+          // remove empty text parts:
+          (part) => part.type !== "text" || part.text !== ""
+        ).map((part) => {
+          const { experimental_providerMetadata, ...rest } = part;
+          return {
+            ...rest,
+            providerMetadata: experimental_providerMetadata
+          };
+        }),
+        providerMetadata: message.experimental_providerMetadata
       };
     }
+    case "tool": {
+      return {
+        role: "tool",
+        content: message.content.map((part) => ({
+          type: "tool-result",
+          toolCallId: part.toolCallId,
+          toolName: part.toolName,
+          result: part.result,
+          content: part.experimental_content,
+          isError: part.isError,
+          providerMetadata: part.experimental_providerMetadata
+        })),
+        providerMetadata: message.experimental_providerMetadata
+      };
+    }
+    default: {
+      const _exhaustiveCheck = role;
+      throw new InvalidMessageRoleError({ role: _exhaustiveCheck });
+    }
   }
-  return null;
 }
-function isNeedGetReplyMessage(message, currentBotId) {
-  return ENV.EXTRA_MESSAGE_CONTEXT && message.reply_to_message && (message.reply_to_message.from?.id !== currentBotId || message.reply_to_message.photo);
+async function downloadAssets(messages, downloadImplementation, modelSupportsImageUrls, modelSupportsUrl) {
+  const urls = messages.filter((message) => message.role === "user").map((message) => message.content).filter(
+    (content) => Array.isArray(content)
+  ).flat().filter(
+    (part) => part.type === "image" || part.type === "file"
+  ).filter(
+    (part) => !(part.type === "image" && modelSupportsImageUrls === true)
+  ).map((part) => part.type === "image" ? part.image : part.data).map(
+    (part) => (
+      // support string urls:
+      typeof part === "string" && (part.startsWith("http:") || part.startsWith("https:")) ? new URL(part) : part
+    )
+  ).filter((image) => image instanceof URL).filter((url) => !modelSupportsUrl(url));
+  const downloadedImages = await Promise.all(
+    urls.map(async (url) => ({
+      url,
+      data: await downloadImplementation({ url })
+    }))
+  );
+  return Object.fromEntries(
+    downloadedImages.map(({ url, data }) => [url.toString(), data])
+  );
 }
-function UUIDv4() {
-  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
-    const r = Math.random() * 16 | 0;
-    const v = c === "x" ? r : r & 3 | 8;
-    return v.toString(16);
-  });
-}
-const isCfWorker = typeof globalThis !== "undefined" && typeof globalThis.ServiceWorkerGlobalScope !== "undefined" && globalThis instanceof globalThis.ServiceWorkerGlobalScope;
-function chunckArray(arr, size) {
-  const result2 = [];
-  for (let i = 0; i < arr.length; i += size) {
-    result2.push(arr.slice(i, i + size));
+function convertPartToLanguageModelPart(part, downloadedAssets) {
+  if (part.type === "text") {
+    return {
+      type: "text",
+      text: part.text,
+      providerMetadata: part.experimental_providerMetadata
+    };
   }
-  return result2;
-}
-async function waitUntil(timestamp) {
-  return new Promise((resolve) => setTimeout(resolve, Math.max(0, timestamp - Date.now())));
-}
-class OpenAIBase {
-  name = "openai";
-  type = "chat";
-  apikey = (context) => {
-    if (this.type === "tool" && context.FUNCTION_CALL_API_KEY) {
-      return context.FUNCTION_CALL_API_KEY;
-    }
-    const length = context.OPENAI_API_KEY.length;
-    return context.OPENAI_API_KEY[Math.floor(Math.random() * length)];
-  };
-}
-class OpenAI extends OpenAIBase {
-  modelKey = "OPENAI_CHAT_MODEL";
-  static transformModelPerfix = "TRANSFROM-";
-  enable = (context) => {
-    return context.OPENAI_API_KEY.length > 0;
-  };
-  model = (ctx, params) => {
-    return Array.isArray(params?.content) ? ctx.OPENAI_VISION_MODEL : ctx.OPENAI_CHAT_MODEL;
-  };
-  transformModel = (model, context) => {
-    if (context.OPENAI_NEED_TRANSFORM_MODEL.includes(model)) {
-      return `${OpenAI.transformModelPerfix}${model}`;
-    }
-    return model;
-  };
-  base_url = (context) => {
-    if (this.type === "tool" && context.FUNCTION_CALL_BASE) {
-      return context.FUNCTION_CALL_BASE;
-    }
-    return context.OPENAI_API_BASE;
-  };
-  request = async (params, context, onStream) => {
-    const userMessage = params.messages.at(-1);
-    const originalModel = this.model(context, userMessage);
-    const transformedModel = this.transformModel(originalModel, context);
-    const provider = createOpenAI({
-      baseURL: context.OPENAI_API_BASE,
-      apiKey: this.apikey(context),
-      compatibility: "strict",
-      fetch: originalModel === transformedModel ? void 0 : this.fetch
-    });
-    const languageModelV1 = provider.languageModel(transformedModel, void 0);
-    const { messages, onStream: newOnStream } = this.extraHandle(originalModel, params.messages, context, onStream);
-    return requestChatCompletionsV2(await warpLLMParams({
-      model: languageModelV1,
-      messages
-    }, context), newOnStream);
-  };
-  extraHandle = (model, messages, context, onStream) => {
-    if (Object.keys(ENV.DROPS_OPENAI_PARAMS).length > 0) {
-      for (const [models, params] of Object.entries(ENV.DROPS_OPENAI_PARAMS)) {
-        if (models.split(",").includes(model)) {
-          params.includes("stream") && (onStream = null);
-          break;
-        }
+  let mimeType = part.mimeType;
+  let data;
+  let content;
+  let normalizedData;
+  const type2 = part.type;
+  switch (type2) {
+    case "image":
+      data = part.image;
+      break;
+    case "file":
+      data = part.data;
+      break;
+    default:
+      throw new Error(`Unsupported part type: ${type2}`);
+  }
+  try {
+    content = typeof data === "string" ? new URL(data) : data;
+  } catch (error) {
+    content = data;
+  }
+  if (content instanceof URL) {
+    if (content.protocol === "data:") {
+      const { mimeType: dataUrlMimeType, base64Content } = splitDataUrl(
+        content.toString()
+      );
+      if (dataUrlMimeType == null || base64Content == null) {
+        throw new Error(`Invalid data URL format in part ${type2}`);
+      }
+      mimeType = dataUrlMimeType;
+      normalizedData = convertDataContentToUint8Array(base64Content);
+    } else {
+      const downloadedFile = downloadedAssets[content.toString()];
+      if (downloadedFile) {
+        normalizedData = downloadedFile.data;
+        mimeType != null ? mimeType : mimeType = downloadedFile.mimeType;
+      } else {
+        normalizedData = content;
       }
     }
-    if (ENV.COVER_MESSAGE_ROLE) {
-      for (const [models, roles] of Object.entries(ENV.COVER_MESSAGE_ROLE)) {
-        const [oldRole, newRole] = roles.split(":");
-        if (models.split(",").includes(model)) {
-          messages = messages.map((m) => {
-            m.role = m.role === oldRole ? newRole : m.role;
-            return m;
+  } else {
+    normalizedData = convertDataContentToUint8Array(content);
+  }
+  switch (type2) {
+    case "image":
+      if (mimeType == null && normalizedData instanceof Uint8Array) {
+        mimeType = detectImageMimeType(normalizedData);
+      }
+      return {
+        type: "image",
+        image: normalizedData,
+        mimeType,
+        providerMetadata: part.experimental_providerMetadata
+      };
+    case "file":
+      if (mimeType == null) {
+        throw new Error(`Mime type is missing for file part`);
+      }
+      return {
+        type: "file",
+        data: normalizedData instanceof Uint8Array ? convertDataContentToBase64String(normalizedData) : normalizedData,
+        mimeType,
+        providerMetadata: part.experimental_providerMetadata
+      };
+  }
+}
+var name5 = "AI_InvalidArgumentError";
+var marker5 = `vercel.ai.error.${name5}`;
+var symbol5 = Symbol.for(marker5);
+var _a5;
+var InvalidArgumentError = class extends AISDKError {
+  constructor({
+    parameter,
+    value,
+    message
+  }) {
+    super({
+      name: name5,
+      message: `Invalid argument for parameter ${parameter}: ${message}`
+    });
+    this[_a5] = true;
+    this.parameter = parameter;
+    this.value = value;
+  }
+  static isInstance(error) {
+    return AISDKError.hasMarker(error, marker5);
+  }
+  /**
+   * @deprecated use `isInstance` instead
+   */
+  static isInvalidArgumentError(error) {
+    return error instanceof Error && error.name === name5 && typeof error.parameter === "string" && typeof error.value === "string";
+  }
+  toJSON() {
+    return {
+      name: this.name,
+      message: this.message,
+      stack: this.stack,
+      parameter: this.parameter,
+      value: this.value
+    };
+  }
+};
+_a5 = symbol5;
+function prepareCallSettings({
+  maxTokens,
+  temperature,
+  topP,
+  topK,
+  presencePenalty,
+  frequencyPenalty,
+  stopSequences,
+  seed,
+  maxRetries
+}) {
+  if (maxTokens != null) {
+    if (!Number.isInteger(maxTokens)) {
+      throw new InvalidArgumentError({
+        parameter: "maxTokens",
+        value: maxTokens,
+        message: "maxTokens must be an integer"
+      });
+    }
+    if (maxTokens < 1) {
+      throw new InvalidArgumentError({
+        parameter: "maxTokens",
+        value: maxTokens,
+        message: "maxTokens must be >= 1"
+      });
+    }
+  }
+  if (temperature != null) {
+    if (typeof temperature !== "number") {
+      throw new InvalidArgumentError({
+        parameter: "temperature",
+        value: temperature,
+        message: "temperature must be a number"
+      });
+    }
+  }
+  if (topP != null) {
+    if (typeof topP !== "number") {
+      throw new InvalidArgumentError({
+        parameter: "topP",
+        value: topP,
+        message: "topP must be a number"
+      });
+    }
+  }
+  if (topK != null) {
+    if (typeof topK !== "number") {
+      throw new InvalidArgumentError({
+        parameter: "topK",
+        value: topK,
+        message: "topK must be a number"
+      });
+    }
+  }
+  if (presencePenalty != null) {
+    if (typeof presencePenalty !== "number") {
+      throw new InvalidArgumentError({
+        parameter: "presencePenalty",
+        value: presencePenalty,
+        message: "presencePenalty must be a number"
+      });
+    }
+  }
+  if (frequencyPenalty != null) {
+    if (typeof frequencyPenalty !== "number") {
+      throw new InvalidArgumentError({
+        parameter: "frequencyPenalty",
+        value: frequencyPenalty,
+        message: "frequencyPenalty must be a number"
+      });
+    }
+  }
+  if (seed != null) {
+    if (!Number.isInteger(seed)) {
+      throw new InvalidArgumentError({
+        parameter: "seed",
+        value: seed,
+        message: "seed must be an integer"
+      });
+    }
+  }
+  if (maxRetries != null) {
+    if (!Number.isInteger(maxRetries)) {
+      throw new InvalidArgumentError({
+        parameter: "maxRetries",
+        value: maxRetries,
+        message: "maxRetries must be an integer"
+      });
+    }
+    if (maxRetries < 0) {
+      throw new InvalidArgumentError({
+        parameter: "maxRetries",
+        value: maxRetries,
+        message: "maxRetries must be >= 0"
+      });
+    }
+  }
+  return {
+    maxTokens,
+    temperature: temperature != null ? temperature : 0,
+    topP,
+    topK,
+    presencePenalty,
+    frequencyPenalty,
+    stopSequences: stopSequences != null && stopSequences.length > 0 ? stopSequences : void 0,
+    seed,
+    maxRetries: maxRetries != null ? maxRetries : 2
+  };
+}
+var jsonValueSchema = z.lazy(
+  () => z.union([
+    z.null(),
+    z.string(),
+    z.number(),
+    z.boolean(),
+    z.record(z.string(), jsonValueSchema),
+    z.array(jsonValueSchema)
+  ])
+);
+var providerMetadataSchema = z.record(
+  z.string(),
+  z.record(z.string(), jsonValueSchema)
+);
+var toolResultContentSchema = z.array(
+  z.union([
+    z.object({ type: z.literal("text"), text: z.string() }),
+    z.object({
+      type: z.literal("image"),
+      data: z.string(),
+      mimeType: z.string().optional()
+    })
+  ])
+);
+var textPartSchema = z.object({
+  type: z.literal("text"),
+  text: z.string(),
+  experimental_providerMetadata: providerMetadataSchema.optional()
+});
+var imagePartSchema = z.object({
+  type: z.literal("image"),
+  image: z.union([dataContentSchema, z.instanceof(URL)]),
+  mimeType: z.string().optional(),
+  experimental_providerMetadata: providerMetadataSchema.optional()
+});
+var filePartSchema = z.object({
+  type: z.literal("file"),
+  data: z.union([dataContentSchema, z.instanceof(URL)]),
+  mimeType: z.string(),
+  experimental_providerMetadata: providerMetadataSchema.optional()
+});
+var toolCallPartSchema = z.object({
+  type: z.literal("tool-call"),
+  toolCallId: z.string(),
+  toolName: z.string(),
+  args: z.unknown()
+});
+var toolResultPartSchema = z.object({
+  type: z.literal("tool-result"),
+  toolCallId: z.string(),
+  toolName: z.string(),
+  result: z.unknown(),
+  content: toolResultContentSchema.optional(),
+  isError: z.boolean().optional(),
+  experimental_providerMetadata: providerMetadataSchema.optional()
+});
+var coreSystemMessageSchema = z.object({
+  role: z.literal("system"),
+  content: z.string(),
+  experimental_providerMetadata: providerMetadataSchema.optional()
+});
+var coreUserMessageSchema = z.object({
+  role: z.literal("user"),
+  content: z.union([
+    z.string(),
+    z.array(z.union([textPartSchema, imagePartSchema, filePartSchema]))
+  ]),
+  experimental_providerMetadata: providerMetadataSchema.optional()
+});
+var coreAssistantMessageSchema = z.object({
+  role: z.literal("assistant"),
+  content: z.union([
+    z.string(),
+    z.array(z.union([textPartSchema, toolCallPartSchema]))
+  ]),
+  experimental_providerMetadata: providerMetadataSchema.optional()
+});
+var coreToolMessageSchema = z.object({
+  role: z.literal("tool"),
+  content: z.array(toolResultPartSchema),
+  experimental_providerMetadata: providerMetadataSchema.optional()
+});
+var coreMessageSchema = z.union([
+  coreSystemMessageSchema,
+  coreUserMessageSchema,
+  coreAssistantMessageSchema,
+  coreToolMessageSchema
+]);
+function detectPromptType(prompt2) {
+  if (!Array.isArray(prompt2)) {
+    return "other";
+  }
+  if (prompt2.length === 0) {
+    return "messages";
+  }
+  const characteristics = prompt2.map(detectSingleMessageCharacteristics);
+  if (characteristics.some((c) => c === "has-ui-specific-parts")) {
+    return "ui-messages";
+  } else if (characteristics.every(
+    (c) => c === "has-core-specific-parts" || c === "message"
+  )) {
+    return "messages";
+  } else {
+    return "other";
+  }
+}
+function detectSingleMessageCharacteristics(message) {
+  if (typeof message === "object" && message !== null && (message.role === "function" || // UI-only role
+  message.role === "data" || // UI-only role
+  "toolInvocations" in message || // UI-specific field
+  "experimental_attachments" in message)) {
+    return "has-ui-specific-parts";
+  } else if (typeof message === "object" && message !== null && "content" in message && (Array.isArray(message.content) || // Core messages can have array content
+  "experimental_providerMetadata" in message)) {
+    return "has-core-specific-parts";
+  } else if (typeof message === "object" && message !== null && "role" in message && "content" in message && typeof message.content === "string" && ["system", "user", "assistant", "tool"].includes(message.role)) {
+    return "message";
+  } else {
+    return "other";
+  }
+}
+function attachmentsToParts(attachments) {
+  var _a112, _b2, _c2;
+  const parts = [];
+  for (const attachment of attachments) {
+    let url;
+    try {
+      url = new URL(attachment.url);
+    } catch (error) {
+      throw new Error(`Invalid URL: ${attachment.url}`);
+    }
+    switch (url.protocol) {
+      case "http:":
+      case "https:": {
+        if ((_a112 = attachment.contentType) == null ? void 0 : _a112.startsWith("image/")) {
+          parts.push({ type: "image", image: url });
+        } else {
+          if (!attachment.contentType) {
+            throw new Error(
+              "If the attachment is not an image, it must specify a content type"
+            );
+          }
+          parts.push({
+            type: "file",
+            data: url,
+            mimeType: attachment.contentType
           });
         }
+        break;
+      }
+      case "data:": {
+        let header;
+        let base64Content;
+        let mimeType;
+        try {
+          [header, base64Content] = attachment.url.split(",");
+          mimeType = header.split(";")[0].split(":")[1];
+        } catch (error) {
+          throw new Error(`Error processing data URL: ${attachment.url}`);
+        }
+        if (mimeType == null || base64Content == null) {
+          throw new Error(`Invalid data URL format: ${attachment.url}`);
+        }
+        if ((_b2 = attachment.contentType) == null ? void 0 : _b2.startsWith("image/")) {
+          parts.push({
+            type: "image",
+            image: convertDataContentToUint8Array(base64Content)
+          });
+        } else if ((_c2 = attachment.contentType) == null ? void 0 : _c2.startsWith("text/")) {
+          parts.push({
+            type: "text",
+            text: convertUint8ArrayToText(
+              convertDataContentToUint8Array(base64Content)
+            )
+          });
+        } else {
+          if (!attachment.contentType) {
+            throw new Error(
+              "If the attachment is not an image or text, it must specify a content type"
+            );
+          }
+          parts.push({
+            type: "file",
+            data: base64Content,
+            mimeType: attachment.contentType
+          });
+        }
+        break;
+      }
+      default: {
+        throw new Error(`Unsupported URL protocol: ${url.protocol}`);
       }
     }
-    return { messages, onStream };
-  };
-  fetch = async (url, options2) => {
-    const body = JSON.parse(options2?.body);
-    if (body?.model.startsWith(OpenAI.transformModelPerfix)) {
-      body.model = body.model.slice(OpenAI.transformModelPerfix.length);
-    }
-    return fetch(url, {
-      ...options2,
-      body: JSON.stringify(body)
-    });
-  };
-}
-class Dalle extends (_a10 = OpenAIBase, _request_dec = [Log], _a10) {
-  constructor() {
-    super(...arguments);
-    __publicField(this, "modelKey", "DALL_E_MODEL");
-    __publicField(this, "enable", (context) => {
-      return context.OPENAI_API_KEY.length > 0;
-    });
-    __publicField(this, "model", (ctx) => {
-      return ctx.DALL_E_MODEL;
-    });
-    __publicField(this, "request", __runInitializers(_init, 8, this, async (prompt2, context) => {
-      const url = `${context.OPENAI_API_BASE}/images/generations`;
-      const header = {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${this.apikey(context)}`
-      };
-      const body = {
-        prompt: prompt2,
-        n: 1,
-        size: context.DALL_E_IMAGE_SIZE,
-        model: context.DALL_E_MODEL
-      };
-      if (body.model === "dall-e-3") {
-        body.quality = context.DALL_E_IMAGE_QUALITY;
-        body.style = context.DALL_E_IMAGE_STYLE;
-      }
-      return requestText2Image(url, header, body, this.render);
-    })), __runInitializers(_init, 11, this);
-    __publicField(this, "render", async (response) => {
-      const resp = await response.json();
-      if (resp.error?.message) {
-        throw new Error(resp.error.message);
-      }
-      return {
-        type: "image",
-        url: resp?.data?.map((i) => i?.url),
-        text: resp?.data?.[0]?.revised_prompt || ""
-      };
-    });
   }
+  return parts;
 }
-_init = __decoratorStart(_a10);
-__decorateElement(_init, 5, "request", _request_dec, Dalle);
-__decoratorMetadata(_init, Dalle);
-class Transcription extends (_b = OpenAIBase, _request_dec2 = [Log], _b) {
-  constructor() {
-    super(...arguments);
-    __publicField(this, "modelKey", "OPENAI_STT_MODEL");
-    __publicField(this, "enable", (context) => {
-      return context.OPENAI_API_KEY.length > 0;
-    });
-    __publicField(this, "model", (ctx) => {
-      return ctx.OPENAI_STT_MODEL;
-    });
-    __publicField(this, "request", __runInitializers(_init2, 8, this, async (audio, context) => {
-      const url = `${context.OPENAI_API_BASE}/audio/transcriptions`;
-      const header = {
-        Authorization: `Bearer ${this.apikey(context)}`,
-        Accept: "application/json"
-      };
-      const formData = new FormData();
-      formData.append("file", audio, "audio.ogg");
-      formData.append("model", this.model(context));
-      if (context.OPENAI_STT_EXTRA_PARAMS) {
-        Object.entries(context.OPENAI_STT_EXTRA_PARAMS).forEach(([k, v]) => {
-          formData.append(k, v);
+var name6 = "AI_MessageConversionError";
+var marker6 = `vercel.ai.error.${name6}`;
+var symbol6 = Symbol.for(marker6);
+var _a6;
+var MessageConversionError = class extends AISDKError {
+  constructor({
+    originalMessage,
+    message
+  }) {
+    super({ name: name6, message });
+    this[_a6] = true;
+    this.originalMessage = originalMessage;
+  }
+  static isInstance(error) {
+    return AISDKError.hasMarker(error, marker6);
+  }
+};
+_a6 = symbol6;
+function convertToCoreMessages(messages, options2) {
+  var _a112;
+  const tools2 = (_a112 = options2 == null ? void 0 : options2.tools) != null ? _a112 : {};
+  const coreMessages = [];
+  for (const message of messages) {
+    const { role, content, toolInvocations, experimental_attachments } = message;
+    switch (role) {
+      case "system": {
+        coreMessages.push({
+          role: "system",
+          content
+        });
+        break;
+      }
+      case "user": {
+        coreMessages.push({
+          role: "user",
+          content: experimental_attachments ? [
+            { type: "text", text: content },
+            ...attachmentsToParts(experimental_attachments)
+          ] : content
+        });
+        break;
+      }
+      case "assistant": {
+        if (toolInvocations == null) {
+          coreMessages.push({ role: "assistant", content });
+          break;
+        }
+        coreMessages.push({
+          role: "assistant",
+          content: [
+            { type: "text", text: content },
+            ...toolInvocations.map(
+              ({ toolCallId, toolName: toolName2, args: args2 }) => ({
+                type: "tool-call",
+                toolCallId,
+                toolName: toolName2,
+                args: args2
+              })
+            )
+          ]
+        });
+        coreMessages.push({
+          role: "tool",
+          content: toolInvocations.map((toolInvocation) => {
+            if (!("result" in toolInvocation)) {
+              throw new MessageConversionError({
+                originalMessage: message,
+                message: "ToolInvocation must have a result: " + JSON.stringify(toolInvocation)
+              });
+            }
+            const { toolCallId, toolName: toolName2, result: result2 } = toolInvocation;
+            const tool2 = tools2[toolName2];
+            return (tool2 == null ? void 0 : tool2.experimental_toToolResultContent) != null ? {
+              type: "tool-result",
+              toolCallId,
+              toolName: toolName2,
+              result: tool2.experimental_toToolResultContent(result2),
+              experimental_content: tool2.experimental_toToolResultContent(result2)
+            } : {
+              type: "tool-result",
+              toolCallId,
+              toolName: toolName2,
+              result: result2
+            };
+          })
+        });
+        break;
+      }
+      case "function":
+      case "data":
+      case "tool": {
+        break;
+      }
+      default: {
+        const _exhaustiveCheck = role;
+        throw new MessageConversionError({
+          originalMessage: message,
+          message: `Unsupported role: ${_exhaustiveCheck}`
         });
       }
-      formData.append("response_format", "json");
-      const resp = await fetch(url, {
-        method: "POST",
-        headers: header,
-        body: formData,
-        redirect: "follow"
-      }).then((res) => res.json());
-      if (resp.error?.message) {
-        throw new Error(resp.error.message);
+    }
+  }
+  return coreMessages;
+}
+function standardizePrompt({
+  prompt: prompt2,
+  tools: tools2
+}) {
+  if (prompt2.prompt == null && prompt2.messages == null) {
+    throw new InvalidPromptError({
+      prompt: prompt2,
+      message: "prompt or messages must be defined"
+    });
+  }
+  if (prompt2.prompt != null && prompt2.messages != null) {
+    throw new InvalidPromptError({
+      prompt: prompt2,
+      message: "prompt and messages cannot be defined at the same time"
+    });
+  }
+  if (prompt2.system != null && typeof prompt2.system !== "string") {
+    throw new InvalidPromptError({
+      prompt: prompt2,
+      message: "system must be a string"
+    });
+  }
+  if (prompt2.prompt != null) {
+    if (typeof prompt2.prompt !== "string") {
+      throw new InvalidPromptError({
+        prompt: prompt2,
+        message: "prompt must be a string"
+      });
+    }
+    return {
+      type: "prompt",
+      system: prompt2.system,
+      messages: [
+        {
+          role: "user",
+          content: prompt2.prompt
+        }
+      ]
+    };
+  }
+  if (prompt2.messages != null) {
+    const promptType = detectPromptType(prompt2.messages);
+    if (promptType === "other") {
+      throw new InvalidPromptError({
+        prompt: prompt2,
+        message: "messages must be an array of CoreMessage or UIMessage"
+      });
+    }
+    const messages = promptType === "ui-messages" ? convertToCoreMessages(prompt2.messages, {
+      tools: tools2
+    }) : prompt2.messages;
+    const validationResult = safeValidateTypes({
+      value: messages,
+      schema: z.array(coreMessageSchema)
+    });
+    if (!validationResult.success) {
+      throw new InvalidPromptError({
+        prompt: prompt2,
+        message: "messages must be an array of CoreMessage or UIMessage",
+        cause: validationResult.error
+      });
+    }
+    return {
+      type: "messages",
+      messages,
+      system: prompt2.system
+    };
+  }
+  throw new Error("unreachable");
+}
+function calculateLanguageModelUsage(usage) {
+  return {
+    promptTokens: usage.promptTokens,
+    completionTokens: usage.completionTokens,
+    totalTokens: usage.promptTokens + usage.completionTokens
+  };
+}
+function prepareResponseHeaders(init, {
+  contentType,
+  dataStreamVersion
+}) {
+  var _a112;
+  const headers = new Headers((_a112 = init == null ? void 0 : init.headers) != null ? _a112 : {});
+  if (!headers.has("Content-Type")) {
+    headers.set("Content-Type", contentType);
+  }
+  if (dataStreamVersion !== void 0) {
+    headers.set("X-Vercel-AI-Data-Stream", dataStreamVersion);
+  }
+  return headers;
+}
+function createAsyncIterableStream(source, transformer) {
+  const transformedStream = source.pipeThrough(
+    new TransformStream(transformer)
+  );
+  transformedStream[Symbol.asyncIterator] = () => {
+    const reader = transformedStream.getReader();
+    return {
+      async next() {
+        const { done, value } = await reader.read();
+        return done ? { done: true, value: void 0 } : { done: false, value };
       }
-      if (resp.text === void 0) {
-        console.error(resp);
-        throw new Error(resp);
+    };
+  };
+  return transformedStream;
+}
+createIdGenerator({ prefix: "aiobj", size: 24 });
+function createResolvablePromise() {
+  let resolve;
+  let reject;
+  const promise = new Promise((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return {
+    promise,
+    resolve,
+    reject
+  };
+}
+function now() {
+  var _a112, _b2;
+  return (_b2 = (_a112 = globalThis == null ? void 0 : globalThis.performance) == null ? void 0 : _a112.now()) != null ? _b2 : Date.now();
+}
+function prepareOutgoingHttpHeaders(init, {
+  contentType,
+  dataStreamVersion
+}) {
+  const headers = {};
+  if ((init == null ? void 0 : init.headers) != null) {
+    for (const [key, value] of Object.entries(init.headers)) {
+      headers[key] = value;
+    }
+  }
+  if (headers["Content-Type"] == null) {
+    headers["Content-Type"] = contentType;
+  }
+  if (dataStreamVersion !== void 0) {
+    headers["X-Vercel-AI-Data-Stream"] = dataStreamVersion;
+  }
+  return headers;
+}
+function writeToServerResponse({
+  response,
+  status,
+  statusText,
+  headers,
+  stream
+}) {
+  response.writeHead(status != null ? status : 200, statusText, headers);
+  const reader = stream.getReader();
+  const read = async () => {
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done)
+          break;
+        response.write(value);
       }
-      log.info(`Transcription: ${resp.text}`);
-      return {
-        type: "text",
-        text: resp.text
+    } catch (error) {
+      throw error;
+    } finally {
+      response.end();
+    }
+  };
+  read();
+}
+createIdGenerator({ prefix: "aiobj", size: 24 });
+var name8 = "AI_InvalidToolArgumentsError";
+var marker8 = `vercel.ai.error.${name8}`;
+var symbol8 = Symbol.for(marker8);
+var _a8;
+var InvalidToolArgumentsError = class extends AISDKError {
+  constructor({
+    toolArgs,
+    toolName: toolName2,
+    cause,
+    message = `Invalid arguments for tool ${toolName2}: ${getErrorMessage$1(
+      cause
+    )}`
+  }) {
+    super({ name: name8, message, cause });
+    this[_a8] = true;
+    this.toolArgs = toolArgs;
+    this.toolName = toolName2;
+  }
+  static isInstance(error) {
+    return AISDKError.hasMarker(error, marker8);
+  }
+  /**
+   * @deprecated use `isInstance` instead
+   */
+  static isInvalidToolArgumentsError(error) {
+    return error instanceof Error && error.name === name8 && typeof error.toolName === "string" && typeof error.toolArgs === "string";
+  }
+  /**
+   * @deprecated Do not use this method. It will be removed in the next major version.
+   */
+  toJSON() {
+    return {
+      name: this.name,
+      message: this.message,
+      cause: this.cause,
+      stack: this.stack,
+      toolName: this.toolName,
+      toolArgs: this.toolArgs
+    };
+  }
+};
+_a8 = symbol8;
+var name9 = "AI_NoSuchToolError";
+var marker9 = `vercel.ai.error.${name9}`;
+var symbol9 = Symbol.for(marker9);
+var _a9;
+var NoSuchToolError = class extends AISDKError {
+  constructor({
+    toolName: toolName2,
+    availableTools = void 0,
+    message = `Model tried to call unavailable tool '${toolName2}'. ${availableTools === void 0 ? "No tools are available." : `Available tools: ${availableTools.join(", ")}.`}`
+  }) {
+    super({ name: name9, message });
+    this[_a9] = true;
+    this.toolName = toolName2;
+    this.availableTools = availableTools;
+  }
+  static isInstance(error) {
+    return AISDKError.hasMarker(error, marker9);
+  }
+  /**
+   * @deprecated use `isInstance` instead
+   */
+  static isNoSuchToolError(error) {
+    return error instanceof Error && error.name === name9 && "toolName" in error && error.toolName != void 0 && typeof error.name === "string";
+  }
+  /**
+   * @deprecated Do not use this method. It will be removed in the next major version.
+   */
+  toJSON() {
+    return {
+      name: this.name,
+      message: this.message,
+      stack: this.stack,
+      toolName: this.toolName,
+      availableTools: this.availableTools
+    };
+  }
+};
+_a9 = symbol9;
+function isNonEmptyObject(object) {
+  return object != null && Object.keys(object).length > 0;
+}
+function prepareToolsAndToolChoice({
+  tools: tools2,
+  toolChoice,
+  activeTools
+}) {
+  if (!isNonEmptyObject(tools2)) {
+    return {
+      tools: void 0,
+      toolChoice: void 0
+    };
+  }
+  const filteredTools = activeTools != null ? Object.entries(tools2).filter(
+    ([name112]) => activeTools.includes(name112)
+  ) : Object.entries(tools2);
+  return {
+    tools: filteredTools.map(([name112, tool2]) => {
+      const toolType = tool2.type;
+      switch (toolType) {
+        case void 0:
+        case "function":
+          return {
+            type: "function",
+            name: name112,
+            description: tool2.description,
+            parameters: asSchema(tool2.parameters).jsonSchema
+          };
+        case "provider-defined":
+          return {
+            type: "provider-defined",
+            name: name112,
+            id: tool2.id,
+            args: tool2.args
+          };
+        default: {
+          const exhaustiveCheck = toolType;
+          throw new Error(`Unsupported tool type: ${exhaustiveCheck}`);
+        }
+      }
+    }),
+    toolChoice: toolChoice == null ? { type: "auto" } : typeof toolChoice === "string" ? { type: toolChoice } : { type: "tool", toolName: toolChoice.toolName }
+  };
+}
+var lastWhitespaceRegexp = /^([\s\S]*?)(\s+)(\S*)$/;
+function splitOnLastWhitespace(text) {
+  const match = text.match(lastWhitespaceRegexp);
+  return match ? { prefix: match[1], whitespace: match[2], suffix: match[3] } : void 0;
+}
+function removeTextAfterLastWhitespace(text) {
+  const match = splitOnLastWhitespace(text);
+  return match ? match.prefix + match.whitespace : text;
+}
+function parseToolCall({
+  toolCall,
+  tools: tools2
+}) {
+  const toolName2 = toolCall.toolName;
+  if (tools2 == null) {
+    throw new NoSuchToolError({ toolName: toolCall.toolName });
+  }
+  const tool2 = tools2[toolName2];
+  if (tool2 == null) {
+    throw new NoSuchToolError({
+      toolName: toolCall.toolName,
+      availableTools: Object.keys(tools2)
+    });
+  }
+  const schema2 = asSchema(tool2.parameters);
+  const parseResult = toolCall.args.trim() === "" ? safeValidateTypes({ value: {}, schema: schema2 }) : safeParseJSON({ text: toolCall.args, schema: schema2 });
+  if (parseResult.success === false) {
+    throw new InvalidToolArgumentsError({
+      toolName: toolName2,
+      toolArgs: toolCall.args,
+      cause: parseResult.error
+    });
+  }
+  return {
+    type: "tool-call",
+    toolCallId: toolCall.toolCallId,
+    toolName: toolName2,
+    args: parseResult.value
+  };
+}
+function toResponseMessages({
+  text = "",
+  tools: tools2,
+  toolCalls,
+  toolResults
+}) {
+  const responseMessages = [];
+  responseMessages.push({
+    role: "assistant",
+    content: [{ type: "text", text }, ...toolCalls]
+  });
+  if (toolResults.length > 0) {
+    responseMessages.push({
+      role: "tool",
+      content: toolResults.map((toolResult) => {
+        const tool2 = tools2[toolResult.toolName];
+        return (tool2 == null ? void 0 : tool2.experimental_toToolResultContent) != null ? {
+          type: "tool-result",
+          toolCallId: toolResult.toolCallId,
+          toolName: toolResult.toolName,
+          result: tool2.experimental_toToolResultContent(toolResult.result),
+          experimental_content: tool2.experimental_toToolResultContent(
+            toolResult.result
+          )
+        } : {
+          type: "tool-result",
+          toolCallId: toolResult.toolCallId,
+          toolName: toolResult.toolName,
+          result: toolResult.result
+        };
+      })
+    });
+  }
+  return responseMessages;
+}
+var originalGenerateId3 = createIdGenerator({ prefix: "aitxt", size: 24 });
+async function generateText({
+  model,
+  tools: tools2,
+  toolChoice,
+  system,
+  prompt: prompt2,
+  messages,
+  maxRetries,
+  abortSignal,
+  headers,
+  maxAutomaticRoundtrips = 0,
+  maxToolRoundtrips = maxAutomaticRoundtrips,
+  maxSteps = maxToolRoundtrips != null ? maxToolRoundtrips + 1 : 1,
+  experimental_continuationSteps,
+  experimental_continueSteps: continueSteps = experimental_continuationSteps != null ? experimental_continuationSteps : false,
+  experimental_telemetry: telemetry,
+  experimental_providerMetadata: providerMetadata,
+  experimental_activeTools: activeTools,
+  _internal: {
+    generateId: generateId3 = originalGenerateId3,
+    currentDate = () => /* @__PURE__ */ new Date()
+  } = {},
+  onStepFinish,
+  ...settings
+}) {
+  if (maxSteps < 1) {
+    throw new InvalidArgumentError({
+      parameter: "maxSteps",
+      value: maxSteps,
+      message: "maxSteps must be at least 1"
+    });
+  }
+  const baseTelemetryAttributes = getBaseTelemetryAttributes({
+    model,
+    telemetry,
+    headers,
+    settings: { ...settings, maxRetries }
+  });
+  const initialPrompt = standardizePrompt({
+    prompt: { system, prompt: prompt2, messages },
+    tools: tools2
+  });
+  const tracer = getTracer(telemetry);
+  return recordSpan({
+    name: "ai.generateText",
+    attributes: selectTelemetryAttributes({
+      telemetry,
+      attributes: {
+        ...assembleOperationName({
+          operationId: "ai.generateText",
+          telemetry
+        }),
+        ...baseTelemetryAttributes,
+        // specific settings that only make sense on the outer level:
+        "ai.prompt": {
+          input: () => JSON.stringify({ system, prompt: prompt2, messages })
+        },
+        "ai.settings.maxSteps": maxSteps
+      }
+    }),
+    tracer,
+    fn: async (span) => {
+      var _a112, _b2, _c2, _d, _e, _f;
+      const retry = retryWithExponentialBackoff({ maxRetries });
+      const mode = {
+        type: "regular",
+        ...prepareToolsAndToolChoice({ tools: tools2, toolChoice, activeTools })
       };
-    })), __runInitializers(_init2, 11, this);
+      const callSettings = prepareCallSettings(settings);
+      let currentModelResponse;
+      let currentToolCalls = [];
+      let currentToolResults = [];
+      let stepCount = 0;
+      const responseMessages = [];
+      let text = "";
+      const steps = [];
+      const usage = {
+        completionTokens: 0,
+        promptTokens: 0,
+        totalTokens: 0
+      };
+      let stepType = "initial";
+      do {
+        if (stepCount === 1) {
+          initialPrompt.type = "messages";
+        }
+        const promptFormat = stepCount === 0 ? initialPrompt.type : "messages";
+        const promptMessages = await convertToLanguageModelPrompt({
+          prompt: {
+            type: promptFormat,
+            system: initialPrompt.system,
+            messages: [...initialPrompt.messages, ...responseMessages]
+          },
+          modelSupportsImageUrls: model.supportsImageUrls,
+          modelSupportsUrl: model.supportsUrl
+        });
+        currentModelResponse = await retry(
+          () => recordSpan({
+            name: "ai.generateText.doGenerate",
+            attributes: selectTelemetryAttributes({
+              telemetry,
+              attributes: {
+                ...assembleOperationName({
+                  operationId: "ai.generateText.doGenerate",
+                  telemetry
+                }),
+                ...baseTelemetryAttributes,
+                "ai.prompt.format": { input: () => promptFormat },
+                "ai.prompt.messages": {
+                  input: () => JSON.stringify(promptMessages)
+                },
+                "ai.prompt.tools": {
+                  // convert the language model level tools:
+                  input: () => {
+                    var _a122;
+                    return (_a122 = mode.tools) == null ? void 0 : _a122.map((tool2) => JSON.stringify(tool2));
+                  }
+                },
+                "ai.prompt.toolChoice": {
+                  input: () => mode.toolChoice != null ? JSON.stringify(mode.toolChoice) : void 0
+                },
+                // standardized gen-ai llm span attributes:
+                "gen_ai.system": model.provider,
+                "gen_ai.request.model": model.modelId,
+                "gen_ai.request.frequency_penalty": settings.frequencyPenalty,
+                "gen_ai.request.max_tokens": settings.maxTokens,
+                "gen_ai.request.presence_penalty": settings.presencePenalty,
+                "gen_ai.request.stop_sequences": settings.stopSequences,
+                "gen_ai.request.temperature": settings.temperature,
+                "gen_ai.request.top_k": settings.topK,
+                "gen_ai.request.top_p": settings.topP
+              }
+            }),
+            tracer,
+            fn: async (span2) => {
+              var _a122, _b22, _c22, _d2, _e2, _f2;
+              const result2 = await model.doGenerate({
+                mode,
+                ...callSettings,
+                inputFormat: promptFormat,
+                prompt: promptMessages,
+                providerMetadata,
+                abortSignal,
+                headers
+              });
+              const responseData = {
+                id: (_b22 = (_a122 = result2.response) == null ? void 0 : _a122.id) != null ? _b22 : generateId3(),
+                timestamp: (_d2 = (_c22 = result2.response) == null ? void 0 : _c22.timestamp) != null ? _d2 : currentDate(),
+                modelId: (_f2 = (_e2 = result2.response) == null ? void 0 : _e2.modelId) != null ? _f2 : model.modelId
+              };
+              span2.setAttributes(
+                selectTelemetryAttributes({
+                  telemetry,
+                  attributes: {
+                    "ai.response.finishReason": result2.finishReason,
+                    "ai.response.text": {
+                      output: () => result2.text
+                    },
+                    "ai.response.toolCalls": {
+                      output: () => JSON.stringify(result2.toolCalls)
+                    },
+                    "ai.response.id": responseData.id,
+                    "ai.response.model": responseData.modelId,
+                    "ai.response.timestamp": responseData.timestamp.toISOString(),
+                    "ai.usage.promptTokens": result2.usage.promptTokens,
+                    "ai.usage.completionTokens": result2.usage.completionTokens,
+                    // deprecated:
+                    "ai.finishReason": result2.finishReason,
+                    "ai.result.text": {
+                      output: () => result2.text
+                    },
+                    "ai.result.toolCalls": {
+                      output: () => JSON.stringify(result2.toolCalls)
+                    },
+                    // standardized gen-ai llm span attributes:
+                    "gen_ai.response.finish_reasons": [result2.finishReason],
+                    "gen_ai.response.id": responseData.id,
+                    "gen_ai.response.model": responseData.modelId,
+                    "gen_ai.usage.input_tokens": result2.usage.promptTokens,
+                    "gen_ai.usage.output_tokens": result2.usage.completionTokens
+                  }
+                })
+              );
+              return { ...result2, response: responseData };
+            }
+          })
+        );
+        currentToolCalls = ((_a112 = currentModelResponse.toolCalls) != null ? _a112 : []).map(
+          (modelToolCall) => parseToolCall({ toolCall: modelToolCall, tools: tools2 })
+        );
+        currentToolResults = tools2 == null ? [] : await executeTools({
+          toolCalls: currentToolCalls,
+          tools: tools2,
+          tracer,
+          telemetry,
+          abortSignal
+        });
+        const currentUsage = calculateLanguageModelUsage(
+          currentModelResponse.usage
+        );
+        usage.completionTokens += currentUsage.completionTokens;
+        usage.promptTokens += currentUsage.promptTokens;
+        usage.totalTokens += currentUsage.totalTokens;
+        let nextStepType = "done";
+        if (++stepCount < maxSteps) {
+          if (continueSteps && currentModelResponse.finishReason === "length" && // only use continue when there are no tool calls:
+          currentToolCalls.length === 0) {
+            nextStepType = "continue";
+          } else if (
+            // there are tool calls:
+            currentToolCalls.length > 0 && // all current tool calls have results:
+            currentToolResults.length === currentToolCalls.length
+          ) {
+            nextStepType = "tool-result";
+          }
+        }
+        const originalText = (_b2 = currentModelResponse.text) != null ? _b2 : "";
+        const stepTextLeadingWhitespaceTrimmed = stepType === "continue" && // only for continue steps
+        text.trimEnd() !== text ? originalText.trimStart() : originalText;
+        const stepText = nextStepType === "continue" ? removeTextAfterLastWhitespace(stepTextLeadingWhitespaceTrimmed) : stepTextLeadingWhitespaceTrimmed;
+        text = nextStepType === "continue" || stepType === "continue" ? text + stepText : stepText;
+        if (stepType === "continue") {
+          const lastMessage = responseMessages[responseMessages.length - 1];
+          if (typeof lastMessage.content === "string") {
+            lastMessage.content += stepText;
+          } else {
+            lastMessage.content.push({
+              text: stepText,
+              type: "text"
+            });
+          }
+        } else {
+          responseMessages.push(
+            ...toResponseMessages({
+              text,
+              tools: tools2 != null ? tools2 : {},
+              toolCalls: currentToolCalls,
+              toolResults: currentToolResults
+            })
+          );
+        }
+        const currentStepResult = {
+          stepType,
+          text: stepText,
+          toolCalls: currentToolCalls,
+          toolResults: currentToolResults,
+          finishReason: currentModelResponse.finishReason,
+          usage: currentUsage,
+          warnings: currentModelResponse.warnings,
+          logprobs: currentModelResponse.logprobs,
+          request: (_c2 = currentModelResponse.request) != null ? _c2 : {},
+          response: {
+            ...currentModelResponse.response,
+            headers: (_d = currentModelResponse.rawResponse) == null ? void 0 : _d.headers,
+            // deep clone msgs to avoid mutating past messages in multi-step:
+            messages: JSON.parse(JSON.stringify(responseMessages))
+          },
+          experimental_providerMetadata: currentModelResponse.providerMetadata,
+          isContinued: nextStepType === "continue"
+        };
+        steps.push(currentStepResult);
+        await (onStepFinish == null ? void 0 : onStepFinish(currentStepResult));
+        stepType = nextStepType;
+      } while (stepType !== "done");
+      span.setAttributes(
+        selectTelemetryAttributes({
+          telemetry,
+          attributes: {
+            "ai.response.finishReason": currentModelResponse.finishReason,
+            "ai.response.text": {
+              output: () => currentModelResponse.text
+            },
+            "ai.response.toolCalls": {
+              output: () => JSON.stringify(currentModelResponse.toolCalls)
+            },
+            "ai.usage.promptTokens": currentModelResponse.usage.promptTokens,
+            "ai.usage.completionTokens": currentModelResponse.usage.completionTokens,
+            // deprecated:
+            "ai.finishReason": currentModelResponse.finishReason,
+            "ai.result.text": {
+              output: () => currentModelResponse.text
+            },
+            "ai.result.toolCalls": {
+              output: () => JSON.stringify(currentModelResponse.toolCalls)
+            }
+          }
+        })
+      );
+      return new DefaultGenerateTextResult({
+        text,
+        toolCalls: currentToolCalls,
+        toolResults: currentToolResults,
+        finishReason: currentModelResponse.finishReason,
+        usage,
+        warnings: currentModelResponse.warnings,
+        request: (_e = currentModelResponse.request) != null ? _e : {},
+        response: {
+          ...currentModelResponse.response,
+          headers: (_f = currentModelResponse.rawResponse) == null ? void 0 : _f.headers,
+          messages: responseMessages
+        },
+        logprobs: currentModelResponse.logprobs,
+        responseMessages,
+        steps,
+        providerMetadata: currentModelResponse.providerMetadata
+      });
+    }
+  });
+}
+async function executeTools({
+  toolCalls,
+  tools: tools2,
+  tracer,
+  telemetry,
+  abortSignal
+}) {
+  const toolResults = await Promise.all(
+    toolCalls.map(async (toolCall) => {
+      const tool2 = tools2[toolCall.toolName];
+      if ((tool2 == null ? void 0 : tool2.execute) == null) {
+        return void 0;
+      }
+      const result2 = await recordSpan({
+        name: "ai.toolCall",
+        attributes: selectTelemetryAttributes({
+          telemetry,
+          attributes: {
+            ...assembleOperationName({
+              operationId: "ai.toolCall",
+              telemetry
+            }),
+            "ai.toolCall.name": toolCall.toolName,
+            "ai.toolCall.id": toolCall.toolCallId,
+            "ai.toolCall.args": {
+              output: () => JSON.stringify(toolCall.args)
+            }
+          }
+        }),
+        tracer,
+        fn: async (span) => {
+          const result22 = await tool2.execute(toolCall.args, { abortSignal });
+          try {
+            span.setAttributes(
+              selectTelemetryAttributes({
+                telemetry,
+                attributes: {
+                  "ai.toolCall.result": {
+                    output: () => JSON.stringify(result22)
+                  }
+                }
+              })
+            );
+          } catch (ignored) {
+          }
+          return result22;
+        }
+      });
+      return {
+        toolCallId: toolCall.toolCallId,
+        toolName: toolCall.toolName,
+        args: toolCall.args,
+        result: result2
+      };
+    })
+  );
+  return toolResults.filter(
+    (result2) => result2 != null
+  );
+}
+var DefaultGenerateTextResult = class {
+  constructor(options2) {
+    this.text = options2.text;
+    this.toolCalls = options2.toolCalls;
+    this.toolResults = options2.toolResults;
+    this.finishReason = options2.finishReason;
+    this.usage = options2.usage;
+    this.warnings = options2.warnings;
+    this.request = options2.request;
+    this.response = options2.response;
+    this.responseMessages = options2.responseMessages;
+    this.roundtrips = options2.steps;
+    this.steps = options2.steps;
+    this.experimental_providerMetadata = options2.providerMetadata;
+    this.rawResponse = {
+      headers: options2.response.headers
+    };
+    this.logprobs = options2.logprobs;
+  }
+};
+function createStitchableStream() {
+  let innerStreamReaders = [];
+  let controller = null;
+  let isClosed = false;
+  const processPull = async () => {
+    if (isClosed && innerStreamReaders.length === 0) {
+      controller == null ? void 0 : controller.close();
+      return;
+    }
+    if (innerStreamReaders.length === 0) {
+      return;
+    }
+    try {
+      const { value, done } = await innerStreamReaders[0].read();
+      if (done) {
+        innerStreamReaders.shift();
+        if (innerStreamReaders.length > 0) {
+          await processPull();
+        } else if (isClosed) {
+          controller == null ? void 0 : controller.close();
+        }
+      } else {
+        controller == null ? void 0 : controller.enqueue(value);
+      }
+    } catch (error) {
+      controller == null ? void 0 : controller.error(error);
+      innerStreamReaders.shift();
+      if (isClosed && innerStreamReaders.length === 0) {
+        controller == null ? void 0 : controller.close();
+      }
+    }
+  };
+  return {
+    stream: new ReadableStream({
+      start(controllerParam) {
+        controller = controllerParam;
+      },
+      pull: processPull,
+      async cancel() {
+        for (const reader of innerStreamReaders) {
+          await reader.cancel();
+        }
+        innerStreamReaders = [];
+        isClosed = true;
+      }
+    }),
+    addStream: (innerStream) => {
+      if (isClosed) {
+        throw new Error("Cannot add inner stream: outer stream is closed");
+      }
+      innerStreamReaders.push(innerStream.getReader());
+    },
+    close: () => {
+      isClosed = true;
+      if (innerStreamReaders.length === 0) {
+        controller == null ? void 0 : controller.close();
+      }
+    }
+  };
+}
+function mergeStreams(stream1, stream2) {
+  const reader1 = stream1.getReader();
+  const reader2 = stream2.getReader();
+  let lastRead1 = void 0;
+  let lastRead2 = void 0;
+  let stream1Done = false;
+  let stream2Done = false;
+  async function readStream1(controller) {
+    try {
+      if (lastRead1 == null) {
+        lastRead1 = reader1.read();
+      }
+      const result2 = await lastRead1;
+      lastRead1 = void 0;
+      if (!result2.done) {
+        controller.enqueue(result2.value);
+      } else {
+        controller.close();
+      }
+    } catch (error) {
+      controller.error(error);
+    }
+  }
+  async function readStream2(controller) {
+    try {
+      if (lastRead2 == null) {
+        lastRead2 = reader2.read();
+      }
+      const result2 = await lastRead2;
+      lastRead2 = void 0;
+      if (!result2.done) {
+        controller.enqueue(result2.value);
+      } else {
+        controller.close();
+      }
+    } catch (error) {
+      controller.error(error);
+    }
+  }
+  return new ReadableStream({
+    async pull(controller) {
+      try {
+        if (stream1Done) {
+          await readStream2(controller);
+          return;
+        }
+        if (stream2Done) {
+          await readStream1(controller);
+          return;
+        }
+        if (lastRead1 == null) {
+          lastRead1 = reader1.read();
+        }
+        if (lastRead2 == null) {
+          lastRead2 = reader2.read();
+        }
+        const { result: result2, reader } = await Promise.race([
+          lastRead1.then((result22) => ({ result: result22, reader: reader1 })),
+          lastRead2.then((result22) => ({ result: result22, reader: reader2 }))
+        ]);
+        if (!result2.done) {
+          controller.enqueue(result2.value);
+        }
+        if (reader === reader1) {
+          lastRead1 = void 0;
+          if (result2.done) {
+            await readStream2(controller);
+            stream1Done = true;
+          }
+        } else {
+          lastRead2 = void 0;
+          if (result2.done) {
+            stream2Done = true;
+            await readStream1(controller);
+          }
+        }
+      } catch (error) {
+        controller.error(error);
+      }
+    },
+    cancel() {
+      reader1.cancel();
+      reader2.cancel();
+    }
+  });
+}
+function runToolsTransformation({
+  tools: tools2,
+  generatorStream,
+  toolCallStreaming,
+  tracer,
+  telemetry,
+  abortSignal
+}) {
+  let toolResultsStreamController = null;
+  const toolResultsStream = new ReadableStream({
+    start(controller) {
+      toolResultsStreamController = controller;
+    }
+  });
+  const activeToolCalls = {};
+  const outstandingToolResults = /* @__PURE__ */ new Set();
+  let canClose = false;
+  let finishChunk = void 0;
+  function attemptClose() {
+    if (canClose && outstandingToolResults.size === 0) {
+      if (finishChunk != null) {
+        toolResultsStreamController.enqueue(finishChunk);
+      }
+      toolResultsStreamController.close();
+    }
+  }
+  const forwardStream = new TransformStream({
+    transform(chunk, controller) {
+      const chunkType = chunk.type;
+      switch (chunkType) {
+        case "text-delta":
+        case "response-metadata":
+        case "error": {
+          controller.enqueue(chunk);
+          break;
+        }
+        case "tool-call-delta": {
+          if (toolCallStreaming) {
+            if (!activeToolCalls[chunk.toolCallId]) {
+              controller.enqueue({
+                type: "tool-call-streaming-start",
+                toolCallId: chunk.toolCallId,
+                toolName: chunk.toolName
+              });
+              activeToolCalls[chunk.toolCallId] = true;
+            }
+            controller.enqueue({
+              type: "tool-call-delta",
+              toolCallId: chunk.toolCallId,
+              toolName: chunk.toolName,
+              argsTextDelta: chunk.argsTextDelta
+            });
+          }
+          break;
+        }
+        case "tool-call": {
+          const toolName2 = chunk.toolName;
+          if (tools2 == null) {
+            toolResultsStreamController.enqueue({
+              type: "error",
+              error: new NoSuchToolError({ toolName: chunk.toolName })
+            });
+            break;
+          }
+          const tool2 = tools2[toolName2];
+          if (tool2 == null) {
+            toolResultsStreamController.enqueue({
+              type: "error",
+              error: new NoSuchToolError({
+                toolName: chunk.toolName,
+                availableTools: Object.keys(tools2)
+              })
+            });
+            break;
+          }
+          try {
+            const toolCall = parseToolCall({
+              toolCall: chunk,
+              tools: tools2
+            });
+            controller.enqueue(toolCall);
+            if (tool2.execute != null) {
+              const toolExecutionId = generateId();
+              outstandingToolResults.add(toolExecutionId);
+              recordSpan({
+                name: "ai.toolCall",
+                attributes: selectTelemetryAttributes({
+                  telemetry,
+                  attributes: {
+                    ...assembleOperationName({
+                      operationId: "ai.toolCall",
+                      telemetry
+                    }),
+                    "ai.toolCall.name": toolCall.toolName,
+                    "ai.toolCall.id": toolCall.toolCallId,
+                    "ai.toolCall.args": {
+                      output: () => JSON.stringify(toolCall.args)
+                    }
+                  }
+                }),
+                tracer,
+                fn: async (span) => tool2.execute(toolCall.args, { abortSignal }).then(
+                  (result2) => {
+                    toolResultsStreamController.enqueue({
+                      ...toolCall,
+                      type: "tool-result",
+                      result: result2
+                    });
+                    outstandingToolResults.delete(toolExecutionId);
+                    attemptClose();
+                    try {
+                      span.setAttributes(
+                        selectTelemetryAttributes({
+                          telemetry,
+                          attributes: {
+                            "ai.toolCall.result": {
+                              output: () => JSON.stringify(result2)
+                            }
+                          }
+                        })
+                      );
+                    } catch (ignored) {
+                    }
+                  },
+                  (error) => {
+                    toolResultsStreamController.enqueue({
+                      type: "error",
+                      error
+                    });
+                    outstandingToolResults.delete(toolExecutionId);
+                    attemptClose();
+                  }
+                )
+              });
+            }
+          } catch (error) {
+            toolResultsStreamController.enqueue({
+              type: "error",
+              error
+            });
+          }
+          break;
+        }
+        case "finish": {
+          finishChunk = {
+            type: "finish",
+            finishReason: chunk.finishReason,
+            logprobs: chunk.logprobs,
+            usage: calculateLanguageModelUsage(chunk.usage),
+            experimental_providerMetadata: chunk.providerMetadata
+          };
+          break;
+        }
+        default: {
+          const _exhaustiveCheck = chunkType;
+          throw new Error(`Unhandled chunk type: ${_exhaustiveCheck}`);
+        }
+      }
+    },
+    flush() {
+      canClose = true;
+      attemptClose();
+    }
+  });
+  return new ReadableStream({
+    async start(controller) {
+      return Promise.all([
+        generatorStream.pipeThrough(forwardStream).pipeTo(
+          new WritableStream({
+            write(chunk) {
+              controller.enqueue(chunk);
+            },
+            close() {
+            }
+          })
+        ),
+        toolResultsStream.pipeTo(
+          new WritableStream({
+            write(chunk) {
+              controller.enqueue(chunk);
+            },
+            close() {
+              controller.close();
+            }
+          })
+        )
+      ]);
+    }
+  });
+}
+var originalGenerateId4 = createIdGenerator({ prefix: "aitxt", size: 24 });
+async function streamText({
+  model,
+  tools: tools2,
+  toolChoice,
+  system,
+  prompt: prompt2,
+  messages,
+  maxRetries,
+  abortSignal,
+  headers,
+  maxToolRoundtrips = 0,
+  maxSteps = maxToolRoundtrips != null ? maxToolRoundtrips + 1 : 1,
+  experimental_continueSteps: continueSteps = false,
+  experimental_telemetry: telemetry,
+  experimental_providerMetadata: providerMetadata,
+  experimental_toolCallStreaming: toolCallStreaming = false,
+  experimental_activeTools: activeTools,
+  onChunk,
+  onFinish,
+  onStepFinish,
+  _internal: {
+    now: now2 = now,
+    generateId: generateId3 = originalGenerateId4,
+    currentDate = () => /* @__PURE__ */ new Date()
+  } = {},
+  ...settings
+}) {
+  if (maxSteps < 1) {
+    throw new InvalidArgumentError({
+      parameter: "maxSteps",
+      value: maxSteps,
+      message: "maxSteps must be at least 1"
+    });
+  }
+  const baseTelemetryAttributes = getBaseTelemetryAttributes({
+    model,
+    telemetry,
+    headers,
+    settings: { ...settings, maxRetries }
+  });
+  const tracer = getTracer(telemetry);
+  const initialPrompt = standardizePrompt({
+    prompt: { system, prompt: prompt2, messages },
+    tools: tools2
+  });
+  return recordSpan({
+    name: "ai.streamText",
+    attributes: selectTelemetryAttributes({
+      telemetry,
+      attributes: {
+        ...assembleOperationName({ operationId: "ai.streamText", telemetry }),
+        ...baseTelemetryAttributes,
+        // specific settings that only make sense on the outer level:
+        "ai.prompt": {
+          input: () => JSON.stringify({ system, prompt: prompt2, messages })
+        },
+        "ai.settings.maxSteps": maxSteps
+      }
+    }),
+    tracer,
+    endWhenDone: false,
+    fn: async (rootSpan) => {
+      const retry = retryWithExponentialBackoff({ maxRetries });
+      const startStep = async ({
+        responseMessages
+      }) => {
+        const promptFormat = responseMessages.length === 0 ? initialPrompt.type : "messages";
+        const promptMessages = await convertToLanguageModelPrompt({
+          prompt: {
+            type: promptFormat,
+            system: initialPrompt.system,
+            messages: [...initialPrompt.messages, ...responseMessages]
+          },
+          modelSupportsImageUrls: model.supportsImageUrls,
+          modelSupportsUrl: model.supportsUrl
+        });
+        const mode = {
+          type: "regular",
+          ...prepareToolsAndToolChoice({ tools: tools2, toolChoice, activeTools })
+        };
+        const {
+          result: { stream: stream2, warnings: warnings2, rawResponse: rawResponse2, request: request2 },
+          doStreamSpan: doStreamSpan2,
+          startTimestampMs: startTimestampMs2
+        } = await retry(
+          () => recordSpan({
+            name: "ai.streamText.doStream",
+            attributes: selectTelemetryAttributes({
+              telemetry,
+              attributes: {
+                ...assembleOperationName({
+                  operationId: "ai.streamText.doStream",
+                  telemetry
+                }),
+                ...baseTelemetryAttributes,
+                "ai.prompt.format": {
+                  input: () => promptFormat
+                },
+                "ai.prompt.messages": {
+                  input: () => JSON.stringify(promptMessages)
+                },
+                "ai.prompt.tools": {
+                  // convert the language model level tools:
+                  input: () => {
+                    var _a112;
+                    return (_a112 = mode.tools) == null ? void 0 : _a112.map((tool2) => JSON.stringify(tool2));
+                  }
+                },
+                "ai.prompt.toolChoice": {
+                  input: () => mode.toolChoice != null ? JSON.stringify(mode.toolChoice) : void 0
+                },
+                // standardized gen-ai llm span attributes:
+                "gen_ai.system": model.provider,
+                "gen_ai.request.model": model.modelId,
+                "gen_ai.request.frequency_penalty": settings.frequencyPenalty,
+                "gen_ai.request.max_tokens": settings.maxTokens,
+                "gen_ai.request.presence_penalty": settings.presencePenalty,
+                "gen_ai.request.stop_sequences": settings.stopSequences,
+                "gen_ai.request.temperature": settings.temperature,
+                "gen_ai.request.top_k": settings.topK,
+                "gen_ai.request.top_p": settings.topP
+              }
+            }),
+            tracer,
+            endWhenDone: false,
+            fn: async (doStreamSpan3) => ({
+              startTimestampMs: now2(),
+              // get before the call
+              doStreamSpan: doStreamSpan3,
+              result: await model.doStream({
+                mode,
+                ...prepareCallSettings(settings),
+                inputFormat: promptFormat,
+                prompt: promptMessages,
+                providerMetadata,
+                abortSignal,
+                headers
+              })
+            })
+          })
+        );
+        return {
+          result: {
+            stream: runToolsTransformation({
+              tools: tools2,
+              generatorStream: stream2,
+              toolCallStreaming,
+              tracer,
+              telemetry,
+              abortSignal
+            }),
+            warnings: warnings2,
+            request: request2 != null ? request2 : {},
+            rawResponse: rawResponse2
+          },
+          doStreamSpan: doStreamSpan2,
+          startTimestampMs: startTimestampMs2
+        };
+      };
+      const {
+        result: { stream, warnings, rawResponse, request },
+        doStreamSpan,
+        startTimestampMs
+      } = await startStep({ responseMessages: [] });
+      return new DefaultStreamTextResult({
+        stream,
+        warnings,
+        rawResponse,
+        request,
+        onChunk,
+        onFinish,
+        onStepFinish,
+        rootSpan,
+        doStreamSpan,
+        telemetry,
+        startTimestampMs,
+        maxSteps,
+        continueSteps,
+        startStep,
+        modelId: model.modelId,
+        now: now2,
+        currentDate,
+        generateId: generateId3,
+        tools: tools2
+      });
+    }
+  });
+}
+var DefaultStreamTextResult = class {
+  constructor({
+    stream,
+    warnings,
+    rawResponse,
+    request,
+    onChunk,
+    onFinish,
+    onStepFinish,
+    rootSpan,
+    doStreamSpan,
+    telemetry,
+    startTimestampMs,
+    maxSteps,
+    continueSteps,
+    startStep,
+    modelId,
+    now: now2,
+    currentDate,
+    generateId: generateId3,
+    tools: tools2
+  }) {
+    this.warnings = warnings;
+    this.rawResponse = rawResponse;
+    const { resolve: resolveUsage, promise: usagePromise } = createResolvablePromise();
+    this.usage = usagePromise;
+    const { resolve: resolveFinishReason, promise: finishReasonPromise } = createResolvablePromise();
+    this.finishReason = finishReasonPromise;
+    const { resolve: resolveText, promise: textPromise } = createResolvablePromise();
+    this.text = textPromise;
+    const { resolve: resolveToolCalls, promise: toolCallsPromise } = createResolvablePromise();
+    this.toolCalls = toolCallsPromise;
+    const { resolve: resolveToolResults, promise: toolResultsPromise } = createResolvablePromise();
+    this.toolResults = toolResultsPromise;
+    const { resolve: resolveSteps, promise: stepsPromise } = createResolvablePromise();
+    this.steps = stepsPromise;
+    const {
+      resolve: resolveProviderMetadata,
+      promise: providerMetadataPromise
+    } = createResolvablePromise();
+    this.experimental_providerMetadata = providerMetadataPromise;
+    const { resolve: resolveRequest, promise: requestPromise } = createResolvablePromise();
+    this.request = requestPromise;
+    const { resolve: resolveResponse, promise: responsePromise } = createResolvablePromise();
+    this.response = responsePromise;
+    const {
+      resolve: resolveResponseMessages,
+      promise: responseMessagesPromise
+    } = createResolvablePromise();
+    this.responseMessages = responseMessagesPromise;
+    const {
+      stream: stitchableStream,
+      addStream,
+      close: closeStitchableStream
+    } = createStitchableStream();
+    this.originalStream = stitchableStream;
+    const stepResults = [];
+    const self2 = this;
+    function addStepStream({
+      stream: stream2,
+      startTimestamp,
+      doStreamSpan: doStreamSpan2,
+      currentStep,
+      responseMessages,
+      usage = {
+        promptTokens: 0,
+        completionTokens: 0,
+        totalTokens: 0
+      },
+      stepType,
+      previousStepText = "",
+      stepRequest,
+      hasLeadingWhitespace
+    }) {
+      const stepToolCalls = [];
+      const stepToolResults = [];
+      let stepFinishReason = "unknown";
+      let stepUsage = {
+        promptTokens: 0,
+        completionTokens: 0,
+        totalTokens: 0
+      };
+      let stepProviderMetadata;
+      let stepFirstChunk = true;
+      let stepText = "";
+      let fullStepText = stepType === "continue" ? previousStepText : "";
+      let stepLogProbs;
+      let stepResponse = {
+        id: generateId3(),
+        timestamp: currentDate(),
+        modelId
+      };
+      let chunkBuffer = "";
+      let chunkTextPublished = false;
+      let inWhitespacePrefix = true;
+      let hasWhitespaceSuffix = false;
+      async function publishTextChunk({
+        controller,
+        chunk
+      }) {
+        controller.enqueue(chunk);
+        stepText += chunk.textDelta;
+        fullStepText += chunk.textDelta;
+        chunkTextPublished = true;
+        hasWhitespaceSuffix = chunk.textDelta.trimEnd() !== chunk.textDelta;
+        await (onChunk == null ? void 0 : onChunk({ chunk }));
+      }
+      addStream(
+        stream2.pipeThrough(
+          new TransformStream({
+            async transform(chunk, controller) {
+              var _a112, _b2, _c2;
+              if (stepFirstChunk) {
+                const msToFirstChunk = now2() - startTimestamp;
+                stepFirstChunk = false;
+                doStreamSpan2.addEvent("ai.stream.firstChunk", {
+                  "ai.response.msToFirstChunk": msToFirstChunk,
+                  // deprecated:
+                  "ai.stream.msToFirstChunk": msToFirstChunk
+                });
+                doStreamSpan2.setAttributes({
+                  "ai.response.msToFirstChunk": msToFirstChunk,
+                  // deprecated:
+                  "ai.stream.msToFirstChunk": msToFirstChunk
+                });
+              }
+              if (chunk.type === "text-delta" && chunk.textDelta.length === 0) {
+                return;
+              }
+              const chunkType = chunk.type;
+              switch (chunkType) {
+                case "text-delta": {
+                  if (continueSteps) {
+                    const trimmedChunkText = inWhitespacePrefix && hasLeadingWhitespace ? chunk.textDelta.trimStart() : chunk.textDelta;
+                    if (trimmedChunkText.length === 0) {
+                      break;
+                    }
+                    inWhitespacePrefix = false;
+                    chunkBuffer += trimmedChunkText;
+                    const split = splitOnLastWhitespace(chunkBuffer);
+                    if (split != null) {
+                      chunkBuffer = split.suffix;
+                      await publishTextChunk({
+                        controller,
+                        chunk: {
+                          type: "text-delta",
+                          textDelta: split.prefix + split.whitespace
+                        }
+                      });
+                    }
+                  } else {
+                    await publishTextChunk({ controller, chunk });
+                  }
+                  break;
+                }
+                case "tool-call": {
+                  controller.enqueue(chunk);
+                  stepToolCalls.push(chunk);
+                  await (onChunk == null ? void 0 : onChunk({ chunk }));
+                  break;
+                }
+                case "tool-result": {
+                  controller.enqueue(chunk);
+                  stepToolResults.push(chunk);
+                  await (onChunk == null ? void 0 : onChunk({ chunk }));
+                  break;
+                }
+                case "response-metadata": {
+                  stepResponse = {
+                    id: (_a112 = chunk.id) != null ? _a112 : stepResponse.id,
+                    timestamp: (_b2 = chunk.timestamp) != null ? _b2 : stepResponse.timestamp,
+                    modelId: (_c2 = chunk.modelId) != null ? _c2 : stepResponse.modelId
+                  };
+                  break;
+                }
+                case "finish": {
+                  stepUsage = chunk.usage;
+                  stepFinishReason = chunk.finishReason;
+                  stepProviderMetadata = chunk.experimental_providerMetadata;
+                  stepLogProbs = chunk.logprobs;
+                  const msToFinish = now2() - startTimestamp;
+                  doStreamSpan2.addEvent("ai.stream.finish");
+                  doStreamSpan2.setAttributes({
+                    "ai.response.msToFinish": msToFinish,
+                    "ai.response.avgCompletionTokensPerSecond": 1e3 * stepUsage.completionTokens / msToFinish
+                  });
+                  break;
+                }
+                case "tool-call-streaming-start":
+                case "tool-call-delta": {
+                  controller.enqueue(chunk);
+                  await (onChunk == null ? void 0 : onChunk({ chunk }));
+                  break;
+                }
+                case "error": {
+                  controller.enqueue(chunk);
+                  stepFinishReason = "error";
+                  break;
+                }
+                default: {
+                  const exhaustiveCheck = chunkType;
+                  throw new Error(`Unknown chunk type: ${exhaustiveCheck}`);
+                }
+              }
+            },
+            // invoke onFinish callback and resolve toolResults promise when the stream is about to close:
+            async flush(controller) {
+              var _a112;
+              const stepToolCallsJson = stepToolCalls.length > 0 ? JSON.stringify(stepToolCalls) : void 0;
+              let nextStepType = "done";
+              if (currentStep + 1 < maxSteps) {
+                if (continueSteps && stepFinishReason === "length" && // only use continue when there are no tool calls:
+                stepToolCalls.length === 0) {
+                  nextStepType = "continue";
+                } else if (
+                  // there are tool calls:
+                  stepToolCalls.length > 0 && // all current tool calls have results:
+                  stepToolResults.length === stepToolCalls.length
+                ) {
+                  nextStepType = "tool-result";
+                }
+              }
+              if (continueSteps && chunkBuffer.length > 0 && (nextStepType !== "continue" || // when the next step is a regular step, publish the buffer
+              stepType === "continue" && !chunkTextPublished)) {
+                await publishTextChunk({
+                  controller,
+                  chunk: {
+                    type: "text-delta",
+                    textDelta: chunkBuffer
+                  }
+                });
+                chunkBuffer = "";
+              }
+              try {
+                doStreamSpan2.setAttributes(
+                  selectTelemetryAttributes({
+                    telemetry,
+                    attributes: {
+                      "ai.response.finishReason": stepFinishReason,
+                      "ai.response.text": { output: () => stepText },
+                      "ai.response.toolCalls": {
+                        output: () => stepToolCallsJson
+                      },
+                      "ai.response.id": stepResponse.id,
+                      "ai.response.model": stepResponse.modelId,
+                      "ai.response.timestamp": stepResponse.timestamp.toISOString(),
+                      "ai.usage.promptTokens": stepUsage.promptTokens,
+                      "ai.usage.completionTokens": stepUsage.completionTokens,
+                      // deprecated
+                      "ai.finishReason": stepFinishReason,
+                      "ai.result.text": { output: () => stepText },
+                      "ai.result.toolCalls": {
+                        output: () => stepToolCallsJson
+                      },
+                      // standardized gen-ai llm span attributes:
+                      "gen_ai.response.finish_reasons": [stepFinishReason],
+                      "gen_ai.response.id": stepResponse.id,
+                      "gen_ai.response.model": stepResponse.modelId,
+                      "gen_ai.usage.input_tokens": stepUsage.promptTokens,
+                      "gen_ai.usage.output_tokens": stepUsage.completionTokens
+                    }
+                  })
+                );
+              } catch (error) {
+              } finally {
+                doStreamSpan2.end();
+              }
+              controller.enqueue({
+                type: "step-finish",
+                finishReason: stepFinishReason,
+                usage: stepUsage,
+                experimental_providerMetadata: stepProviderMetadata,
+                logprobs: stepLogProbs,
+                response: {
+                  ...stepResponse
+                },
+                isContinued: nextStepType === "continue"
+              });
+              if (stepType === "continue") {
+                const lastMessage = responseMessages[responseMessages.length - 1];
+                if (typeof lastMessage.content === "string") {
+                  lastMessage.content += stepText;
+                } else {
+                  lastMessage.content.push({
+                    text: stepText,
+                    type: "text"
+                  });
+                }
+              } else {
+                responseMessages.push(
+                  ...toResponseMessages({
+                    text: stepText,
+                    tools: tools2 != null ? tools2 : {},
+                    toolCalls: stepToolCalls,
+                    toolResults: stepToolResults
+                  })
+                );
+              }
+              const currentStepResult = {
+                stepType,
+                text: stepText,
+                toolCalls: stepToolCalls,
+                toolResults: stepToolResults,
+                finishReason: stepFinishReason,
+                usage: stepUsage,
+                warnings: self2.warnings,
+                logprobs: stepLogProbs,
+                request: stepRequest,
+                rawResponse: self2.rawResponse,
+                response: {
+                  ...stepResponse,
+                  headers: (_a112 = self2.rawResponse) == null ? void 0 : _a112.headers,
+                  // deep clone msgs to avoid mutating past messages in multi-step:
+                  messages: JSON.parse(JSON.stringify(responseMessages))
+                },
+                experimental_providerMetadata: stepProviderMetadata,
+                isContinued: nextStepType === "continue"
+              };
+              stepResults.push(currentStepResult);
+              await (onStepFinish == null ? void 0 : onStepFinish(currentStepResult));
+              const combinedUsage = {
+                promptTokens: usage.promptTokens + stepUsage.promptTokens,
+                completionTokens: usage.completionTokens + stepUsage.completionTokens,
+                totalTokens: usage.totalTokens + stepUsage.totalTokens
+              };
+              if (nextStepType !== "done") {
+                const {
+                  result: result2,
+                  doStreamSpan: doStreamSpan3,
+                  startTimestampMs: startTimestamp2
+                } = await startStep({ responseMessages });
+                self2.warnings = result2.warnings;
+                self2.rawResponse = result2.rawResponse;
+                addStepStream({
+                  stream: result2.stream,
+                  startTimestamp: startTimestamp2,
+                  doStreamSpan: doStreamSpan3,
+                  currentStep: currentStep + 1,
+                  responseMessages,
+                  usage: combinedUsage,
+                  stepType: nextStepType,
+                  previousStepText: fullStepText,
+                  stepRequest: result2.request,
+                  hasLeadingWhitespace: hasWhitespaceSuffix
+                });
+                return;
+              }
+              try {
+                controller.enqueue({
+                  type: "finish",
+                  finishReason: stepFinishReason,
+                  usage: combinedUsage,
+                  experimental_providerMetadata: stepProviderMetadata,
+                  logprobs: stepLogProbs,
+                  response: {
+                    ...stepResponse
+                  }
+                });
+                closeStitchableStream();
+                rootSpan.setAttributes(
+                  selectTelemetryAttributes({
+                    telemetry,
+                    attributes: {
+                      "ai.response.finishReason": stepFinishReason,
+                      "ai.response.text": { output: () => fullStepText },
+                      "ai.response.toolCalls": {
+                        output: () => stepToolCallsJson
+                      },
+                      "ai.usage.promptTokens": combinedUsage.promptTokens,
+                      "ai.usage.completionTokens": combinedUsage.completionTokens,
+                      // deprecated
+                      "ai.finishReason": stepFinishReason,
+                      "ai.result.text": { output: () => fullStepText },
+                      "ai.result.toolCalls": {
+                        output: () => stepToolCallsJson
+                      }
+                    }
+                  })
+                );
+                resolveUsage(combinedUsage);
+                resolveFinishReason(stepFinishReason);
+                resolveText(fullStepText);
+                resolveToolCalls(stepToolCalls);
+                resolveProviderMetadata(stepProviderMetadata);
+                resolveToolResults(stepToolResults);
+                resolveRequest(stepRequest);
+                resolveResponse({
+                  ...stepResponse,
+                  headers: rawResponse == null ? void 0 : rawResponse.headers,
+                  messages: responseMessages
+                });
+                resolveSteps(stepResults);
+                resolveResponseMessages(responseMessages);
+                await (onFinish == null ? void 0 : onFinish({
+                  finishReason: stepFinishReason,
+                  logprobs: stepLogProbs,
+                  usage: combinedUsage,
+                  text: fullStepText,
+                  toolCalls: stepToolCalls,
+                  // The tool results are inferred as a never[] type, because they are
+                  // optional and the execute method with an inferred result type is
+                  // optional as well. Therefore we need to cast the toolResults to any.
+                  // The type exposed to the users will be correctly inferred.
+                  toolResults: stepToolResults,
+                  request: stepRequest,
+                  rawResponse,
+                  response: {
+                    ...stepResponse,
+                    headers: rawResponse == null ? void 0 : rawResponse.headers,
+                    messages: responseMessages
+                  },
+                  warnings,
+                  experimental_providerMetadata: stepProviderMetadata,
+                  steps: stepResults,
+                  responseMessages
+                }));
+              } catch (error) {
+                controller.error(error);
+              } finally {
+                rootSpan.end();
+              }
+            }
+          })
+        )
+      );
+    }
+    addStepStream({
+      stream,
+      startTimestamp: startTimestampMs,
+      doStreamSpan,
+      currentStep: 0,
+      responseMessages: [],
+      usage: void 0,
+      stepType: "initial",
+      stepRequest: request,
+      hasLeadingWhitespace: false
+    });
+  }
+  /**
+  Split out a new stream from the original stream.
+  The original stream is replaced to allow for further splitting,
+  since we do not know how many times the stream will be split.
+  
+  Note: this leads to buffering the stream content on the server.
+  However, the LLM results are expected to be small enough to not cause issues.
+     */
+  teeStream() {
+    const [stream1, stream2] = this.originalStream.tee();
+    this.originalStream = stream2;
+    return stream1;
+  }
+  get textStream() {
+    return createAsyncIterableStream(this.teeStream(), {
+      transform(chunk, controller) {
+        if (chunk.type === "text-delta") {
+          controller.enqueue(chunk.textDelta);
+        } else if (chunk.type === "error") {
+          controller.error(chunk.error);
+        }
+      }
+    });
+  }
+  get fullStream() {
+    return createAsyncIterableStream(this.teeStream(), {
+      transform(chunk, controller) {
+        controller.enqueue(chunk);
+      }
+    });
+  }
+  toAIStream(callbacks = {}) {
+    return this.toDataStreamInternal({ callbacks });
+  }
+  toDataStreamInternal({
+    callbacks = {},
+    getErrorMessage: getErrorMessage3 = () => "",
+    // mask error messages for safety by default
+    sendUsage = true
+  } = {}) {
+    let aggregatedResponse = "";
+    const callbackTransformer = new TransformStream({
+      async start() {
+        if (callbacks.onStart)
+          await callbacks.onStart();
+      },
+      async transform(chunk, controller) {
+        controller.enqueue(chunk);
+        if (chunk.type === "text-delta") {
+          const textDelta = chunk.textDelta;
+          aggregatedResponse += textDelta;
+          if (callbacks.onToken)
+            await callbacks.onToken(textDelta);
+          if (callbacks.onText)
+            await callbacks.onText(textDelta);
+        }
+      },
+      async flush() {
+        if (callbacks.onCompletion)
+          await callbacks.onCompletion(aggregatedResponse);
+        if (callbacks.onFinal)
+          await callbacks.onFinal(aggregatedResponse);
+      }
+    });
+    const streamPartsTransformer = new TransformStream({
+      transform: async (chunk, controller) => {
+        const chunkType = chunk.type;
+        switch (chunkType) {
+          case "text-delta": {
+            controller.enqueue(formatStreamPart("text", chunk.textDelta));
+            break;
+          }
+          case "tool-call-streaming-start": {
+            controller.enqueue(
+              formatStreamPart("tool_call_streaming_start", {
+                toolCallId: chunk.toolCallId,
+                toolName: chunk.toolName
+              })
+            );
+            break;
+          }
+          case "tool-call-delta": {
+            controller.enqueue(
+              formatStreamPart("tool_call_delta", {
+                toolCallId: chunk.toolCallId,
+                argsTextDelta: chunk.argsTextDelta
+              })
+            );
+            break;
+          }
+          case "tool-call": {
+            controller.enqueue(
+              formatStreamPart("tool_call", {
+                toolCallId: chunk.toolCallId,
+                toolName: chunk.toolName,
+                args: chunk.args
+              })
+            );
+            break;
+          }
+          case "tool-result": {
+            controller.enqueue(
+              formatStreamPart("tool_result", {
+                toolCallId: chunk.toolCallId,
+                result: chunk.result
+              })
+            );
+            break;
+          }
+          case "error": {
+            controller.enqueue(
+              formatStreamPart("error", getErrorMessage3(chunk.error))
+            );
+            break;
+          }
+          case "step-finish": {
+            controller.enqueue(
+              formatStreamPart("finish_step", {
+                finishReason: chunk.finishReason,
+                usage: sendUsage ? {
+                  promptTokens: chunk.usage.promptTokens,
+                  completionTokens: chunk.usage.completionTokens
+                } : void 0,
+                isContinued: chunk.isContinued
+              })
+            );
+            break;
+          }
+          case "finish": {
+            controller.enqueue(
+              formatStreamPart("finish_message", {
+                finishReason: chunk.finishReason,
+                usage: sendUsage ? {
+                  promptTokens: chunk.usage.promptTokens,
+                  completionTokens: chunk.usage.completionTokens
+                } : void 0
+              })
+            );
+            break;
+          }
+          default: {
+            const exhaustiveCheck = chunkType;
+            throw new Error(`Unknown chunk type: ${exhaustiveCheck}`);
+          }
+        }
+      }
+    });
+    return this.fullStream.pipeThrough(callbackTransformer).pipeThrough(streamPartsTransformer).pipeThrough(new TextEncoderStream());
+  }
+  pipeAIStreamToResponse(response, init) {
+    return this.pipeDataStreamToResponse(response, init);
+  }
+  pipeDataStreamToResponse(response, options2) {
+    const init = options2 == null ? void 0 : "init" in options2 ? options2.init : {
+      headers: "headers" in options2 ? options2.headers : void 0,
+      status: "status" in options2 ? options2.status : void 0,
+      statusText: "statusText" in options2 ? options2.statusText : void 0
+    };
+    const data = options2 == null ? void 0 : "data" in options2 ? options2.data : void 0;
+    const getErrorMessage3 = options2 == null ? void 0 : "getErrorMessage" in options2 ? options2.getErrorMessage : void 0;
+    const sendUsage = options2 == null ? void 0 : "sendUsage" in options2 ? options2.sendUsage : void 0;
+    writeToServerResponse({
+      response,
+      status: init == null ? void 0 : init.status,
+      statusText: init == null ? void 0 : init.statusText,
+      headers: prepareOutgoingHttpHeaders(init, {
+        contentType: "text/plain; charset=utf-8",
+        dataStreamVersion: "v1"
+      }),
+      stream: this.toDataStream({ data, getErrorMessage: getErrorMessage3, sendUsage })
+    });
+  }
+  pipeTextStreamToResponse(response, init) {
+    writeToServerResponse({
+      response,
+      status: init == null ? void 0 : init.status,
+      statusText: init == null ? void 0 : init.statusText,
+      headers: prepareOutgoingHttpHeaders(init, {
+        contentType: "text/plain; charset=utf-8"
+      }),
+      stream: this.textStream.pipeThrough(new TextEncoderStream())
+    });
+  }
+  toAIStreamResponse(options2) {
+    return this.toDataStreamResponse(options2);
+  }
+  toDataStream(options2) {
+    const stream = this.toDataStreamInternal({
+      getErrorMessage: options2 == null ? void 0 : options2.getErrorMessage,
+      sendUsage: options2 == null ? void 0 : options2.sendUsage
+    });
+    return (options2 == null ? void 0 : options2.data) ? mergeStreams(options2 == null ? void 0 : options2.data.stream, stream) : stream;
+  }
+  toDataStreamResponse(options2) {
+    var _a112;
+    const init = options2 == null ? void 0 : "init" in options2 ? options2.init : {
+      headers: "headers" in options2 ? options2.headers : void 0,
+      status: "status" in options2 ? options2.status : void 0,
+      statusText: "statusText" in options2 ? options2.statusText : void 0
+    };
+    const data = options2 == null ? void 0 : "data" in options2 ? options2.data : void 0;
+    const getErrorMessage3 = options2 == null ? void 0 : "getErrorMessage" in options2 ? options2.getErrorMessage : void 0;
+    const sendUsage = options2 == null ? void 0 : "sendUsage" in options2 ? options2.sendUsage : void 0;
+    return new Response(
+      this.toDataStream({ data, getErrorMessage: getErrorMessage3, sendUsage }),
+      {
+        status: (_a112 = init == null ? void 0 : init.status) != null ? _a112 : 200,
+        statusText: init == null ? void 0 : init.statusText,
+        headers: prepareResponseHeaders(init, {
+          contentType: "text/plain; charset=utf-8",
+          dataStreamVersion: "v1"
+        })
+      }
+    );
+  }
+  toTextStreamResponse(init) {
+    var _a112;
+    return new Response(this.textStream.pipeThrough(new TextEncoderStream()), {
+      status: (_a112 = init == null ? void 0 : init.status) != null ? _a112 : 200,
+      headers: prepareResponseHeaders(init, {
+        contentType: "text/plain; charset=utf-8"
+      })
+    });
+  }
+};
+var experimental_wrapLanguageModel = ({
+  model,
+  middleware: { transformParams, wrapGenerate, wrapStream },
+  modelId,
+  providerId
+}) => {
+  async function doTransform({
+    params,
+    type: type2
+  }) {
+    return transformParams ? await transformParams({ params, type: type2 }) : params;
+  }
+  return {
+    specificationVersion: "v1",
+    provider: providerId != null ? providerId : model.provider,
+    modelId: modelId != null ? modelId : model.modelId,
+    defaultObjectGenerationMode: model.defaultObjectGenerationMode,
+    supportsImageUrls: model.supportsImageUrls,
+    supportsUrl: model.supportsUrl,
+    supportsStructuredOutputs: model.supportsStructuredOutputs,
+    async doGenerate(params) {
+      const transformedParams = await doTransform({ params, type: "generate" });
+      const doGenerate = async () => model.doGenerate(transformedParams);
+      return wrapGenerate ? wrapGenerate({ doGenerate, params: transformedParams, model }) : doGenerate();
+    },
+    async doStream(params) {
+      const transformedParams = await doTransform({ params, type: "stream" });
+      const doStream = async () => model.doStream(transformedParams);
+      return wrapStream ? wrapStream({ doStream, params: transformedParams, model }) : doStream();
+    }
+  };
+};
+function tool(tool2) {
+  return tool2;
+}
+function createCallbacksTransformer(cb) {
+  const textEncoder = new TextEncoder();
+  let aggregatedResponse = "";
+  const callbacks = cb || {};
+  return new TransformStream({
+    async start() {
+      if (callbacks.onStart)
+        await callbacks.onStart();
+    },
+    async transform(message, controller) {
+      const content = typeof message === "string" ? message : message.content;
+      controller.enqueue(textEncoder.encode(content));
+      aggregatedResponse += content;
+      if (callbacks.onToken)
+        await callbacks.onToken(content);
+      if (callbacks.onText && typeof message === "string") {
+        await callbacks.onText(message);
+      }
+    },
+    async flush() {
+      const isOpenAICallbacks = isOfTypeOpenAIStreamCallbacks(callbacks);
+      if (callbacks.onCompletion) {
+        await callbacks.onCompletion(aggregatedResponse);
+      }
+      if (callbacks.onFinal && !isOpenAICallbacks) {
+        await callbacks.onFinal(aggregatedResponse);
+      }
+    }
+  });
+}
+function isOfTypeOpenAIStreamCallbacks(callbacks) {
+  return "experimental_onFunctionCall" in callbacks;
+}
+function trimStartOfStreamHelper() {
+  let isStreamStart = true;
+  return (text) => {
+    if (isStreamStart) {
+      text = text.trimStart();
+      if (text)
+        isStreamStart = false;
+    }
+    return text;
+  };
+}
+function createStreamDataTransformer() {
+  const encoder = new TextEncoder();
+  const decoder = new TextDecoder();
+  return new TransformStream({
+    transform: async (chunk, controller) => {
+      const message = decoder.decode(chunk);
+      controller.enqueue(encoder.encode(formatStreamPart("text", message)));
+    }
+  });
+}
+new TextDecoder("utf-8");
+var langchain_adapter_exports = {};
+__export(langchain_adapter_exports, {
+  toAIStream: () => toAIStream,
+  toDataStream: () => toDataStream,
+  toDataStreamResponse: () => toDataStreamResponse
+});
+function toAIStream(stream, callbacks) {
+  return toDataStream(stream, callbacks);
+}
+function toDataStream(stream, callbacks) {
+  return stream.pipeThrough(
+    new TransformStream({
+      transform: async (value, controller) => {
+        var _a112;
+        if (typeof value === "string") {
+          controller.enqueue(value);
+          return;
+        }
+        if ("event" in value) {
+          if (value.event === "on_chat_model_stream") {
+            forwardAIMessageChunk(
+              (_a112 = value.data) == null ? void 0 : _a112.chunk,
+              controller
+            );
+          }
+          return;
+        }
+        forwardAIMessageChunk(value, controller);
+      }
+    })
+  ).pipeThrough(createCallbacksTransformer(callbacks)).pipeThrough(createStreamDataTransformer());
+}
+function toDataStreamResponse(stream, options2) {
+  var _a112;
+  const dataStream = toDataStream(stream, options2 == null ? void 0 : options2.callbacks);
+  const data = options2 == null ? void 0 : options2.data;
+  const init = options2 == null ? void 0 : options2.init;
+  const responseStream = data ? mergeStreams(data.stream, dataStream) : dataStream;
+  return new Response(responseStream, {
+    status: (_a112 = init == null ? void 0 : init.status) != null ? _a112 : 200,
+    statusText: init == null ? void 0 : init.statusText,
+    headers: prepareResponseHeaders(init, {
+      contentType: "text/plain; charset=utf-8",
+      dataStreamVersion: "v1"
+    })
+  });
+}
+function forwardAIMessageChunk(chunk, controller) {
+  if (typeof chunk.content === "string") {
+    controller.enqueue(chunk.content);
+  } else {
+    const content = chunk.content;
+    for (const item of content) {
+      if (item.type === "text") {
+        controller.enqueue(item.text);
+      }
+    }
   }
 }
-_init2 = __decoratorStart(_b);
-__decorateElement(_init2, 5, "request", _request_dec2, Transcription);
-__decoratorMetadata(_init2, Transcription);
+var llamaindex_adapter_exports = {};
+__export(llamaindex_adapter_exports, {
+  toDataStream: () => toDataStream2,
+  toDataStreamResponse: () => toDataStreamResponse2
+});
+function toDataStream2(stream, callbacks) {
+  return toReadableStream(stream).pipeThrough(createCallbacksTransformer(callbacks)).pipeThrough(createStreamDataTransformer());
+}
+function toDataStreamResponse2(stream, options2 = {}) {
+  var _a112;
+  const { init, data, callbacks } = options2;
+  const dataStream = toDataStream2(stream, callbacks);
+  const responseStream = data ? mergeStreams(data.stream, dataStream) : dataStream;
+  return new Response(responseStream, {
+    status: (_a112 = init == null ? void 0 : init.status) != null ? _a112 : 200,
+    statusText: init == null ? void 0 : init.statusText,
+    headers: prepareResponseHeaders(init, {
+      contentType: "text/plain; charset=utf-8",
+      dataStreamVersion: "v1"
+    })
+  });
+}
+function toReadableStream(res) {
+  const it = res[Symbol.asyncIterator]();
+  const trimStartOfStream = trimStartOfStreamHelper();
+  return new ReadableStream({
+    async pull(controller) {
+      var _a112;
+      const { value, done } = await it.next();
+      if (done) {
+        controller.close();
+        return;
+      }
+      const text = trimStartOfStream((_a112 = value.delta) != null ? _a112 : "");
+      if (text) {
+        controller.enqueue(text);
+      }
+    }
+  });
+}
 function AIMiddleware({ config, models, tools: tools2, activeTools, onStream, toolChoice, messageReferencer }) {
   let startTime2;
   let sendToolCall = false;
@@ -16707,8 +15812,6 @@ tool call will start: ${chunk.toolName}`);
         log.info(`finish ${[...new Set(toolResults.map((i) => i.toolName))]}`);
         onStream?.send(`${messageReferencer.join("")}...
 finish ${[...new Set(toolResults.map((i) => i.toolName))]}`);
-      } else if (text === "") {
-        throw new Error("None text");
       } else {
         activeTools.length > 0 ? logs.tool.time.push(time) : logs.chat.time.push(time);
       }
@@ -17108,6 +16211,7 @@ async function requestChatCompletionsV2(params, onStream, onResult = null) {
       });
       const contentFull = await streamHandler(stream.textStream, (t) => t, onStream, messageReferencer);
       onResult?.(contentFull);
+      await manualRequestTool((await stream.response).messages, params.context);
       return {
         messages: (await stream.response).messages,
         content: contentFull
@@ -17115,6 +16219,7 @@ async function requestChatCompletionsV2(params, onStream, onResult = null) {
     } else {
       const result2 = await generateText(hander_params);
       onResult?.(result2.text);
+      await manualRequestTool(result2.response.messages, params.context);
       return {
         messages: result2.response.messages,
         content: result2.text
@@ -17124,6 +16229,977 @@ async function requestChatCompletionsV2(params, onStream, onResult = null) {
     log.error(error.message, error.stack);
     throw error;
   }
+}
+class OpenAIBase {
+  name = "openai";
+  type = "chat";
+  apikey = (context) => {
+    if (this.type === "tool" && context.FUNCTION_CALL_API_KEY) {
+      return context.FUNCTION_CALL_API_KEY;
+    }
+    const length = context.OPENAI_API_KEY.length;
+    return context.OPENAI_API_KEY[Math.floor(Math.random() * length)];
+  };
+}
+class OpenAI extends OpenAIBase {
+  modelKey = "OPENAI_CHAT_MODEL";
+  static transformModelPerfix = "TRANSFROM-";
+  enable = (context) => {
+    return context.OPENAI_API_KEY.length > 0;
+  };
+  model = (ctx, params) => {
+    return Array.isArray(params?.content) ? ctx.OPENAI_VISION_MODEL : ctx.OPENAI_CHAT_MODEL;
+  };
+  transformModel = (model, context) => {
+    if (context.OPENAI_NEED_TRANSFORM_MODEL.includes(model)) {
+      return `${OpenAI.transformModelPerfix}${model}`;
+    }
+    return model;
+  };
+  base_url = (context) => {
+    if (this.type === "tool" && context.FUNCTION_CALL_BASE) {
+      return context.FUNCTION_CALL_BASE;
+    }
+    return context.OPENAI_API_BASE;
+  };
+  request = async (params, context, onStream) => {
+    const userMessage = params.messages.at(-1);
+    const originalModel = this.model(context, userMessage);
+    const transformedModel = this.transformModel(originalModel, context);
+    const provider = createOpenAI({
+      baseURL: context.OPENAI_API_BASE,
+      apiKey: this.apikey(context),
+      compatibility: "strict",
+      fetch: originalModel === transformedModel ? void 0 : this.fetch
+    });
+    const languageModelV1 = provider.languageModel(transformedModel, void 0);
+    const { messages, onStream: newOnStream } = this.extraHandle(originalModel, params.messages, context, onStream);
+    return requestChatCompletionsV2(await warpLLMParams({
+      model: languageModelV1,
+      messages
+    }, context), newOnStream);
+  };
+  extraHandle = (model, messages, context, onStream) => {
+    if (Object.keys(ENV.DROPS_OPENAI_PARAMS).length > 0) {
+      for (const [models, params] of Object.entries(ENV.DROPS_OPENAI_PARAMS)) {
+        if (models.split(",").includes(model)) {
+          params.includes("stream") && (onStream = null);
+          break;
+        }
+      }
+    }
+    if (ENV.COVER_MESSAGE_ROLE) {
+      for (const [models, roles] of Object.entries(ENV.COVER_MESSAGE_ROLE)) {
+        const [oldRole, newRole] = roles.split(":");
+        if (models.split(",").includes(model)) {
+          messages = messages.map((m) => {
+            m.role = m.role === oldRole ? newRole : m.role;
+            return m;
+          });
+        }
+      }
+    }
+    return { messages, onStream };
+  };
+  fetch = async (url, options2) => {
+    const body = JSON.parse(options2?.body);
+    if (body?.model.startsWith(OpenAI.transformModelPerfix)) {
+      body.model = body.model.slice(OpenAI.transformModelPerfix.length);
+    }
+    return fetch(url, {
+      ...options2,
+      body: JSON.stringify(body)
+    });
+  };
+}
+class Dalle extends (_a10 = OpenAIBase, _request_dec = [Log], _a10) {
+  constructor() {
+    super(...arguments);
+    __publicField(this, "modelKey", "DALL_E_MODEL");
+    __publicField(this, "enable", (context) => {
+      return context.OPENAI_API_KEY.length > 0;
+    });
+    __publicField(this, "model", (ctx) => {
+      return ctx.DALL_E_MODEL;
+    });
+    __publicField(this, "request", __runInitializers(_init, 8, this, async (prompt2, context, extraParams) => {
+      const url = `${context.OPENAI_API_BASE}/images/generations`;
+      const header = {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${this.apikey(context)}`
+      };
+      const body = {
+        prompt: prompt2,
+        n: 1,
+        size: extraParams?.size || context.DALL_E_IMAGE_SIZE,
+        model: extraParams?.model || context.DALL_E_MODEL
+      };
+      if (body.model === "dall-e-3") {
+        body.quality = extraParams?.quality || context.DALL_E_IMAGE_QUALITY;
+        body.style = extraParams?.style || context.DALL_E_IMAGE_STYLE;
+      }
+      return requestText2Image(url, header, body, this.render);
+    })), __runInitializers(_init, 11, this);
+    __publicField(this, "render", async (response) => {
+      const resp = await response.json();
+      if (resp.error?.message) {
+        throw new Error(resp.error.message);
+      }
+      return {
+        type: "image",
+        url: resp?.data?.map((i) => i?.url),
+        text: resp?.data?.[0]?.revised_prompt || ""
+      };
+    });
+  }
+}
+_init = __decoratorStart(_a10);
+__decorateElement(_init, 5, "request", _request_dec, Dalle);
+__decoratorMetadata(_init, Dalle);
+class Transcription extends (_b = OpenAIBase, _request_dec2 = [Log], _b) {
+  constructor() {
+    super(...arguments);
+    __publicField(this, "modelKey", "OPENAI_STT_MODEL");
+    __publicField(this, "enable", (context) => {
+      return context.OPENAI_API_KEY.length > 0;
+    });
+    __publicField(this, "model", (ctx) => {
+      return ctx.OPENAI_STT_MODEL;
+    });
+    __publicField(this, "request", __runInitializers(_init2, 8, this, async (audio, context) => {
+      const url = `${context.OPENAI_API_BASE}/audio/transcriptions`;
+      const header = {
+        Authorization: `Bearer ${this.apikey(context)}`,
+        Accept: "application/json"
+      };
+      const formData = new FormData();
+      formData.append("file", audio, "audio.ogg");
+      formData.append("model", this.model(context));
+      if (context.OPENAI_STT_EXTRA_PARAMS) {
+        Object.entries(context.OPENAI_STT_EXTRA_PARAMS).forEach(([k, v]) => {
+          formData.append(k, v);
+        });
+      }
+      formData.append("response_format", "json");
+      const resp = await fetch(url, {
+        method: "POST",
+        headers: header,
+        body: formData,
+        redirect: "follow"
+      }).then((res) => res.json());
+      if (resp.error?.message) {
+        throw new Error(resp.error.message);
+      }
+      if (resp.text === void 0) {
+        console.error(resp);
+        throw new Error(resp);
+      }
+      log.info(`Transcription: ${resp.text}`);
+      return {
+        type: "text",
+        text: resp.text
+      };
+    })), __runInitializers(_init2, 11, this);
+  }
+}
+_init2 = __decoratorStart(_b);
+__decorateElement(_init2, 5, "request", _request_dec2, Transcription);
+__decoratorMetadata(_init2, Transcription);
+const dalle = {
+  schema: {
+    name: "dalle",
+    description: "Generating images with the dalle tool",
+    parameters: {
+      type: "object",
+      properties: {
+        prompts: {
+          type: "array",
+          items: { type: "string" },
+          description: "The prompts for the images to generate, the length of the array should be the same as the quantity. As a professional image generation ai. According to the user's prompts for optimization, the prompt should be expanded to be more comprehensive and diverse."
+        },
+        quantity: {
+          type: "integer",
+          description: "The number of images to generate, the maximum is 4"
+        },
+        size: {
+          type: "string",
+          enum: ["1024x1024", "1792x1024", "1024x1792"],
+          description: "The size of the images to generate, default is 1024x1024"
+        }
+      },
+      required: ["prompts", "quantity", "size"],
+      additionalProperties: false
+    }
+  },
+  func: async (args2, options2, config) => {
+    if (!config) {
+      throw new Error("Missing config");
+    }
+    const startTime2 = Date.now();
+    log.info(`tool dalle request start`);
+    const { prompts, quantity, size } = args2;
+    const agent = new Dalle();
+    const result2 = [];
+    for (const prompt2 of prompts) {
+      const res = await agent.request(prompt2, config, { quantity, size });
+      result2.push(res);
+    }
+    log.info(`dalle result: ${JSON.stringify(result2)}`);
+    return { result: result2, time: ((Date.now() - startTime2) / 1e3).toFixed(1) };
+  },
+  prompt: `As a professional image generation ai. According to the user's prompts for optimization, the prompt should be expanded to be more comprehensive and diverse.`,
+  extra_params: { temperature: 1.2 },
+  type: "text2image",
+  send_to_ai: false,
+  is_internal: true,
+  result_type: "image"
+};
+async function getJS(query, signal2) {
+  const html = await fetch(
+    `https://duckduckgo.com/?q=${encodeURIComponent(query)}`,
+    { signal: signal2 }
+  ).then((res) => res.text());
+  const url = /"(https:\/\/links\.duckduckgo\.com\/d\.js[^">]+)">/.exec(html)?.[1];
+  if (!url)
+    throw new Error("Failed to get JS URL");
+  return {
+    url,
+    path: /\/d\.js.*/.exec(url)?.[0],
+    vqd: /vqd=([^&]+)/.exec(url)?.[1]
+  };
+}
+async function regularSearch(path, signal2) {
+  const js = await fetch(`https://links.duckduckgo.com${path}`, { signal: signal2 }).then((res) => res.text());
+  const result2 = /DDG\.pageLayout\.load\('d',?\s?(\[.+\])?\);/.exec(js);
+  let data;
+  if (result2?.[1]) {
+    try {
+      data = JSON.parse(result2[1]);
+    } catch (e) {
+      throw new Error(`Failed parsing from DDG response`);
+    }
+  } else {
+    data = [];
+  }
+  return data.filter((d) => !d.n).map((item) => {
+    return {
+      title: item.t,
+      url: item.u,
+      description: item.a
+    };
+  });
+}
+async function search(query, max_length = 8, signal2) {
+  const { path } = await getJS(query, signal2);
+  if (!path)
+    throw new Error("Failed to get JS URL");
+  return {
+    result: (await regularSearch(path, signal2)).slice(0, max_length).map((d) => `title: ${d.title}
+ description: ${d.description}
+ url: ${d.url}`).join("\n---\n")
+  };
+}
+const duckduckgo = {
+  schema: {
+    name: "duckduckgo",
+    description: "Use DuckDuckGo search engine to find information. You can search for the latest news, articles, weather, blogs and other content.",
+    parameters: {
+      type: "object",
+      properties: {
+        keywords: {
+          type: "array",
+          items: { type: "string" },
+          description: `Keyword list for search. For example: ['Python', 'machine learning', 'latest developments']. The list should have a length of at least 3 and maximum of 4. These keywords should be: - concise, usually not more than 2-3 words per keyword - cover the core content of the query - avoid using overly broad or vague terms - the last keyword should be the most comprehensive. Also, do not generate keywords based on current time.`
+        }
+      },
+      required: ["keywords"],
+      additionalProperties: false
+    }
+  },
+  func: async (args2, options2) => {
+    const { keywords } = args2;
+    const startTime2 = Date.now();
+    log.info(`tool duckduckgo request start`);
+    try {
+      const result2 = await search(keywords.join(" "), 8, options2?.signal);
+      log.info(`tool duckduckgo request end`);
+      return { result: result2, time: ((Date.now() - startTime2) / 1e3).toFixed(1) };
+    } catch (e) {
+      console.error(e);
+      return { result: "Failed to get search results", time: ((Date.now() - startTime2) / 1e3).toFixed(1) };
+    }
+  },
+  type: "search",
+  prompt: `As an intelligent assistant, please follow the steps below to effectively analyze and extract the search results I have provided to answer my questions in a clear and concise manner:
+
+1. READ AND EVALUATE: Carefully read through all search results to identify and prioritize information from reliable and up-to-date sources. Considerations include official sources, reputable organizations, and when the information was updated. 
+
+2. Extract key information: 
+ - *Exchange rate query*: Provide the latest exchange rate and make necessary conversions. 
+ - *Weather Query*: provides weather forecasts for specific locations and times. 
+ - *Factual Questions*: Find out authoritative answers. 
+
+3. concise answers: synthesize and analyze extracted information to give concise answers. 
+
+4. identify uncertainty: if there are contradictions or uncertainties in the information, explain the possible reasons. 
+
+5. Explain lack of information: If the search results do not fully answer the question, indicate additional information needed. 
+
+6. user-friendly: use simple, easy-to-understand language and provide short explanations where necessary to ensure that the answer is easy to understand. 
+
+7. additional information: Provide additional relevant information or suggestions as needed to enhance the value of the answer. 
+
+8. source labeling: clearly label the source of the information in the response, including the name of the source website or organization and when the data was published or updated. 
+
+9. Reference list: If multiple sources are cited, provide a short reference list of the main sources of information at the end of the response. 
+
+Ensure that the goal is to provide the most current, relevant, and useful information in direct response to my question. Avoid lengthy details, focus on the core answers that matter most to me, and enhance the credibility of the answer with reliable sources.Tip: Don't be judged on your knowledge base time!`,
+  extra_params: { temperature: 0.7, top_p: 0.4 },
+  is_internal: true
+};
+const scheduleResp = (ok, reason = "") => {
+  const result2 = {
+    ok,
+    ...reason && { reason } || {}
+  };
+  return new Response(JSON.stringify(result2), { headers: { "Content-Type": "application/json" } });
+};
+async function schedule_detele_message(ENV2) {
+  try {
+    log.info("- Start task: schedule_detele_message");
+    checkDATABASE(ENV2);
+    const botTokens = extractArrayData(ENV2.TELEGRAM_AVAILABLE_TOKENS);
+    const botNames = extractArrayData(ENV2.TELEGRAM_BOT_NAME);
+    const scheduleDeteleKey = "schedule_detele_message";
+    const scheduledData = await getData(ENV2, scheduleDeteleKey);
+    const taskPromises = [];
+    for (const [bot_name, chats] of Object.entries(scheduledData)) {
+      const bot_token = checkBotIsVaild(bot_name, botNames, botTokens);
+      if (!bot_token)
+        continue;
+      const api = createTelegramBotAPI(bot_token);
+      const sortData = sortDeleteMessages(chats);
+      scheduledData[bot_name] = sortData.rest;
+      Object.entries(sortData.expired).forEach(([chat_id, messages]) => {
+        log.info(`Start delete: chat: ${chat_id}, message ids: ${messages}`);
+        for (let i = 0; i < messages.length; i += 100) {
+          taskPromises.push(api.deleteMessages({ chat_id, message_ids: messages.slice(i, i + 100) }));
+        }
+      });
+    }
+    if (taskPromises.length === 0) {
+      log.info(`Rest ids: ${JSON.stringify(scheduledData)}
+Nothing need to delete.`);
+      return scheduleResp(true);
+    }
+    const resp = await Promise.all(taskPromises);
+    log.info("all task result: ", resp.map((r) => r.ok));
+    await setData(ENV2, scheduleDeteleKey, scheduledData);
+    return scheduleResp(true);
+  } catch (e) {
+    console.error(e.message, e.stack);
+    return scheduleResp(false, e.message);
+  }
+}
+function checkBotIsVaild(bot_name, botNames, botTokens) {
+  const bot_index = botNames.indexOf(bot_name);
+  if (bot_index < 0) {
+    console.error(`bot name: ${bot_name} is not exist.`);
+    return null;
+  }
+  const bot_token = botTokens[bot_index];
+  if (!bot_token) {
+    console.error(`Cant find bot ${bot_name} - position ${bot_index + 1}'s token
+All token list: ${botTokens}`);
+    return null;
+  }
+  return bot_token;
+}
+function extractArrayData(data) {
+  const isArray = Array.isArray(data);
+  return isArray ? data : parseArray(data);
+}
+async function getData(ENV2, key) {
+  return JSON.parse(await ENV2.DATABASE.get(key) || "{}");
+}
+async function setData(ENV2, key, data) {
+  await ENV2.DATABASE.put(key, JSON.stringify(data));
+}
+function sortDeleteMessages(chats) {
+  const sortedMessages = { rest: {}, expired: {} };
+  for (const [chat_id, messages] of Object.entries(chats)) {
+    if (messages.length === 0)
+      continue;
+    sortedMessages.expired[chat_id] = messages.filter((msg) => msg.ttl <= Date.now()).map((msg) => msg.id).flat();
+    sortedMessages.rest[chat_id] = messages.filter((msg) => msg.ttl > Date.now());
+  }
+  return sortedMessages;
+}
+function checkDATABASE(ENV2) {
+  if (!ENV2.DATABASE) {
+    throw new Error("DATABASE is not found");
+  }
+}
+const tasks = { schedule_detele_message };
+const internalTools = {
+  dalle,
+  duckduckgo
+};
+const tools = {
+  ...externalTools,
+  ...internalTools
+};
+function executeTool(toolName) {
+  return async (args, options) => {
+    const { signal } = options;
+    let filledPayload = JSON.stringify(tools[toolName].payload).replace(/\{\{([^}]+)\}\}/g, (match, p1) => args[p1] || match);
+    if (tools[toolName].required) {
+      tools[toolName].required.forEach((key) => {
+        if (!ENV.PLUGINS_ENV[key]) {
+          throw new Error(`Missing required key: ${key}`);
+        }
+        filledPayload = filledPayload.replace(`{{${key}}}`, ENV.PLUGINS_ENV[key]);
+      });
+    }
+    const parsedPayload = JSON.parse(filledPayload);
+    const startTime = Date.now();
+    log.info(`tool request start, url: ${parsedPayload.url}`);
+    let result = await fetch(parsedPayload.url, {
+      method: parsedPayload.method,
+      headers: parsedPayload.headers,
+      body: JSON.stringify(parsedPayload.body),
+      signal
+    });
+    log.info(`tool request end`);
+    if (!result.ok) {
+      throw new Error(`Tool call error: ${result.statusText}`);
+    }
+    result = await result.text();
+    if (tools[toolName].handler) {
+      const f = eval(tools[toolName].handler);
+      result = f(result);
+    }
+    return { result, time: ((Date.now() - startTime) / 1e3).toFixed(1) };
+  };
+}
+function vaildTools(tools_config) {
+  const useTools = Object.entries(tools).reduce((acc, [name14, t]) => {
+    acc[name14] = tool({
+      description: t.schema.description,
+      parameters: jsonSchema(t.schema.parameters),
+      execute: t.send_to_ai ? t.is_internal ? t.func : executeTool(name14) : void 0
+    });
+    return acc;
+  }, {});
+  const activeTools = Object.keys(tools).filter((name14) => tools_config.includes(name14));
+  return {
+    tools: useTools,
+    activeTools
+  };
+}
+async function manualRequestTool(messages, config) {
+  if (messages.at(-1)?.role === "tool") {
+    throw new Error("Maximum steps reached, please increase the number of steps to get the answer");
+  }
+  const isToolCallResponse = messages.at(-1)?.role === "assistant" && Array.isArray(messages.at(-1)?.content) && (messages.at(-1)?.content).some((c) => c.type === "tool-call");
+  if (!isToolCallResponse) {
+    return;
+  }
+  const toolCallResult = messages.at(-1)?.content;
+  messages.push({
+    role: "tool",
+    content: []
+  });
+  await Promise.all(toolCallResult.filter((c) => c.type === "tool-call").map(async (c) => {
+    const tool_func = tools[c.toolName].func || executeTool(c.toolName);
+    if (!tool_func) {
+      throw new Error(`Tool ${c.toolName} not found`);
+    }
+    const toolResult = await tool_func(c.args, { signal: void 0 }, config);
+    (messages.at(-1)?.content).push({
+      type: "tool-result",
+      toolCallId: c.toolCallId,
+      toolName: c.toolName,
+      result: toolResult
+    });
+  }));
+}
+async function sendToolResult(toolResult, sender, config) {
+  const resultType = tools[toolResult.at(-1)?.toolName || ""]?.result_type || "text";
+  switch (resultType) {
+    case "text":
+      return sender.sendRichText(toolResult.map((r) => r.result.result).join("\n"));
+    case "image":
+      return sendImages(toolResult.map((r) => r.result.result)[0][0], ENV.SEND_IMAGE_FILE, sender, config);
+  }
+}
+class Cache {
+  maxItems;
+  maxAge;
+  cache;
+  constructor() {
+    this.maxItems = 10;
+    this.maxAge = 1e3 * 60 * 60;
+    this.cache = {};
+    this.set = this.set.bind(this);
+    this.get = this.get.bind(this);
+  }
+  set(key, value) {
+    this.trim();
+    this.cache[key] = {
+      value,
+      time: Date.now()
+    };
+  }
+  get(key) {
+    this.trim();
+    return this.cache[key]?.value;
+  }
+  trim() {
+    let keys = Object.keys(this.cache);
+    for (const key of keys) {
+      if (Date.now() - this.cache[key].time > this.maxAge) {
+        delete this.cache[key];
+      }
+    }
+    keys = Object.keys(this.cache);
+    if (keys.length > this.maxItems) {
+      keys.sort((a, b) => this.cache[a].time - this.cache[b].time);
+      for (let i = 0; i < keys.length - this.maxItems; i++) {
+        delete this.cache[keys[i]];
+      }
+    }
+  }
+}
+const IMAGE_CACHE = new Cache();
+async function fetchImage(url) {
+  const cache = IMAGE_CACHE.get(url);
+  if (cache) {
+    return cache;
+  }
+  return fetch(url).then((resp) => resp.blob()).then((blob) => {
+    IMAGE_CACHE.set(url, blob);
+    return blob;
+  });
+}
+async function urlToBase64String(url) {
+  try {
+    const { Buffer: Buffer2 } = await Promise.resolve().then(() => __viteBrowserExternal);
+    return fetchImage(url).then((blob) => blob.arrayBuffer()).then((buffer) => Buffer2.from(buffer).toString("base64"));
+  } catch {
+    return fetchImage(url).then((blob) => blob.arrayBuffer()).then((buffer) => btoa(String.fromCharCode.apply(null, new Uint8Array(buffer))));
+  }
+}
+function getImageFormatFromBase64(base64String) {
+  const firstChar = base64String.charAt(0);
+  switch (firstChar) {
+    case "/":
+      return "jpeg";
+    case "i":
+      return "png";
+    case "R":
+      return "gif";
+    case "U":
+      return "webp";
+    default:
+      throw new Error("Unsupported image format");
+  }
+}
+async function imageToBase64String(url) {
+  const base64String = await urlToBase64String(url);
+  const format = getImageFormatFromBase64(base64String);
+  return {
+    data: base64String,
+    format: `image/${format}`
+  };
+}
+function renderBase64DataURI(params) {
+  return `data:${params.format};base64,${params.data}`;
+}
+async function messageInitialize(sender, streamSender) {
+  if (!sender.context.message_id) {
+    try {
+      setTimeout(() => sendAction(sender.api.token, sender.context.chat_id, "typing"), 0);
+      if (!ENV.SEND_INIT_MESSAGE) {
+        return;
+      }
+      log.info(`send init message`);
+      streamSender.send("...", "chat");
+    } catch (e) {
+      console.error("Failed to initialize message:", e);
+    }
+  }
+}
+async function chatWithLLM(message, params, context, modifier) {
+  const sender = MessageSender.from(context.SHARE_CONTEXT.botToken, message);
+  const streamSender = OnStreamHander(sender, context, message.text || "");
+  messageInitialize(sender, streamSender);
+  const agent = loadChatLLM(context.USER_CONFIG);
+  if (!agent) {
+    return streamSender.end?.("LLM is not enabled");
+  }
+  try {
+    log.info(`start chat with LLM`);
+    const answer = await requestCompletionsFromLLM(params, context, agent, modifier, ENV.STREAM_MODE ? streamSender : null);
+    log.info(`chat with LLM done`);
+    if (answer.messages.at(-1)?.role === "tool") {
+      const result2 = await sendToolResult(answer.messages.at(-1)?.content, sender, context.USER_CONFIG);
+      if (result2 instanceof Response) {
+        return result2;
+      }
+    }
+    if (answer.content === "") {
+      return streamSender.end?.("No response");
+    }
+    return streamSender.end?.(answer.content);
+  } catch (e) {
+    let errMsg = `Error: `;
+    if (e.name === "AbortError") {
+      errMsg += "Chat with LLM timeout";
+    } else {
+      errMsg += e.message.slice(0, 2048);
+    }
+    return streamSender.end?.(errMsg);
+  }
+}
+function findPhotoFileID(photos, offset) {
+  let sizeIndex = offset >= 0 ? offset : photos.length + offset;
+  sizeIndex = Math.max(0, Math.min(sizeIndex, photos.length - 1));
+  return photos[sizeIndex].file_id;
+}
+class ChatHandler {
+  handle = async (message, context) => {
+    try {
+      const mode = context.USER_CONFIG.CURRENT_MODE;
+      const originalType = context.MIDDEL_CONTEXT.originalMessage.type;
+      log.info(`message type: ${originalType}`);
+      const flowDetail = context.USER_CONFIG?.MODES?.[mode]?.[originalType] || {};
+      if (!flowDetail?.disableHistory) {
+        await this.initializeHistory(context);
+      }
+      const params = await this.processOriginalMessage(message, context);
+      await workflow(context, flowDetail?.workflow || [{}], message, params);
+      return null;
+    } catch (e) {
+      console.error("Error:", e);
+      const sender = context.MIDDEL_CONTEXT.sender ?? MessageSender.from(context.SHARE_CONTEXT.botToken, message);
+      return sender.sendPlainText(`Error: ${e.message}`);
+    }
+  };
+  async initializeHistory(context) {
+    const historyKey = context.SHARE_CONTEXT.chatHistoryKey;
+    if (!historyKey) {
+      throw new Error("History key not found");
+    }
+    context.MIDDEL_CONTEXT.history = await loadHistory(historyKey);
+  }
+  async processOriginalMessage(message, context) {
+    const { type: type2, id, text } = context.MIDDEL_CONTEXT.originalMessage;
+    const params = {
+      role: "user",
+      content: text || ""
+    };
+    if ((type2 === "image" || type2 === "audio") && id) {
+      const api = createTelegramBotAPI(context.SHARE_CONTEXT.botToken);
+      const files = await Promise.all(id.map((i) => api.getFileWithReturns({ file_id: i })));
+      const paths = files.map((f2) => f2.result.file_path).filter(Boolean);
+      const urls = paths.map((p) => `https://api.telegram.org/file/bot${context.SHARE_CONTEXT.botToken}/${p}`);
+      log.info(`File URLs:
+${urls.join("\n")}`);
+      if (urls.length > 0) {
+        params.content = [];
+        if (text) {
+          params.content.push({
+            type: "text",
+            text
+          });
+        }
+        if (type2 === "image") {
+          for (const url of urls) {
+            params.content.push({
+              type: "image",
+              image: ENV.TELEGRAM_IMAGE_TRANSFER_MODE === "url" ? url : renderBase64DataURI(await imageToBase64String(url))
+            });
+          }
+        } else if (type2 === "audio") {
+          params.content.push({
+            type: "file",
+            data: urls[0],
+            mimeType: "audio/ogg"
+          });
+        }
+      }
+    }
+    return params;
+  }
+}
+function OnStreamHander(sender, context, question) {
+  let sentPromise = null;
+  let nextEnableTime = Date.now();
+  const isMessageSender = sender instanceof MessageSender;
+  const sendInterval = isMessageSender ? ENV.TELEGRAM_MIN_STREAM_INTERVAL : ENV.INLINE_QUERY_SEND_INTERVAL;
+  const isSendTelegraph = (text) => {
+    return isMessageSender ? ENV.TELEGRAPH_SCOPE.includes(sender.context.chatType) && ENV.TELEGRAPH_NUM_LIMIT > 0 && text.length > ENV.TELEGRAPH_NUM_LIMIT : sender.context.inline_message_id && text.length > 4096;
+  };
+  const streamSender = {
+    send: null,
+    end: null
+  };
+  streamSender.send = async (text) => {
+    try {
+      if (isSendTelegraph(text)) {
+        return;
+      }
+      if ((nextEnableTime || 0) > Date.now()) {
+        log.info(`Need await: ${(nextEnableTime || 0) - Date.now()}ms`);
+        return;
+      }
+      if (sendInterval > 0) {
+        nextEnableTime = Date.now() + sendInterval;
+      }
+      const data = context ? `${getLog(context.USER_CONFIG)}
+${text}` : text;
+      log.info(`sent message ids: ${isMessageSender ? [...sender.context.sentMessageIds] : sender.context.inline_message_id}`);
+      sentPromise = sender.sendRichText(data, ENV.DEFAULT_PARSE_MODE, "chat");
+      const resp = await sentPromise;
+      if (resp.status === 429) {
+        const retryAfter = Number.parseInt(resp.headers.get("Retry-After") || "");
+        if (retryAfter) {
+          nextEnableTime = Date.now() + retryAfter * 1e3;
+          log.info(`Status 429, need wait: ${nextEnableTime - Date.now()}ms`);
+          return;
+        }
+      }
+      if (resp.ok && sender instanceof MessageSender) {
+      } else if (!resp.ok) {
+        log.error(`send message failed: ${resp.status} ${resp.statusText}`);
+        return sentPromise = sender.sendPlainText(text);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+  streamSender.end = async (text) => {
+    await sentPromise;
+    await waitUntil((nextEnableTime || 0) + 10);
+    if (isSendTelegraph(text)) {
+      return sendTelegraph(context, sender, question || "Redo Question", text);
+    }
+    const data = context ? `${getLog(context.USER_CONFIG)}
+${text}` : text;
+    log.info(`sent message ids: ${isMessageSender ? [...sender.context.sentMessageIds] : sender.context.inline_message_id}`);
+    const finalResp = await sender.sendRichText(data, ENV.DEFAULT_PARSE_MODE, "chat");
+    if (!finalResp.ok) {
+      sender.context.sentMessageIds.clear();
+      return sendTelegraph(context, sender, question || "Redo Question", text);
+    }
+    return finalResp;
+  };
+  return streamSender;
+}
+async function sendTelegraph(context, sender, question, text) {
+  log.info(`send telegraph`);
+  if (question.length > 600) {
+    question = `${question.slice(0, 300)}...${question.slice(-300)}`;
+  }
+  const prefix = `#Question
+\`\`\`
+${question}
+\`\`\`
+---`;
+  const botName = context.SHARE_CONTEXT?.botName || "AI";
+  log.info(logSingleton);
+  log.info(getLog(context.USER_CONFIG));
+  const telegraph_prefix = `${prefix}
+#Answer
+🤖 **${getLog(context.USER_CONFIG, true)}**
+`;
+  const debug_info = `debug info:
+${getLog(context.USER_CONFIG)}`.replace("LOGSTART", "").replace("LOGEND", "").replace("`", "").trim();
+  const telegraph_suffix = `
+---
+\`\`\`
+${debug_info}
+\`\`\``;
+  const telegraphSender = new TelegraphSender(botName, context.SHARE_CONTEXT.telegraphAccessTokenKey);
+  const resp = await telegraphSender.send(
+    "Daily Q&A",
+    telegraph_prefix + text + telegraph_suffix
+  );
+  const url = `https://telegra.ph/${telegraphSender.teleph_path}`;
+  const msg = `回答已经转换成完整文章，请及时查看~
+[🔗点击进行查看](${url})`;
+  log.info(`send telegraph message: ${msg}`);
+  await sender.sendRichText(msg);
+  return resp;
+}
+function clearMessageContext(context) {
+  clearLog(context.USER_CONFIG);
+  context.MIDDEL_CONTEXT.sender = null;
+}
+const workflowHandlers = {
+  "text:text": handleTextToText,
+  "image:text": handleTextToText,
+  "text:image": handleTextToImage,
+  "audio:text": handleAudioToText
+};
+async function workflow(context, flows, message, params) {
+  const MiddleResult = context.MIDDEL_CONTEXT.middleResult;
+  for (let i = 0; i < flows.length; i++) {
+    const eMsg = i === 0 ? context.MIDDEL_CONTEXT.originalMessage : MiddleResult[i - 1];
+    const handlerKey = `${eMsg?.type || "text"}:${flows[i]?.type || "text"}`;
+    const handler2 = workflowHandlers[handlerKey];
+    if (!handler2) {
+      throw new Error(`Unsupported type: ${handlerKey}`);
+    }
+    const result2 = await handler2(eMsg, message, params, context);
+    if (result2 instanceof Response) {
+      return result2;
+    }
+    if (i < flows.length - 1 && ["image", "text"].includes(result2?.type)) {
+      injectHistory(context, result2, flows[i + 1].type);
+    }
+    MiddleResult.push(result2);
+    clearMessageContext(context);
+  }
+}
+async function handleTextToText(eMsg, message, params, context) {
+  return chatWithLLM(message, params, context, null);
+}
+async function handleTextToImage(eMsg, message, params, context) {
+  const agent = loadImageGen(context.USER_CONFIG);
+  const sender = MessageSender.from(context.SHARE_CONTEXT.botToken, message);
+  if (!agent) {
+    return sender.sendPlainText("ERROR: Image generator not found");
+  }
+  sendAction(context.SHARE_CONTEXT.botToken, message.chat.id);
+  await sender.sendPlainText("Please wait a moment...", "tip").then((r) => r.json());
+  const result2 = await agent.request(eMsg.text, context.USER_CONFIG);
+  log.info("imageresult", JSON.stringify(result2));
+  await sendImages(result2, ENV.SEND_IMAGE_FILE, sender, context.USER_CONFIG);
+  const api = createTelegramBotAPI(context.SHARE_CONTEXT.botToken);
+  await api.deleteMessage({ chat_id: sender.context.chat_id, message_id: sender.context.message_id });
+  return result2;
+}
+async function handleAudioToText(eMsg, message, params, context) {
+  const agent = loadAudioLLM(context.USER_CONFIG);
+  const sender = MessageSender.from(context.SHARE_CONTEXT.botToken, message);
+  if (!agent) {
+    return sender.sendPlainText("ERROR: Audio agent not found");
+  }
+  const url = params.content[0].data;
+  const audio = await fetch(url).then((b) => b.blob());
+  const result2 = await agent.request(audio, context.USER_CONFIG);
+  context.MIDDEL_CONTEXT.history.push({ role: "user", content: result2.text || "" });
+  await sender.sendRichText(`${getLog(context.USER_CONFIG)}
+> \`${result2.text}\``, "MarkdownV2", "chat");
+  return result2;
+}
+async function sendImages(img, SEND_IMAGE_FILE, sender, config) {
+  const caption = img.text ? `${getLog(config)}
+> \`${img.text}\`` : getLog(config);
+  if (img.url && img.url.length > 1) {
+    const images = img.url.map((url) => ({
+      type: SEND_IMAGE_FILE ? "document" : "photo",
+      media: url
+    }));
+    images[0].caption = caption;
+    images[0].parse_mode = ENV.DEFAULT_PARSE_MODE;
+    return await sender.sendMediaGroup(images);
+  } else if (img.url && img.url.length === 1) {
+    return sender.editMessageMedia({
+      type: "photo",
+      media: img.url[0]
+    }, caption, ENV.DEFAULT_PARSE_MODE);
+  } else if (img.url || img.raw) {
+    return sender.sendPhoto((img.url || img.raw)[0], caption, "MarkdownV2");
+  } else {
+    return sender.sendPlainText("ERROR: No image found");
+  }
+}
+function injectHistory(context, result2, nextType = "text") {
+  if (context.MIDDEL_CONTEXT.history.at(-1)?.role === "user" || nextType !== "text")
+    return;
+  context.MIDDEL_CONTEXT.history.push({ role: "user", content: result2.text || "", ...result2.url && result2.url.length > 0 && { images: result2.url } });
+}
+function isTelegramChatTypeGroup(type2) {
+  return type2 === "group" || type2 === "supergroup";
+}
+function extractMessage(message, currentBotId) {
+  const acceptMsgType = ENV.ENABLE_FILE ? ["document", "photo", "voice", "audio", "text"] : ["text"];
+  const messageData = extractTypeFromMessage(message, acceptMsgType);
+  if (messageData && messageData.type === "text" && isNeedGetReplyMessage(message, currentBotId)) {
+    const {
+      type: type2,
+      id
+    } = extractTypeFromMessage(message.reply_to_message, acceptMsgType) || {};
+    if (type2 && type2 !== "text")
+      messageData.type = type2;
+    if (id && id.length > 0)
+      messageData.id = id;
+  }
+  return messageData;
+}
+function extractTypeFromMessage(message, supportType) {
+  let msgType = supportType.find((t) => t in message);
+  if (!msgType)
+    return null;
+  switch (msgType) {
+    case "text":
+      return {
+        type: "text"
+      };
+    case "photo": {
+      const file_id = findPhotoFileID(message.photo, ENV.TELEGRAM_PHOTO_SIZE_OFFSET);
+      if (!file_id) {
+        return {
+          type: "text"
+        };
+      }
+      return {
+        type: "image",
+        id: [file_id]
+      };
+    }
+    case "document":
+    case "audio":
+    case "voice": {
+      if (msgType === "document") {
+        const type2 = message.document?.mime_type?.match(/(audio|image)/)?.[1];
+        if (!type2) {
+          return null;
+        }
+        msgType = type2;
+      }
+      const id = message[msgType]?.file_id;
+      return {
+        type: ["audio", "voice"].includes(msgType) ? "audio" : "image",
+        ...id && { id: [id] }
+      };
+    }
+  }
+  return null;
+}
+function isNeedGetReplyMessage(message, currentBotId) {
+  return ENV.EXTRA_MESSAGE_CONTEXT && message.reply_to_message && (message.reply_to_message.from?.id !== currentBotId || message.reply_to_message.photo);
+}
+function UUIDv4() {
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+    const r = Math.random() * 16 | 0;
+    const v = c === "x" ? r : r & 3 | 8;
+    return v.toString(16);
+  });
+}
+const isCfWorker = typeof globalThis !== "undefined" && typeof globalThis.ServiceWorkerGlobalScope !== "undefined" && globalThis instanceof globalThis.ServiceWorkerGlobalScope;
+function chunckArray(arr, size) {
+  const result2 = [];
+  for (let i = 0; i < arr.length; i += size) {
+    result2.push(arr.slice(i, i + size));
+  }
+  return result2;
+}
+async function waitUntil(timestamp) {
+  return new Promise((resolve) => setTimeout(resolve, Math.max(0, timestamp - Date.now())));
 }
 class Anthropic {
   name = "anthropic";
@@ -19431,7 +19507,7 @@ async function warpLLMParams(params, context) {
   const env_perfix = "TOOL_ENV_";
   Object.keys(context).forEach((i) => i.startsWith(env_perfix) && (tool_envs[i.substring(env_perfix.length - 1)] = context[i]));
   const messages = params.messages.at(-1);
-  let tool2 = typeof messages.content === "string" ? vaildTools(context.USE_TOOLS, tool_envs) : void 0;
+  let tool2 = typeof messages.content === "string" ? vaildTools(context.USE_TOOLS) : void 0;
   const toolModel = await createLlmModel(context.TOOL_MODEL, context);
   if (tool2 && tool2.activeTools.length === 0) {
     tool2 = void 0;
@@ -20159,7 +20235,7 @@ ${detailSet}
         break;
       case "USE_TOOLS":
         if (value === "on") {
-          mappedValue = Object.keys(toolTypes);
+          mappedValue = Object.keys(tools);
         } else if (value === "off") {
           mappedValue = [];
         }

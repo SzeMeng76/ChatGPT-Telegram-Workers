@@ -6,9 +6,9 @@ import { createCohere } from '@ai-sdk/cohere';
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { createOpenAI } from '@ai-sdk/openai';
 import { type AgentUserConfig, ENV } from '../config/env';
-import { log } from '../extra/log/logger';
-import { vaildTools } from '../extra/tools';
+import { log } from '../log/logger';
 import { isCfWorker } from '../telegram/utils/utils';
+import { vaildTools } from '../tools';
 import { Anthropic } from './anthropic';
 import { AzureChatAI, AzureImageAI } from './azure';
 import { Cohere } from './cohere';
@@ -122,7 +122,7 @@ export async function warpLLMParams(params: { messages: CoreMessage[]; model: La
 
     const messages = params.messages.at(-1) as CoreUserMessage;
     let tool = typeof messages.content === 'string'
-        ? vaildTools(context.USE_TOOLS, tool_envs)
+        ? vaildTools(context.USE_TOOLS)
         : undefined;
     const toolModel = await createLlmModel(context.TOOL_MODEL, context);
 

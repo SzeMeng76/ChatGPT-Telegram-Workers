@@ -4,8 +4,8 @@ import type { AudioAgent, ChatAgent, ChatStreamTextHandler, ImageAgent, ImageRes
 import { createOpenAI } from '@ai-sdk/openai';
 import { warpLLMParams } from '.';
 import { type AgentUserConfig, ENV } from '../config/env';
-import { Log } from '../extra/log/logDecortor';
-import { log } from '../extra/log/logger';
+import { Log } from '../log/logDecortor';
+import { log } from '../log/logger';
 import { requestText2Image } from './chat';
 import { requestChatCompletionsV2 } from './request';
 
@@ -117,7 +117,7 @@ export class Dalle extends OpenAIBase implements ImageAgent {
     };
 
     @Log
-    request = async (prompt: string, context: AgentUserConfig): Promise<ImageResult> => {
+    request = async (prompt: string, context: AgentUserConfig, extraParams?: Record<string, any>): Promise<ImageResult> => {
         const url = `${context.OPENAI_API_BASE}/images/generations`;
         const header = {
             'Content-Type': 'application/json',
@@ -126,12 +126,12 @@ export class Dalle extends OpenAIBase implements ImageAgent {
         const body: any = {
             prompt,
             n: 1,
-            size: context.DALL_E_IMAGE_SIZE,
-            model: context.DALL_E_MODEL,
+            size: extraParams?.size || context.DALL_E_IMAGE_SIZE,
+            model: extraParams?.model || context.DALL_E_MODEL,
         };
         if (body.model === 'dall-e-3') {
-            body.quality = context.DALL_E_IMAGE_QUALITY;
-            body.style = context.DALL_E_IMAGE_STYLE;
+            body.quality = extraParams?.quality || context.DALL_E_IMAGE_QUALITY;
+            body.style = extraParams?.style || context.DALL_E_IMAGE_STYLE;
         }
         return requestText2Image(url, header, body, this.render);
     };
