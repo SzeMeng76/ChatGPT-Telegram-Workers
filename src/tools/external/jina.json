@@ -27,5 +27,6 @@
     },
     "handler": "content => content",
     "type": "reader",
-    "required": ["JINA_API_KEY"]
+    "required": ["JINA_API_KEY"],
+    "send_to_ai": true
 }

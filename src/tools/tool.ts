@@ -1,3 +1,5 @@
+/* eslint-disable no-case-declarations */
+
 import type { ToolCallPart, ToolResultPart } from 'ai';
 import type { ImageResult, ResponseMessage } from '../agent/types';
 import type { AgentUserConfig } from '../config/env';
@@ -104,7 +106,17 @@ export async function sendToolResult(toolResult: ToolResultPart[], sender: Messa
         case 'text':
             return sender.sendRichText(toolResult.map(r => (r.result as ToolResult).result).join('\n'));
         case 'image':
-            return sendImages(toolResult.map(r => (r.result as ToolResult).result)[0][0], ENV.SEND_IMAGE_FILE, sender, config);
+            const images = toolResult.map(r => (r.result as ToolResult).result).flat();
+            return sendImages({
+                type: 'image',
+                url: images.map(r => r.url).flat(),
+                text: images.map((r) => {
+                    if (r.text) {
+                        return `\`${r.text}\``;
+                    }
+                    return '';
+                }).join('\n-----\n'),
+            }, ENV.SEND_IMAGE_FILE, sender, config);
         default:
             break;
     }

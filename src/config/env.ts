@@ -117,6 +117,11 @@ class Environment extends EnvironmentConfig {
             }
         }
 
+        // 兼容旧版 JINA_API_KEY
+        if (source.JINA_API_KEY) {
+            this.PLUGINS_ENV.JINA_API_KEY = source.JINA_API_KEY;
+        }
+
         // 合并环境变量
         ConfigMerger.merge(this, source, [
             'BUILD_TIMESTAMP',

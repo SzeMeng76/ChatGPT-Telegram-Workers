@@ -13,6 +13,7 @@ import { log } from '../../log/logger';
 import { sendToolResult } from '../../tools';
 import { imageToBase64String, renderBase64DataURI } from '../../utils/image';
 import { createTelegramBotAPI } from '../api';
+import { escape } from '../utils/md2tgmd';
 import { MessageSender, sendAction, TelegraphSender } from '../utils/send';
 import { type UnionData, waitUntil } from '../utils/utils';
 
@@ -370,7 +371,7 @@ async function handleAudioToText(
 }
 
 export async function sendImages(img: ImageResult, SEND_IMAGE_FILE: boolean, sender: MessageSender, config: AgentUserConfig) {
-    const caption = img.text ? `${getLog(config)}\n> \`${img.text}\`` : getLog(config);
+    const caption = escape((img.text ? `${getLog(config)}\n> ${img.text}` : getLog(config)).split('\n'));
     if (img.url && img.url.length > 1) {
         const images = img.url.map((url: string) => ({
             type: (SEND_IMAGE_FILE ? 'document' : 'photo'),
