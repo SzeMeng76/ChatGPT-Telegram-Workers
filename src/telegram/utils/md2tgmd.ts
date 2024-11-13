@@ -24,8 +24,7 @@ const escapedChars = {
 };
 const escapedCharsReverseMap = new Map(Object.entries(escapedChars).map(([key, value]) => [value, key]));
 
-export function escape(text: string): string {
-    const lines = text.split('\n');
+export function escape(lines: string[]): string {
     const stack: number[] = [];
     const result: string[] = [];
     let lineTrim = '';
@@ -63,7 +62,7 @@ export function escape(text: string): string {
         const last = `${lines.slice(stack[0]).join('\n')}\n\`\`\``;
         result.push(handleEscape(last, 'code'));
     }
-    const regexp = /^LOGSTART(.*?)LOGEND/s;
+    const regexp = /^LOGSTART\n(.*?)LOGEND/s;
     return result.join('\n')
         .replace(regexp, '**$1||')
         .replace(new RegExp(Object.values(escapedChars).join('|'), 'g'), match => escapedCharsReverseMap.get(match) ?? match);
@@ -100,4 +99,61 @@ function handleEscape(text: string, type: string = 'text'): string {
             .replace(/^\\`\\`\\`([\s\S]+)\\`\\`\\`$/g, '```$1```'); // code block
     }
     return text;
+}
+
+export function chunkDocument(text: string, chunkSize: number = 4096): string[][] {
+    const textList = text.split('\n');
+    const chunks: string[][] = [[]];
+    let chunkIndex = 0;
+    const codeStack: string[] = [];
+    for (const line of textList) {
+        if (chunks[chunkIndex].join('\n').length + line.length >= chunkSize) {
+            chunkIndex++;
+            chunks.push([]);
+            if (codeStack.length) {
+                if (chunks[chunkIndex - 1].join('\n').length + codeStack.length * 4 >= chunkSize) {
+                    chunks[chunkIndex - 1].push(...chunks[chunkIndex - 1].slice(-codeStack.length));
+                    chunks[chunkIndex - 1].length -= codeStack.length;
+                }
+                chunks[chunkIndex - 1].push(...Array.from({ length: codeStack.length }).fill('```') as string[]);
+                chunks[chunkIndex].push(...codeStack);
+            }
+            if (line.length > chunkSize) {
+                const lineSplit = chunkText(chunks[chunkIndex].join('\n') + line, chunkSize);
+                if (lineSplit.length > 1) {
+                    chunks.length -= 1;
+                    chunks.push(...lineSplit.map(item => item.split('\n')));
+                    chunkIndex = chunks.length - 1;
+                } else {
+                    chunks[chunkIndex].push(line);
+                }
+            } else {
+                chunks[chunkIndex].push(line);
+            }
+            continue;
+        }
+        if (/^```.+/.test(line.trim())) {
+            codeStack.push(line);
+        } else if (line.trim() === '```') {
+            if (codeStack.length) {
+                codeStack.pop();
+            } else {
+                codeStack.push(line);
+            }
+        }
+
+        chunks[chunkIndex].push(line);
+    }
+    if (codeStack.length) {
+        chunks[chunkIndex].push(...Array.from({ length: codeStack.length }).fill('```') as string[]);
+    }
+    return chunks;
+}
+
+function chunkText(text: string, chunkSize: number): string[] {
+    const chunks: string[] = [];
+    for (let i = 0; i < text.length; i += chunkSize) {
+        chunks.push(text.slice(i, i + chunkSize));
+    }
+    return chunks;
 }

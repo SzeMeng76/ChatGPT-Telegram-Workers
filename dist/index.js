@@ -411,8 +411,8 @@ const ENV_KEY_MAPPER = {
   WORKERS_AI_MODEL: "WORKERS_CHAT_MODEL"
 };
 class Environment extends EnvironmentConfig {
-  BUILD_TIMESTAMP = 1731434644;
-  BUILD_VERSION = "d5c70ce";
+  BUILD_TIMESTAMP = 1731490895;
+  BUILD_VERSION = "cfde76e";
   I18N = loadI18n();
   PLUGINS_ENV = {};
   USER_CONFIG = createAgentUserConfig();
@@ -11470,7 +11470,7 @@ function formatInput(input, type2) {
   }
 }
 const logSingleton = /* @__PURE__ */ new WeakMap();
-const sentMessageIds = /* @__PURE__ */ new WeakMap();
+const tagMessageIds = /* @__PURE__ */ new WeakMap();
 function Log(value, context) {
   if (context.kind === "field") {
     const configIndex = 1;
@@ -11801,8 +11801,7 @@ const escapedChars = {
   "\\?": "ESCAPEQUESTION"
 };
 const escapedCharsReverseMap = new Map(Object.entries(escapedChars).map(([key, value]) => [value, key]));
-function escape(text) {
-  const lines = text.split("\n");
+function escape(lines) {
   const stack = [];
   const result2 = [];
   let lineTrim = "";
@@ -11836,7 +11835,7 @@ function escape(text) {
 \`\`\``;
     result2.push(handleEscape(last, "code"));
   }
-  const regexp = /^LOGSTART(.*?)LOGEND/s;
+  const regexp = /^LOGSTART\n(.*?)LOGEND/s;
   return result2.join("\n").replace(regexp, "**$1||").replace(new RegExp(Object.values(escapedChars).join("|"), "g"), (match) => escapedCharsReverseMap.get(match) ?? match);
 }
 function handleEscape(text, type2 = "text") {
@@ -11856,6 +11855,60 @@ function handleEscape(text, type2 = "text") {
   }
   return text;
 }
+function chunkDocument(text, chunkSize = 4096) {
+  const textList = text.split("\n");
+  const chunks = [[]];
+  let chunkIndex = 0;
+  const codeStack = [];
+  for (const line of textList) {
+    if (chunks[chunkIndex].join("\n").length + line.length >= chunkSize) {
+      chunkIndex++;
+      chunks.push([]);
+      if (codeStack.length) {
+        if (chunks[chunkIndex - 1].join("\n").length + codeStack.length * 4 >= chunkSize) {
+          chunks[chunkIndex - 1].push(...chunks[chunkIndex - 1].slice(-codeStack.length));
+          chunks[chunkIndex - 1].length -= codeStack.length;
+        }
+        chunks[chunkIndex - 1].push(...Array.from({ length: codeStack.length }).fill("```"));
+        chunks[chunkIndex].push(...codeStack);
+      }
+      if (line.length > chunkSize) {
+        const lineSplit = chunkText(chunks[chunkIndex].join("\n") + line, chunkSize);
+        if (lineSplit.length > 1) {
+          chunks.length -= 1;
+          chunks.push(...lineSplit.map((item) => item.split("\n")));
+          chunkIndex = chunks.length - 1;
+        } else {
+          chunks[chunkIndex].push(line);
+        }
+      } else {
+        chunks[chunkIndex].push(line);
+      }
+      continue;
+    }
+    if (/^```.+/.test(line.trim())) {
+      codeStack.push(line);
+    } else if (line.trim() === "```") {
+      if (codeStack.length) {
+        codeStack.pop();
+      } else {
+        codeStack.push(line);
+      }
+    }
+    chunks[chunkIndex].push(line);
+  }
+  if (codeStack.length) {
+    chunks[chunkIndex].push(...Array.from({ length: codeStack.length }).fill("```"));
+  }
+  return chunks;
+}
+function chunkText(text, chunkSize) {
+  const chunks = [];
+  for (let i = 0; i < text.length; i += chunkSize) {
+    chunks.push(text.slice(i, i + chunkSize));
+  }
+  return chunks;
+}
 class MessageContext {
   chat_id;
   message_id = null;
@@ -11866,6 +11919,7 @@ class MessageContext {
   message_thread_id = null;
   chatType;
   message;
+  sentMessageIds = /* @__PURE__ */ new Set();
   constructor(message) {
     this.chat_id = message.chat.id;
     this.chatType = message.chat.type;
@@ -11950,24 +12004,17 @@ class MessageSender {
   }
   async sendLongMessage(message, context) {
     const chatContext = { ...context };
-    const limit = 4096;
-    if (message.length <= limit) {
-      const resp = await this.sendMessage(renderMessage(context.parse_mode, message), chatContext);
-      if (resp.status === 200) {
-        return resp;
-      }
-    }
-    chatContext.parse_mode = null;
+    const messages = renderMessage(context.parse_mode, message);
     let lastMessageResponse = null;
-    for (let i = 0; i < message.length; i += limit) {
-      const msg = message.slice(i, Math.min(i + limit, message.length));
-      if (i > 0) {
-        chatContext.message_id = null;
-      }
-      lastMessageResponse = await this.sendMessage(msg, chatContext);
+    let lastMessageRespJson = null;
+    for (let i = 0; i < messages.length; i++) {
+      chatContext.message_id = [...context.sentMessageIds][i] ?? null;
+      lastMessageResponse = await this.sendMessage(messages[i], chatContext);
       if (lastMessageResponse.status !== 200) {
         break;
       }
+      lastMessageRespJson = await lastMessageResponse.clone().json();
+      context.sentMessageIds.add(lastMessageRespJson.result.message_id);
     }
     if (lastMessageResponse === null) {
       throw new Error("Send message failed");
@@ -12002,7 +12049,7 @@ class MessageSender {
       chat_id: this.context.chat_id,
       message_thread_id: this.context.message_thread_id || void 0,
       photo,
-      ...caption ? { caption: renderMessage(parse_mode || null, caption) } : {},
+      ...caption ? { caption: renderMessage(parse_mode || null, caption)[0] } : {},
       parse_mode
     };
     if (this.context.reply_to_message_id) {
@@ -12066,7 +12113,7 @@ class MessageSender {
       message_id: this.context.message_id,
       media: {
         ...media,
-        ...caption ? { caption: parse_mode ? renderMessage(parse_mode, caption) : caption } : {},
+        ...caption ? { caption: parse_mode ? renderMessage(parse_mode, caption)[0] : caption } : {},
         parse_mode
       }
     };
@@ -12152,10 +12199,10 @@ function sendAction(botToken, chat_id, action = "typing") {
 }
 async function checkIsNeedTagIds(context, resp, msgType) {
   const { chatType } = context;
-  let message_id = null;
+  let message_id = [];
   const original_resp = await resp;
   do {
-    if (ENV.EXPIRED_TIME <= 0 || context.message_id) break;
+    if (ENV.EXPIRED_TIME <= 0) break;
     const clone_resp = await original_resp.clone().json();
     if (Array.isArray(clone_resp.result)) {
       message_id = clone_resp?.result?.map((i) => i.message_id);
@@ -12163,17 +12210,13 @@ async function checkIsNeedTagIds(context, resp, msgType) {
       message_id = [clone_resp?.result?.message_id];
     }
     if (message_id.filter(Boolean).length === 0) {
-      log.error("resp", JSON.stringify(clone_resp));
-      throw new Error("Message send failed, see logs for more details");
+      log.error("resp:", JSON.stringify(clone_resp));
+      break;
     }
     const isGroup = ["group", "supergroup"].includes(chatType);
     const isNeedTag = isGroup && ENV.SCHEDULE_GROUP_DELETE_TYPE.includes(msgType) || !isGroup && ENV.SCHEDULE_PRIVATE_DELETE_TYPE.includes(msgType);
     if (isNeedTag) {
-      if (!sentMessageIds.has(context.message)) {
-        sentMessageIds.set(context.message, []);
-      }
-      message_id.forEach((id) => sentMessageIds.get(context.message)?.push(id));
-      log.debug("taged message id", sentMessageIds.get(context.message)?.join(","));
+      message_id.forEach((id) => tagMessageIds.get(context.message)?.push(id));
     }
   } while (false);
   return original_resp;
@@ -12212,7 +12255,7 @@ class ChosenInlineSender {
   editMessageText(text, parse_mode) {
     return this.api.editMessageText({
       inline_message_id: this.context.inline_message_id,
-      text: renderMessage(parse_mode || null, text),
+      text: renderMessage(parse_mode || null, text)[0],
       parse_mode,
       link_preview_options: {
         is_disabled: ENV.DISABLE_WEB_PREVIEW
@@ -12225,16 +12268,17 @@ class ChosenInlineSender {
       media: {
         type: type2,
         media,
-        ...caption ? { caption: renderMessage(parse_mode || null, caption) } : {}
+        ...caption ? { caption: renderMessage(parse_mode || null, caption)[0] } : {}
       }
     });
   }
 }
 function renderMessage(parse_mode, message) {
+  const chunkMessage = chunkDocument(message);
   if (parse_mode === "MarkdownV2") {
-    return escape(message);
+    return chunkMessage.map((lines) => escape(lines));
   }
-  return message;
+  return chunkMessage.map((line) => line.join("\n"));
 }
 async function loadChatRoleWithContext(message, context, isCallbackQuery = false) {
   const { groupAdminsKey } = context.SHARE_CONTEXT;
@@ -16144,7 +16188,6 @@ function OnStreamHander(sender, context, question) {
   let nextEnableTime = Date.now();
   const isMessageSender = sender instanceof MessageSender;
   const sendInterval = isMessageSender ? ENV.TELEGRAM_MIN_STREAM_INTERVAL : ENV.INLINE_QUERY_SEND_INTERVAL;
-  const sentMessageIds2 = isMessageSender && sender.context.message_id ? [sender.context.message_id] : [];
   const isSendTelegraph = (text) => {
     return isMessageSender ? ENV.TELEGRAPH_SCOPE.includes(sender.context.chatType) && ENV.TELEGRAPH_NUM_LIMIT > 0 && text.length > ENV.TELEGRAPH_NUM_LIMIT : sender.context.inline_message_id && text.length > 4096;
   };
@@ -16166,7 +16209,7 @@ function OnStreamHander(sender, context, question) {
       }
       const data = context ? `${getLog(context.USER_CONFIG)}
 ${text}` : text;
-      log.info(`send message id: ${isMessageSender ? sender.context.message_id : sender.context.inline_message_id}`);
+      log.info(`sent message ids: ${isMessageSender ? sender.context.sentMessageIds : sender.context.inline_message_id}`);
       sentPromise = sender.sendRichText(data, ENV.DEFAULT_PARSE_MODE, "chat");
       const resp = await sentPromise;
       if (resp.status === 429) {
@@ -16178,11 +16221,6 @@ ${text}` : text;
         }
       }
       if (resp.ok && sender instanceof MessageSender) {
-        const respJson = await resp.json();
-        sender.update({
-          message_id: respJson.result.message_id
-        });
-        sentMessageIds2.push(respJson.result.message_id);
       } else if (!resp.ok) {
         log.error(`send message failed: ${resp.status} ${resp.statusText}`);
         return sentPromise = sender.sendPlainText(text);
@@ -16199,7 +16237,7 @@ ${text}` : text;
     }
     const data = context ? `${getLog(context.USER_CONFIG)}
 ${text}` : text;
-    log.info(`send message id: ${sender instanceof MessageSender ? sender.context.message_id : sender.context.inline_message_id}`);
+    log.info(`sent message ids: ${sender instanceof MessageSender ? [...sender.context.sentMessageIds] : sender.context.inline_message_id}`);
     return sender.sendRichText(data, ENV.DEFAULT_PARSE_MODE, "chat");
   };
   return streamSender;
@@ -16280,13 +16318,12 @@ async function handleTextToImage(eMsg, message, params, context) {
     return sender.sendPlainText("ERROR: Image generator not found");
   }
   sendAction(context.SHARE_CONTEXT.botToken, message.chat.id);
-  const { message_id } = await sender.sendPlainText("Please wait a moment...", "tip").then((r) => r.json());
-  sender.update({ message_id });
+  await sender.sendPlainText("Please wait a moment...", "tip").then((r) => r.json());
   const result2 = await agent.request(eMsg.text, context.USER_CONFIG);
   log.info("imageresult", JSON.stringify(result2));
   await sendImages(result2, ENV.SEND_IMAGE_FILE, sender, context.USER_CONFIG);
   const api = createTelegramBotAPI(context.SHARE_CONTEXT.botToken);
-  await api.deleteMessage({ chat_id: sender.context.chat_id, message_id });
+  await api.deleteMessage({ chat_id: sender.context.chat_id, message_id: sender.context.message_id });
   return result2;
 }
 async function handleAudioToText(eMsg, message, params, context) {
@@ -19701,9 +19738,6 @@ class ImgCommandHandler {
       }
       sendAction(context.SHARE_CONTEXT.botToken, message.chat.id, "upload_photo");
       const respJson = await sender.sendPlainText("Please wait a moment...").then((resp2) => resp2.json());
-      sender.update({
-        message_id: respJson.result.message_id
-      });
       const img = await agent.request(subcommand, context.USER_CONFIG);
       log.info("img", img);
       const resp = await sendImages(img, ENV.SEND_IMAGE_FILE, sender, context.USER_CONFIG);
@@ -20193,10 +20227,7 @@ class PerplexityCommandHandler {
       },
       rejectUnauthorized: false
     };
-    const resp = await (await sender.sendRichText("Perplexity is asking...")).json();
-    sender.update({
-      message_id: resp.result.message_id
-    });
+    await (await sender.sendRichText("Perplexity is asking...")).json();
     const onStream = OnStreamHander(sender, context, subcommand);
     const logs = getLogSingleton(context.USER_CONFIG);
     logs.chat.model.push(`Perplexity ${mode}`);
@@ -20217,7 +20248,7 @@ class InlineCommandHandler {
     return createTelegramBotAPI(context.SHARE_CONTEXT.botToken).sendMessage({
       chat_id: message.chat.id,
       ...message.chat.type === "private" ? {} : { reply_to_message_id: message.message_id },
-      text: escape(currentSettings),
+      text: escape(currentSettings.split("\n")),
       parse_mode: "MarkdownV2",
       reply_markup: {
         inline_keyboard: this.inlineKeyboard(context.USER_CONFIG, defaultInlineKeys)
@@ -20794,15 +20825,11 @@ function SubstituteWords(message) {
       return false;
     }
   }
-  const isGroup = isTelegramChatTypeGroup(message?.chat?.type || "private");
-  if (!ENV.CHAT_TRIGGER_PERFIX || !(message?.text || message.caption)?.startsWith(ENV.CHAT_TRIGGER_PERFIX)) {
-    if (isGroup) {
-      return false;
-    }
-  }
   const replacer = ENV.MESSAGE_REPLACER;
   let replacedString = "";
-  let text = (message.text || message.caption || "").substring(isGroup ? ENV.CHAT_TRIGGER_PERFIX.length : 0).trim();
+  const textBefore = message.text || message.caption || "";
+  let text = textBefore.replace(new RegExp(`^${ENV.CHAT_TRIGGER_PERFIX}`), "").trim();
+  const isTrigger = text !== textBefore;
   do {
     const triggerKey = Object.keys(replacer).find(
       (key) => text.startsWith(`${key} `)
@@ -20816,7 +20843,7 @@ function SubstituteWords(message) {
   } while (true);
   log.info(`replacedString: ${replacedString}, text: ${text}`);
   message.text ? message.text = replacedString + text : message.caption = replacedString + text;
-  return true;
+  return isTrigger;
 }
 class GroupMention {
   handle = async (message, context) => {
@@ -21018,7 +21045,7 @@ class StoreHistory {
 }
 class TagNeedDelete {
   handle = async (message, context) => {
-    if (!sentMessageIds.get(message) || sentMessageIds.get(message)?.length === 0) {
+    if ((tagMessageIds.get(message) ?? []).length === 0) {
       log.info(`[TAG MESSAGE] No message id to tag`);
       return new Response("success", { status: 200 });
     }
@@ -21037,11 +21064,11 @@ class TagNeedDelete {
     }
     const offsetInMillisenconds = ENV.EXPIRED_TIME * 60 * 1e3;
     scheduledData[botName][chatId].push({
-      id: sentMessageIds.get(message) || [],
+      id: tagMessageIds.get(message) || [],
       ttl: Date.now() + offsetInMillisenconds
     });
     await ENV.DATABASE.put(scheduleDeteleKey, JSON.stringify(scheduledData));
-    log.info(`[TAG MESSAGE] Record chat ${chatId}, message ids: ${sentMessageIds.get(message) || []}`);
+    log.info(`[TAG MESSAGE] Record chat ${chatId}, message ids: ${tagMessageIds.get(message) || []}`);
     return new Response("success", { status: 200 });
   };
 }
@@ -21165,7 +21192,7 @@ class HandlerCallbackQuery {
       chat_id: message.chat.id,
       message_id: message.message_id,
       ...message.chat.type === "private" ? {} : { reply_to_message_id: message.message_id },
-      text: escape(text),
+      text: escape(text.split("\n")),
       parse_mode: "MarkdownV2",
       reply_markup: { inline_keyboard }
     }).then((r) => r.json());

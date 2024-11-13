@@ -6,7 +6,7 @@ import type { UnionData } from '../utils/utils';
 import type { CallbackQueryHandler, ChosenInlineQueryHandler, InlineQueryHandler, MessageHandler } from './types';
 import { WorkerContext } from '../../config/context';
 import { ENV } from '../../config/env';
-import { sentMessageIds } from '../../extra/log/logDecortor';
+import { tagMessageIds } from '../../extra/log/logDecortor';
 import { log } from '../../extra/log/logger';
 import { createTelegramBotAPI } from '../api';
 import { handleCommandMessage } from '../command';
@@ -152,7 +152,7 @@ export class StoreHistory implements MessageHandler<WorkerContext> {
 export class TagNeedDelete implements MessageHandler<WorkerContext> {
     handle = async (message: Telegram.Message, context: WorkerContext): Promise<Response | null> => {
         // 未记录消息
-        if (!sentMessageIds.get(message) || sentMessageIds.get(message)?.length === 0) {
+        if ((tagMessageIds.get(message) ?? []).length === 0) {
             log.info(`[TAG MESSAGE] No message id to tag`);
             return new Response('success', { status: 200 });
         }
@@ -172,12 +172,12 @@ export class TagNeedDelete implements MessageHandler<WorkerContext> {
         }
         const offsetInMillisenconds = ENV.EXPIRED_TIME * 60 * 1000;
         scheduledData[botName][chatId].push({
-            id: sentMessageIds.get(message) || [],
+            id: tagMessageIds.get(message) || [],
             ttl: Date.now() + offsetInMillisenconds,
         });
 
         await ENV.DATABASE.put(scheduleDeteleKey, JSON.stringify(scheduledData));
-        log.info(`[TAG MESSAGE] Record chat ${chatId}, message ids: ${sentMessageIds.get(message) || []}`);
+        log.info(`[TAG MESSAGE] Record chat ${chatId}, message ids: ${tagMessageIds.get(message) || []}`);
 
         return new Response('success', { status: 200 });
     };
@@ -319,7 +319,7 @@ export class HandlerCallbackQuery implements CallbackQueryHandler<CallbackQueryC
             chat_id: message.chat.id,
             message_id: message.message_id,
             ...(message.chat.type === 'private' ? {} : { reply_to_message_id: message.message_id }),
-            text: escape(text),
+            text: escape(text.split('\n')),
             parse_mode: 'MarkdownV2',
             reply_markup: { inline_keyboard },
         }).then(r => r.json());

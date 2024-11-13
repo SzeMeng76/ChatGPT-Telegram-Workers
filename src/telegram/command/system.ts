@@ -54,9 +54,9 @@ export class ImgCommandHandler implements CommandHandler {
             }
             sendAction(context.SHARE_CONTEXT.botToken, message.chat.id, 'upload_photo');
             const respJson = await sender.sendPlainText('Please wait a moment...').then(resp => resp.json());
-            sender.update({
-                message_id: respJson.result.message_id,
-            });
+            // sender.update({
+            //     message_id: respJson.result.message_id,
+            // });
             const img = await agent.request(subcommand, context.USER_CONFIG);
             log.info('img', img);
             const resp = await sendImages(img, ENV.SEND_IMAGE_FILE, sender, context.USER_CONFIG);
@@ -596,9 +596,9 @@ export class PerplexityCommandHandler implements CommandHandler {
             rejectUnauthorized: false,
         };
         const resp = await (await sender.sendRichText('Perplexity is asking...')).json();
-        sender.update({
-            message_id: resp.result.message_id,
-        });
+        // sender.update({
+        //     message_id: resp.result.message_id,
+        // });
 
         const onStream = OnStreamHander(sender, context, subcommand);
         const logs = getLogSingleton(context.USER_CONFIG);
@@ -622,7 +622,7 @@ export class InlineCommandHandler implements CommandHandler {
         return createTelegramBotAPI(context.SHARE_CONTEXT.botToken).sendMessage({
             chat_id: message.chat.id,
             ...(message.chat.type === 'private' ? {} : { reply_to_message_id: message.message_id }),
-            text: escape(currentSettings),
+            text: escape(currentSettings.split('\n')),
             parse_mode: 'MarkdownV2',
             reply_markup: {
                 inline_keyboard: this.inlineKeyboard(context.USER_CONFIG, defaultInlineKeys),

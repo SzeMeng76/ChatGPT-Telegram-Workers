@@ -62,20 +62,16 @@ export function SubstituteWords(message: Telegram.Message): boolean {
             return false;
         }
     }
-    // 新的触发逻辑
-    // inline message not exist chat property
-    const isGroup = isTelegramChatTypeGroup(message?.chat?.type || 'private');
-    if (!ENV.CHAT_TRIGGER_PERFIX || !(message?.text || message.caption)?.startsWith(ENV.CHAT_TRIGGER_PERFIX)) {
-        if (isGroup) {
-            return false;
-        }
-    }
+
     const replacer = ENV.MESSAGE_REPLACER;
     let replacedString = '';
-    let text = (message.text || message.caption || '').substring(isGroup ? ENV.CHAT_TRIGGER_PERFIX.length : 0).trim();
-
+    const textBefore = message.text || message.caption || '';
+    // alaways remove the trigger prefix
+    let text = textBefore.replace(new RegExp(`^${ENV.CHAT_TRIGGER_PERFIX}`), '').trim();
+    const isTrigger = text !== textBefore;
     do {
         const triggerKey = Object.keys(replacer).find(key =>
+            // You can remove the space judgment here, adjust the order of trigger words with the same prefix by yourself.
             text.startsWith(`${key} `),
         );
         if (triggerKey) {
@@ -87,7 +83,7 @@ export function SubstituteWords(message: Telegram.Message): boolean {
     } while (true);
     log.info(`replacedString: ${replacedString}, text: ${text}`);
     message.text ? (message.text = replacedString + text) : (message.caption = replacedString + text);
-    return true;
+    return isTrigger;
 }
 
 export class GroupMention implements MessageHandler {

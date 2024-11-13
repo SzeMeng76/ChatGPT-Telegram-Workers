@@ -3,11 +3,11 @@
 import type * as Telegram from 'telegram-bot-api-types';
 import type { TelegramBotAPI } from '../api';
 import { ENV } from '../../config/env';
-import { sentMessageIds } from '../../extra/log/logDecortor';
+import { tagMessageIds } from '../../extra/log/logDecortor';
 import { log } from '../../extra/log/logger';
 import { createTelegramBotAPI } from '../api';
 import md2node from './md2node';
-import { escape } from './md2tgmd';
+import { chunkDocument, escape } from './md2tgmd';
 
 class MessageContext implements Record<string, any> {
     chat_id: number;
@@ -18,7 +18,8 @@ class MessageContext implements Record<string, any> {
     disable_web_page_preview: boolean | null = ENV.DISABLE_WEB_PREVIEW;
     message_thread_id: number | null = null;
     chatType: string; // 聊天类型
-    message: Telegram.Message; // 原始消息 用于缓存需要删除的id
+    message: Telegram.Message; // 原始消息 用于标记需要删除的id
+    sentMessageIds: Set<number> = new Set();
 
     constructor(message: Telegram.Message) {
         this.chat_id = message.chat.id;
@@ -115,27 +116,17 @@ export class MessageSender {
 
     private async sendLongMessage(message: string, context: MessageContext): Promise<Response> {
         const chatContext = { ...context };
-        const limit = 4096;
-        if (message.length <= limit) {
-            // 原始消息长度小于限制，直接使用当前parse_mode发送
-            const resp = await this.sendMessage(renderMessage(context.parse_mode, message), chatContext);
-            if (resp.status === 200) {
-                // 发送成功，直接返回
-                return resp;
-            }
-        }
-        // 拆分消息后可能导致markdown格式错乱，所以采用纯文本模式发送,不使用任何parse_mode
-        chatContext.parse_mode = null;
+        const messages = renderMessage(context.parse_mode, message);
         let lastMessageResponse = null;
-        for (let i = 0; i < message.length; i += limit) {
-            const msg = message.slice(i, Math.min(i + limit, message.length));
-            if (i > 0) {
-                chatContext.message_id = null;
-            }
-            lastMessageResponse = await this.sendMessage(msg, chatContext);
+        let lastMessageRespJson = null;
+        for (let i = 0; i < messages.length; i++) {
+            chatContext.message_id = [...context.sentMessageIds][i] ?? null;
+            lastMessageResponse = await this.sendMessage(messages[i], chatContext);
             if (lastMessageResponse.status !== 200) {
                 break;
             }
+            lastMessageRespJson = await lastMessageResponse.clone().json() as Telegram.ResponseWithMessage;
+            context.sentMessageIds.add(lastMessageRespJson.result.message_id);
         }
         if (lastMessageResponse === null) {
             throw new Error('Send message failed');
@@ -173,7 +164,7 @@ export class MessageSender {
             chat_id: this.context.chat_id,
             message_thread_id: this.context.message_thread_id || undefined,
             photo,
-            ...(caption ? { caption: renderMessage(parse_mode || null, caption) } : {}),
+            ...(caption ? { caption: renderMessage(parse_mode || null, caption)[0] } : {}),
             parse_mode,
         };
         if (this.context.reply_to_message_id) {
@@ -241,7 +232,7 @@ export class MessageSender {
             message_id: this.context.message_id,
             media: {
                 ...media,
-                ...(caption ? { caption: parse_mode ? renderMessage(parse_mode, caption) : caption } : {}),
+                ...(caption ? { caption: parse_mode ? renderMessage(parse_mode, caption)[0] : caption } : {}),
                 parse_mode,
             },
         };
@@ -350,10 +341,10 @@ export function sendAction(botToken: string, chat_id: number, action: Telegram.C
 
 async function checkIsNeedTagIds(context: MessageContext, resp: Promise<Response>, msgType: 'tip' | 'chat') {
     const { chatType } = context;
-    let message_id = null;
+    let message_id: number[] = [];
     const original_resp = await resp;
     do {
-        if (ENV.EXPIRED_TIME <= 0 || context.message_id) break;
+        if (ENV.EXPIRED_TIME <= 0) break;
         const clone_resp = await original_resp.clone().json() as Telegram.SendMediaGroupResponse | Telegram.SendMessageResponse;
         if (Array.isArray(clone_resp.result)) {
             message_id = clone_resp?.result?.map((i: { message_id: any }) => i.message_id);
@@ -361,19 +352,16 @@ async function checkIsNeedTagIds(context: MessageContext, resp: Promise<Response
             message_id = [clone_resp?.result?.message_id];
         }
         if (message_id.filter(Boolean).length === 0) {
-            log.error('resp', JSON.stringify(clone_resp));
-            throw new Error('Message send failed, see logs for more details');
+            log.error('resp:', JSON.stringify(clone_resp));
+            break;
+            // throw new Error('Message send failed, see logs for more details');
         }
         const isGroup = ['group', 'supergroup'].includes(chatType);
         const isNeedTag
             = (isGroup && ENV.SCHEDULE_GROUP_DELETE_TYPE.includes(msgType))
             || (!isGroup && ENV.SCHEDULE_PRIVATE_DELETE_TYPE.includes(msgType));
         if (isNeedTag) {
-            if (!sentMessageIds.has(context.message)) {
-                sentMessageIds.set(context.message, []);
-            }
-            message_id.forEach(id => sentMessageIds.get(context.message)?.push(id));
-            log.debug('taged message id', sentMessageIds.get(context.message)?.join(','));
+            message_id.forEach(id => tagMessageIds.get(context.message)?.push(id));
         }
     } while (false);
 
@@ -486,7 +474,7 @@ export class ChosenInlineSender {
     editMessageText(text: string, parse_mode?: Telegram.ParseMode): Promise<Response> {
         return this.api.editMessageText({
             inline_message_id: this.context.inline_message_id,
-            text: renderMessage(parse_mode || null, text),
+            text: renderMessage(parse_mode || null, text)[0],
             parse_mode,
             link_preview_options: {
                 is_disabled: ENV.DISABLE_WEB_PREVIEW,
@@ -500,15 +488,16 @@ export class ChosenInlineSender {
             media: {
                 type,
                 media,
-                ...(caption ? { caption: renderMessage(parse_mode || null, caption) } : {}),
+                ...(caption ? { caption: renderMessage(parse_mode || null, caption)[0] } : {}),
             },
         });
     }
 }
 
-function renderMessage(parse_mode: Telegram.ParseMode | null, message: string): string {
+function renderMessage(parse_mode: Telegram.ParseMode | null, message: string): string[] {
+    const chunkMessage = chunkDocument(message);
     if (parse_mode === 'MarkdownV2') {
-        return escape(message);
+        return chunkMessage.map(lines => escape(lines));
     }
-    return message;
+    return chunkMessage.map(line => line.join('\n'));
 }

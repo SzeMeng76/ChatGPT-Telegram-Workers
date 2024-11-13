@@ -154,7 +154,7 @@ export function OnStreamHander(sender: MessageSender | ChosenInlineSender, conte
     let nextEnableTime = Date.now();
     const isMessageSender = sender instanceof MessageSender;
     const sendInterval = isMessageSender ? ENV.TELEGRAM_MIN_STREAM_INTERVAL : ENV.INLINE_QUERY_SEND_INTERVAL;
-    const sentMessageIds = isMessageSender && sender.context.message_id ? [sender.context.message_id] : [];
+    // const sentMessageIds = isMessageSender && sender.context.message_id ? [sender.context.message_id] : [];
     const isSendTelegraph = (text: string) => {
         return isMessageSender
             ? ENV.TELEGRAPH_SCOPE.includes(sender.context.chatType) && ENV.TELEGRAPH_NUM_LIMIT > 0 && text.length > ENV.TELEGRAPH_NUM_LIMIT
@@ -182,7 +182,7 @@ export function OnStreamHander(sender: MessageSender | ChosenInlineSender, conte
             }
 
             const data = context ? `${getLog(context.USER_CONFIG)}\n${text}` : text;
-            log.info(`send message id: ${isMessageSender ? sender.context.message_id : sender.context.inline_message_id}`);
+            log.info(`sent message ids: ${isMessageSender ? sender.context.sentMessageIds : sender.context.inline_message_id}`);
             sentPromise = sender.sendRichText(data, ENV.DEFAULT_PARSE_MODE as Telegram.ParseMode, 'chat');
             const resp = await sentPromise;
             // 判断429
@@ -197,11 +197,11 @@ export function OnStreamHander(sender: MessageSender | ChosenInlineSender, conte
             }
 
             if (resp.ok && sender instanceof MessageSender) {
-                const respJson = await resp.json() as Telegram.ResponseWithMessage;
-                sender.update({
-                    message_id: respJson.result.message_id,
-                });
-                sentMessageIds.push(respJson.result.message_id);
+                // const respJson = await resp.json() as Telegram.ResponseWithMessage;
+                // sender.update({
+                //     message_id: respJson.result.message_id,
+                // });
+                // sentMessageIds.push(respJson.result.message_id);
             } else if (!resp.ok) {
                 log.error(`send message failed: ${resp.status} ${resp.statusText}`);
                 return sentPromise = sender.sendPlainText(text);
@@ -218,7 +218,7 @@ export function OnStreamHander(sender: MessageSender | ChosenInlineSender, conte
             return sendTelegraph(context!, sender, question || 'Redo Question', text);
         }
         const data = context ? `${getLog(context.USER_CONFIG)}\n${text}` : text;
-        log.info(`send message id: ${sender instanceof MessageSender ? sender.context.message_id : (sender as ChosenInlineSender).context.inline_message_id}`);
+        log.info(`sent message ids: ${sender instanceof MessageSender ? [...sender.context.sentMessageIds] : (sender as ChosenInlineSender).context.inline_message_id}`);
         return sender.sendRichText(data, ENV.DEFAULT_PARSE_MODE as Telegram.ParseMode, 'chat');
     };
 
@@ -329,13 +329,13 @@ async function handleTextToImage(
         return sender.sendPlainText('ERROR: Image generator not found');
     }
     sendAction(context.SHARE_CONTEXT.botToken, message.chat.id);
-    const { message_id } = await sender.sendPlainText('Please wait a moment...', 'tip').then(r => r.json());
-    sender.update({ message_id });
+    await sender.sendPlainText('Please wait a moment...', 'tip').then(r => r.json());
+    // sender.update({ message_id });
     const result = await agent.request(eMsg.text, context.USER_CONFIG);
     log.info('imageresult', JSON.stringify(result));
     await sendImages(result, ENV.SEND_IMAGE_FILE, sender, context.USER_CONFIG);
     const api = createTelegramBotAPI(context.SHARE_CONTEXT.botToken);
-    await api.deleteMessage({ chat_id: sender.context.chat_id, message_id });
+    await api.deleteMessage({ chat_id: sender.context.chat_id, message_id: sender.context.message_id! });
     return result as UnionData;
 }
 
