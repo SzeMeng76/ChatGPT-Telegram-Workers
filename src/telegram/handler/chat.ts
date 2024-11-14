@@ -371,14 +371,14 @@ async function handleAudioToText(
 }
 
 export async function sendImages(img: ImageResult, SEND_IMAGE_FILE: boolean, sender: MessageSender, config: AgentUserConfig) {
-    const caption = escape((img.text ? `${getLog(config)}\n> ${img.text}` : getLog(config)).split('\n'));
+    const caption = img.text ? `${getLog(config)}\n> ${img.text}` : getLog(config);
     if (img.url && img.url.length > 1) {
         const images = img.url.map((url: string) => ({
             type: (SEND_IMAGE_FILE ? 'document' : 'photo'),
             media: url,
         })) as Telegram.InputMedia[];
-        images[0].caption = caption;
-        images[0].parse_mode = ENV.DEFAULT_PARSE_MODE as Telegram.ParseMode;
+        images.at(-1)!.caption = escape(caption.split('\n'));
+        images.at(-1)!.parse_mode = ENV.DEFAULT_PARSE_MODE as Telegram.ParseMode;
         return await sender.sendMediaGroup(images);
     } else if (img.url && img.url.length === 1) {
         return sender.editMessageMedia({

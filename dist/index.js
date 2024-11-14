@@ -411,8 +411,8 @@ const ENV_KEY_MAPPER = {
   WORKERS_AI_MODEL: "WORKERS_CHAT_MODEL"
 };
 class Environment extends EnvironmentConfig {
-  BUILD_TIMESTAMP = 1731517948;
-  BUILD_VERSION = "068e026";
+  BUILD_TIMESTAMP = 1731602862;
+  BUILD_VERSION = "e7e9048";
   I18N = loadI18n();
   PLUGINS_ENV = {};
   USER_CONFIG = createAgentUserConfig();
@@ -447,6 +447,9 @@ class Environment extends EnvironmentConfig {
         const plugin = key.substring(pluginEnvPrefix.length);
         this.PLUGINS_ENV[plugin] = source[key];
       }
+    }
+    if (source.JINA_API_KEY) {
+      this.PLUGINS_ENV.JINA_API_KEY = source.JINA_API_KEY;
     }
     ConfigMerger.merge(this, source, [
       "BUILD_TIMESTAMP",
@@ -10420,12 +10423,14 @@ const type = "reader";
 const required = [
   "JINA_API_KEY"
 ];
+const send_to_ai = true;
 const jina_reader = {
   schema,
   payload,
   handler,
   type,
-  required
+  required,
+  send_to_ai
 };
 const externalTools = { jina_reader };
 const ignoreOverride = Symbol("Let zodToJsonSchema decide on which parser to use");
@@ -16345,10 +16350,13 @@ class Dalle extends (_a10 = OpenAIBase, _request_dec = [Log], _a10) {
       if (resp.error?.message) {
         throw new Error(resp.error.message);
       }
+      if (!Array.isArray(resp.data) || resp.data.length === 0) {
+        throw new Error(`Data is invalid: ${JSON.stringify(resp)}`);
+      }
       return {
         type: "image",
-        url: resp?.data?.map((i) => i?.url),
-        text: resp?.data?.[0]?.revised_prompt || ""
+        url: resp.data?.map((i) => i?.url),
+        text: resp.data?.[0]?.revised_prompt || ""
       };
     });
   }
@@ -16555,7 +16563,8 @@ const duckduckgo = {
 
 Ensure that the goal is to provide the most current, relevant, and useful information in direct response to my question. Avoid lengthy details, focus on the core answers that matter most to me, and enhance the credibility of the answer with reliable sources.Tip: Don't be judged on your knowledge base time!`,
   extra_params: { temperature: 0.7, top_p: 0.4 },
-  is_internal: true
+  is_internal: true,
+  send_to_ai: true
 };
 const scheduleResp = (ok, reason = "") => {
   const result2 = {
@@ -16729,8 +16738,18 @@ async function sendToolResult(toolResult, sender, config) {
   switch (resultType) {
     case "text":
       return sender.sendRichText(toolResult.map((r) => r.result.result).join("\n"));
-    case "image":
-      return sendImages(toolResult.map((r) => r.result.result)[0][0], ENV.SEND_IMAGE_FILE, sender, config);
+    case "image": {
+      const images = toolResult.map((r) => r.result.result).flat();
+      let text = `${images.map((r) => r.text ?? "").join("\n-----\n")}`;
+      if (text.length > 500) {
+        text = `${text.substring(0, 500)}...`;
+      }
+      return sendImages({
+        type: "image",
+        url: images.map((r) => r.url).flat(),
+        text
+      }, ENV.SEND_IMAGE_FILE, sender, config);
+    }
   }
 }
 class Cache {
@@ -17097,14 +17116,14 @@ async function handleAudioToText(eMsg, message, params, context) {
 }
 async function sendImages(img, SEND_IMAGE_FILE, sender, config) {
   const caption = img.text ? `${getLog(config)}
-> \`${img.text}\`` : getLog(config);
+> ${img.text}` : getLog(config);
   if (img.url && img.url.length > 1) {
     const images = img.url.map((url) => ({
       type: SEND_IMAGE_FILE ? "document" : "photo",
       media: url
     }));
-    images[0].caption = caption;
-    images[0].parse_mode = ENV.DEFAULT_PARSE_MODE;
+    images.at(-1).caption = escape(caption.split("\n"));
+    images.at(-1).parse_mode = ENV.DEFAULT_PARSE_MODE;
     return await sender.sendMediaGroup(images);
   } else if (img.url && img.url.length === 1) {
     return sender.editMessageMedia({

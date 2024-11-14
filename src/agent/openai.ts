@@ -141,10 +141,13 @@ export class Dalle extends OpenAIBase implements ImageAgent {
         if (resp.error?.message) {
             throw new Error(resp.error.message);
         }
+        if (!Array.isArray(resp.data) || resp.data.length === 0) {
+            throw new Error(`Data is invalid: ${JSON.stringify(resp)}`);
+        }
         return {
             type: 'image',
-            url: resp?.data?.map((i: { url: any }) => i?.url),
-            text: resp?.data?.[0]?.revised_prompt || '',
+            url: resp.data?.map((i: { url: any }) => i?.url),
+            text: resp.data?.[0]?.revised_prompt || '',
         };
     };
 }
