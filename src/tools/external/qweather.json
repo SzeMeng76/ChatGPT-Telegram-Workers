@@ -12,12 +12,12 @@
                 },
                 "lang": {
                     "type": "string",
-                    "description": "Language setting for the response. Refer to the multi-language documentation for supported languages and settings.",
-                    "examples": ["en", "zh"]
+                    "description": "Language setting for the response. Based on the language used by the user. Default is zh-hans",
+                    "examples": ["zh-hans", "zh-hant", "en", "de"]
                 },
                 "unit": {
                     "type": "string",
-                    "description": "Unit of measurement for the response data. Options include unit=m (metric units, default) and unit=i (imperial units). Refer to the measurement units documentation for more options and details.",
+                    "description": "Unit of measurement for the response data. Options include unit=m (metric units, default) and unit=i (imperial units). Default is m",
                     "enum": ["m", "i"],
                     "default": "m"
                 }

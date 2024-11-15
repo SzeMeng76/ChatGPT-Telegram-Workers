@@ -294,12 +294,22 @@ export class TelegraphSender {
         }
     }
 
-    private async createOrEditPage(url: string, title: string, content: string): Promise<CreateOrEditPageResponse> {
+    private async createOrEditPage(url: string, title: string, content: string, raw?: string): Promise<CreateOrEditPageResponse> {
+        const contentNode = md2node(content);
+        if (raw) {
+            contentNode.push(...[{
+                tag: 'p',
+                children: ['raw data:'],
+            }, {
+                tag: 'code',
+                children: [raw],
+            }]);
+        }
         const body = {
             access_token: this.telegraphAccessToken,
             teleph_path: this.teleph_path ?? undefined,
             title: title || 'Daily Q&A',
-            content: md2node(content),
+            content: contentNode,
             ...this.author,
         };
         const headers = { 'Content-Type': 'application/json' };
@@ -310,7 +320,7 @@ export class TelegraphSender {
         }).then(r => r.json());
     }
 
-    async send(title: string, content: string): Promise<CreateOrEditPageResponse> {
+    async send(title: string, content: string, raw?: string): Promise<CreateOrEditPageResponse> {
         let endPoint = 'https://api.telegra.ph/editPage';
         if (!this.telegraphAccessToken) {
             this.telegraphAccessToken = await ENV.DATABASE.get(this.telegraphAccessTokenKey);
@@ -322,7 +332,7 @@ export class TelegraphSender {
 
         if (!this.teleph_path) {
             endPoint = 'https://api.telegra.ph/createPage';
-            const c_resp = await this.createOrEditPage(endPoint, title, content);
+            const c_resp = await this.createOrEditPage(endPoint, title, content, raw);
             if (c_resp.ok) {
                 this.teleph_path = c_resp.result!.path;
                 log.info('telegraph url:', c_resp.result!.url);

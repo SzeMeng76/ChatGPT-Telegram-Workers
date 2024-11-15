@@ -150,6 +150,8 @@ export async function warpLLMParams(params: { messages: CoreMessage[]; model: La
         toolChoice = choiceResult.toolChoices;
     }
 
+    log.info(`[warpLLMParams] activeTools: ${activeTools}`);
+
     return {
         model: params.model,
         toolModel,

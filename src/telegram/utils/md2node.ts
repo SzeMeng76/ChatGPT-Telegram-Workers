@@ -147,11 +147,11 @@ function processInlineElementsHelper(text: string) {
     return children;
 }
 
-function processInlineStyles(text: string) {
+function processInlineStyles(text: string): (string | { tag: string; children: any[] })[] {
     const children = [];
 
     // 处理粗体 下划线 斜体 删除线
-    const styleRegex = /(\*\*|__|_|~~)(.+?)\1/g;
+    const styleRegex = /(^|[^\\])(\*\*|__|_|~~)(.*?[^\\]?)\2/g;
     let lastIndex = 0;
     let match;
     while (true) {
@@ -159,11 +159,11 @@ function processInlineStyles(text: string) {
         if (match === null)
             break;
 
-        if (match.index > lastIndex) {
-            children.push(text.slice(lastIndex, match.index));
+        if (match.index + match[1].length > lastIndex) {
+            children.push(text.slice(lastIndex, match.index + match[1].length));
         }
         let tag = '';
-        switch (match[1]) {
+        switch (match[2]) {
             case '**':
                 tag = 'strong';
                 break;
@@ -182,7 +182,7 @@ function processInlineStyles(text: string) {
         }
         children.push({
             tag,
-            children: [match[2]],
+            children: [...processInlineStyles(match[3])],
         });
         lastIndex = match.index + match[0].length;
     }
@@ -197,7 +197,7 @@ function processInlineElements(text: string) {
     const children = [];
 
     // 处理行内代码块
-    const codeRegex = /`([^`]+)`/g;
+    const codeRegex = /(^|[^\\])`(.*?[^\\]?)`/g;
     let codeMatch = null;
     let lastIndex = 0;
 
@@ -206,12 +206,12 @@ function processInlineElements(text: string) {
         if (codeMatch === null)
             break;
 
-        if (codeMatch.index > lastIndex) {
-            children.push(...processInlineElementsHelper(text.slice(lastIndex, codeMatch.index)));
+        if (codeMatch.index + codeMatch[1].length > lastIndex) {
+            children.push(...processInlineElementsHelper(text.slice(lastIndex, codeMatch.index + codeMatch[1].length)));
         }
         children.push({
             tag: 'code',
-            children: [codeMatch[1]],
+            children: [codeMatch[2]],
         });
         lastIndex = codeMatch.index + codeMatch[0].length;
     }

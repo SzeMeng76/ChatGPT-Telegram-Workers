@@ -1,8 +1,8 @@
 /* eslint-disable unused-imports/no-unused-vars */
 import type {
-    CoreMessage,
     CoreToolChoice,
     LanguageModelV1,
+    LanguageModelV1CallOptions,
     Experimental_LanguageModelV1Middleware as LanguageModelV1Middleware,
     StepResult,
 } from 'ai';
@@ -55,7 +55,7 @@ export function AIMiddleware({ config, models, tools, activeTools, onStream, too
                 params.mode.toolChoice = toolChoice[step] as any;
                 log.info(`toolChoice changed: ${JSON.stringify(toolChoice[step])}`);
             }
-            warpMessages(params.prompt, tools, activeTools);
+            warpMessages(params, tools, activeTools);
             // log.debug(`warp params result: ${JSON.stringify(params)}`);
             return params;
         },
@@ -116,7 +116,8 @@ export function AIMiddleware({ config, models, tools, activeTools, onStream, too
     };
 }
 
-function warpMessages(messages: CoreMessage[], tools: Record<string, any>, activeTools: string[]) {
+function warpMessages(params: LanguageModelV1CallOptions, tools: Record<string, any>, activeTools: string[]) {
+    const { prompt: messages, mode } = params;
     if (messages.at(-1)?.role === 'tool') {
         const content = messages.at(-1)!.content;
         if (Array.isArray(content) && content.length > 0) {
@@ -129,5 +130,8 @@ function warpMessages(messages: CoreMessage[], tools: Record<string, any>, activ
         messages[0].content += `\n\nYou can consider using the following tools:\n##TOOLS${activeTools.map(name =>
             `\n\n### ${name}\n- desc: ${tools[name].description} \n${tools[name].prompt || ''}`,
         ).join('')}`;
+    }
+    if (activeTools.length === 0) {
+        (mode as any).tools = undefined;
     }
 }

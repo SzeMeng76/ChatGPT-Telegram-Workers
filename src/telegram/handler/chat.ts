@@ -160,6 +160,7 @@ export class ChatHandler implements MessageHandler<WorkerContext> {
 export function OnStreamHander(sender: MessageSender | ChosenInlineSender, context?: WorkerContext, question?: string): ChatStreamTextHandler {
     let sentPromise = null as Promise<Response> | null;
     let nextEnableTime = Date.now();
+    let sentError = false;
     const isMessageSender = sender instanceof MessageSender;
     const sendInterval = isMessageSender ? ENV.TELEGRAM_MIN_STREAM_INTERVAL : ENV.INLINE_QUERY_SEND_INTERVAL;
     // const sentMessageIds = isMessageSender && sender.context.message_id ? [sender.context.message_id] : [];
@@ -204,14 +205,10 @@ export function OnStreamHander(sender: MessageSender | ChosenInlineSender, conte
                 }
             }
 
-            if (resp.ok && sender instanceof MessageSender) {
-                // const respJson = await resp.json() as Telegram.ResponseWithMessage;
-                // sender.update({
-                //     message_id: respJson.result.message_id,
-                // });
-                // sentMessageIds.push(respJson.result.message_id);
-            } else if (!resp.ok) {
+            if (!resp.ok) {
                 log.error(`send message failed: ${resp.status} ${resp.statusText}`);
+                sender.context.parse_mode = null;
+                sentError = true;
                 return sentPromise = sender.sendPlainText(text);
             }
         } catch (e) {
@@ -227,10 +224,10 @@ export function OnStreamHander(sender: MessageSender | ChosenInlineSender, conte
         }
         const data = context ? `${getLog(context.USER_CONFIG)}\n${text}` : text;
         log.info(`sent message ids: ${isMessageSender ? [...sender.context.sentMessageIds] : sender.context.inline_message_id}`);
-        const finalResp = await sender.sendRichText(data, ENV.DEFAULT_PARSE_MODE as Telegram.ParseMode, 'chat');
-        if (!finalResp.ok) {
+        const finalResp = await sender.sendRichText(data);
+        if (sentError || !finalResp.ok) {
             (sender as MessageSender).context.sentMessageIds.clear();
-            return sendTelegraph(context!, sender, question || 'Redo Question', text);
+            return sendTelegraph(context!, sender, question || 'Redo Question', data, text);
         }
         return finalResp;
     };
@@ -238,7 +235,7 @@ export function OnStreamHander(sender: MessageSender | ChosenInlineSender, conte
     return streamSender as unknown as ChatStreamTextHandler;
 }
 
-async function sendTelegraph(context: WorkerContext, sender: MessageSender | ChosenInlineSender, question: string, text: string) {
+async function sendTelegraph(context: WorkerContext, sender: MessageSender | ChosenInlineSender, question: string, text: string, raw?: string) {
     log.info(`send telegraph`);
     if (question.length > 600) {
         question = `${question.slice(0, 300)}...${question.slice(-300)}`;
@@ -249,7 +246,7 @@ async function sendTelegraph(context: WorkerContext, sender: MessageSender | Cho
     log.info(logSingleton);
     log.info(getLog(context.USER_CONFIG));
 
-    const telegraph_prefix = `${prefix}\n#Answer\n🤖 **${getLog(context.USER_CONFIG, true)}**\n`;
+    const telegraph_prefix = `${prefix}\n#Answer\n🤖 **${getLog(context.USER_CONFIG, true, true)}**\n`;
     const debug_info = `debug info:\n${getLog(context.USER_CONFIG) as string}`
         .replace('LOGSTART', '')
         .replace('LOGEND', '')
@@ -260,9 +257,10 @@ async function sendTelegraph(context: WorkerContext, sender: MessageSender | Cho
     const resp = await telegraphSender.send(
         'Daily Q&A',
         telegraph_prefix + text + telegraph_suffix,
+        raw,
     );
     const url = `https://telegra.ph/${telegraphSender.teleph_path}`;
-    const msg = `回答已经转换成完整文章，请及时查看~\n[🔗点击进行查看](${url})`;
+    const msg = `${raw ? '由于渲染出现错误 ' : ''}回答已经转换成完整文章。\n[🔗点击进行查看](${url})`.trim();
     log.info(`send telegraph message: ${msg}`);
     await sender.sendRichText(msg);
     return resp;

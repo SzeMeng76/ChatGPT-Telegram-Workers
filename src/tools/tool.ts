@@ -72,7 +72,7 @@ export async function vaildTools(tools_config: string[]) {
         return acc;
     }, {});
     // tools key name
-    const activeToolAlias = Object.keys(tools).filter(name => tools_config.includes(name));
+    const activeToolAlias = tools_config.filter(t => Object.keys(tools).includes(t));
     return {
         tools: useTools,
         activeToolAlias,

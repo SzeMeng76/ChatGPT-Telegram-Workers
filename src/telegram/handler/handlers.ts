@@ -350,8 +350,8 @@ export class HandlerCallbackQuery implements CallbackQueryHandler<CallbackQueryC
 export class HandlerInlineQuery implements InlineQueryHandler<InlineQueryContext> {
     handle = async (chosenInline: Telegram.InlineQuery, context: InlineQueryContext): Promise<Response | null> => {
         const endSuffix = '$';
-        if (!endSuffix) {
-            log.info(`[INLINE QUERY] Not end with $: ${context.query}`);
+        if (!chosenInline.query.endsWith(endSuffix)) {
+            log.info(`[INLINE QUERY] Not end with $: ${chosenInline.query}`);
             return new Response('success', { status: 200 });
         }
         const api = createTelegramBotAPI(context.token);

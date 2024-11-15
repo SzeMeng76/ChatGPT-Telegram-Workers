@@ -44,7 +44,6 @@ export class AnswerChatInlineQuery implements answerInlineQuery {
     };
 
     handlerQuestion = async (chosenInline: ChosenInlineResult, context: ChosenInlineWorkerContext, sender: MessageSender): Promise<string> => {
-        // const endSeparator = '$';
         const question = chosenInline.query.substring(0, chosenInline.query.length - 1).trim();
         // simulate message and substitute words
         const message = { text: question } as unknown as Message;
