@@ -17,7 +17,7 @@
     "payload": {
         "url": "https://geoapi.qweather.com/v2/city/lookup?location={{location}}",
         "headers": {
-            "Authorization": "Bearer {{QWEATHER_TOKEN}}",
+            "X-QW-Api-Key": "{{QWEATHER_TOKEN}}",
             "Content-Type": "application/json"
         }
     },

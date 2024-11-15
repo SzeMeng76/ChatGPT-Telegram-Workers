@@ -32,6 +32,8 @@ export function executeTool(toolName: string) {
             }
             filledPayload = filledPayload.replace(`{{${key}}}`, secret);
         });
+        // Remove the remaining {{...}}
+        filledPayload = filledPayload.replace(/\{\{.*?\}\}/g, '');
 
         const parsedPayload = JSON.parse(filledPayload);
         const startTime = Date.now();
@@ -44,9 +46,13 @@ export function executeTool(toolName: string) {
         });
         log.info(`tool request end`);
         if (!result.ok) {
-            throw new Error(`Tool call error: ${result.statusText}`);
+            throw new Error(`Tool call error: ${result.statusText}}`);
         }
-        result = await result.text();
+        if (await result.headers.get('content-type')?.includes('json')) {
+            result = await result.json();
+        } else {
+            result = await result.text();
+        }
         if (tools[toolName].handler) {
             const f = eval(tools[toolName].handler);
             result = f(result);

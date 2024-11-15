@@ -29,7 +29,7 @@
     "payload": {
         "url": "https://api.qweather.com/v7/weather/now?location={{location}}&lang={{lang}}&unit={{unit}}",
         "headers": {
-            "Authorization": "Bearer {{QWEATHER_TOKEN}}",
+            "X-QW-Api-Key": "{{QWEATHER_TOKEN}}",
             "Content-Type": "application/json"
         }
     },
