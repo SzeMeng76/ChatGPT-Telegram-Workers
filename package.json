@@ -36,7 +36,8 @@
         "start:debug": "wrangler dev --local",
         "prepare:vercel": "tsx ./scripts/plugins/vercel/setenv.ts",
         "wrangler": "wrangler",
-        "test": "tsx ./src/config/env.test.ts"
+        "test": "tsx ./src/config/env.test.ts",
+        "clean": "rm -rf dist"
     },
     "dependencies": {
         "@ai-sdk/anthropic": "^0.0.56",
