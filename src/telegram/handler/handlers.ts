@@ -209,8 +209,7 @@ export class HandlerCallbackQuery implements CallbackQueryHandler<CallbackQueryC
             return checkRoleResult;
         }
         if (context.data === 'CLOSE') {
-            await this.closeInlineKeyboard(api, message);
-            return null;
+            return this.closeInlineKeyboard(api, message);
         }
         const queryHandler = new InlineCommandHandler();
         const defaultInlineKeys = queryHandler.defaultInlineKeys(context.USER_CONFIG);
@@ -236,10 +235,9 @@ export class HandlerCallbackQuery implements CallbackQueryHandler<CallbackQueryC
             }
             inlineKeyboard = this.updateInlineList(defaultInlineKeys[inlineKey], configValue);
         }
-        const settingMessage = queryHandler.settingsMessage(context.USER_CONFIG, defaultInlineKeys);
+        const settingMessage = queryHandler.settingsMessage(context.USER_CONFIG, queryHandler.defaultInlineKeys(context.USER_CONFIG));
 
-        await this.sendCallBackMessage(api, message, settingMessage, inlineKeyboard);
-        return null;
+        return this.sendCallBackMessage(api, message, settingMessage, inlineKeyboard);
     };
 
     private async checkInlineKey(api: TelegramBotAPI, context: CallbackQueryContext, key: string, index: string, inlineKeys: Record<string, any>) {
@@ -300,30 +298,30 @@ export class HandlerCallbackQuery implements CallbackQueryHandler<CallbackQueryC
                 throw new TypeError('Not support config type');
         }
 
+        if (!context.USER_CONFIG.DEFINE_KEYS.includes(configKey)) {
+            context.USER_CONFIG.DEFINE_KEYS.push(configKey);
+        }
         log.info(`[CALLBACK QUERY] Update config: ${configKey} = ${context.USER_CONFIG[configKey]}`);
-
         await ENV.DATABASE.put(context.SHARE_CONTEXT.configStoreKey, JSON.stringify(context.USER_CONFIG)).catch(console.error);
-        this.sendAlert(api, context.query_id, 'Data update successful', false);
+        this.sendAlert(api, context.query_id, '✅ Data update successful', false);
     }
 
     private async closeInlineKeyboard(api: TelegramBotAPI, message: Telegram.Message) {
-        const resp = await api.deleteMessage({
+        return api.deleteMessage({
             chat_id: message.chat.id,
             message_id: message.message_id,
         }).then(r => r.json());
-        return resp;
     }
 
     private async sendCallBackMessage(api: TelegramBotAPI, message: Telegram.Message, text: string, inline_keyboard: Telegram.InlineKeyboardButton[][]) {
-        const resp = await api.editMessageText({
+        return api.editMessageText({
             chat_id: message.chat.id,
             message_id: message.message_id,
             ...(message.chat.type === 'private' ? {} : { reply_to_message_id: message.message_id }),
             text: escape(text.split('\n')),
             parse_mode: 'MarkdownV2',
             reply_markup: { inline_keyboard },
-        }).then(r => r.json());
-        return resp;
+        });
     }
 
     private updateInlineList(inline_item: InlineItem, configValue: string | boolean) {
@@ -351,7 +349,8 @@ export class HandlerCallbackQuery implements CallbackQueryHandler<CallbackQueryC
 
 export class HandlerInlineQuery implements InlineQueryHandler<InlineQueryContext> {
     handle = async (chosenInline: Telegram.InlineQuery, context: InlineQueryContext): Promise<Response | null> => {
-        if (!context.query?.endsWith('$')) {
+        const endSuffix = '$';
+        if (!endSuffix) {
             log.info(`[INLINE QUERY] Not end with $: ${context.query}`);
             return new Response('success', { status: 200 });
         }

@@ -56,7 +56,7 @@ export function AIMiddleware({ config, models, tools, activeTools, onStream, too
                 log.info(`toolChoice changed: ${JSON.stringify(toolChoice[step])}`);
             }
             warpMessages(params.prompt, tools, activeTools);
-            log.debug(`warp params result: ${JSON.stringify(params)}`);
+            // log.debug(`warp params result: ${JSON.stringify(params)}`);
             return params;
         },
 

@@ -68,7 +68,7 @@ export async function chatWithLLM(
         } else {
             errMsg += (e as Error).message.slice(0, 2048);
         }
-        return streamSender.end?.(errMsg);
+        return streamSender.end?.(`\`\`\`\n${errMsg}\n\`\`\``);
     }
 }
 
@@ -345,7 +345,7 @@ async function handleTextToImage(
     await sender.sendPlainText('Please wait a moment...', 'tip').then(r => r.json());
     const result = await agent.request(eMsg.text, context.USER_CONFIG);
     log.info('imageresult', JSON.stringify(result));
-    await sendImages(result, ENV.SEND_IMAGE_FILE, sender, context.USER_CONFIG);
+    await sendImages(result, ENV.SEND_IMAGE_AS_FILE, sender, context.USER_CONFIG);
     const api = createTelegramBotAPI(context.SHARE_CONTEXT.botToken);
     await api.deleteMessage({ chat_id: sender.context.chat_id, message_id: sender.context.message_id! });
     return result as UnionData;
@@ -370,11 +370,11 @@ async function handleAudioToText(
     return result;
 }
 
-export async function sendImages(img: ImageResult, SEND_IMAGE_FILE: boolean, sender: MessageSender, config: AgentUserConfig) {
+export async function sendImages(img: ImageResult, SEND_IMAGE_AS_FILE: boolean, sender: MessageSender, config: AgentUserConfig) {
     const caption = img.text ? `${getLog(config)}\n> ${img.text}` : getLog(config);
     if (img.url && img.url.length > 1) {
         const images = img.url.map((url: string) => ({
-            type: (SEND_IMAGE_FILE ? 'document' : 'photo'),
+            type: (SEND_IMAGE_AS_FILE ? 'document' : 'photo'),
             media: url,
         })) as Telegram.InputMedia[];
         images.at(-1)!.caption = escape(caption.split('\n'));

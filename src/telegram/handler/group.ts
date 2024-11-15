@@ -63,20 +63,21 @@ export function SubstituteWords(message: Telegram.Message): boolean {
         }
     }
 
-    const replacer = ENV.MESSAGE_REPLACER;
     let replacedString = '';
     const textBefore = message.text || message.caption || '';
-    // alaways remove the trigger prefix
     let text = textBefore.replace(new RegExp(`^${ENV.CHAT_TRIGGER_PERFIX}`), '').trim();
     const isTrigger = text !== textBefore;
+    const replacer = { ...ENV.MESSAGE_REPLACER };
     do {
         const triggerKey = Object.keys(replacer).find(key =>
-            // You can remove the space judgment here, adjust the order of trigger words with the same prefix by yourself.
-            text.startsWith(`${key} `),
+            // adjust the order of trigger words with the same prefix by yourself.
+            text.startsWith(key),
         );
         if (triggerKey) {
             replacedString += `${replacer[triggerKey]} `;
             text = text.substring(triggerKey.length).trim();
+            // remove the trigger key from replacer to avoid replace again
+            delete replacer[triggerKey];
         } else {
             break;
         }

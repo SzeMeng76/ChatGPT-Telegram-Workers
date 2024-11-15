@@ -1,0 +1,26 @@
+{
+    "schema": {
+        "name": "qweather_city_lookup",
+        "description": "Retrieve city information based on location name using QWeather API. This can be used to get city details such as city ID, name, and coordinates.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "location": {
+                    "type": "string",
+                    "description": "The name of the location to look up. This can be a city name, administrative region, or other geographical name."
+                }
+            },
+            "required": ["location"],
+            "additionalProperties": false
+        }
+    },
+    "payload": {
+        "url": "https://geoapi.qweather.com/v2/city/lookup?location={{location}}",
+        "headers": {
+            "Authorization": "Bearer {{QWEATHER_TOKEN}}",
+            "Content-Type": "application/json"
+        }
+    },
+    "type": "lookup",
+    "required": ["QWEATHER_TOKEN"]
+}

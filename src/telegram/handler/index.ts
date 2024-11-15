@@ -102,12 +102,13 @@ async function handleMessage(token: string, message: Telegram.Message, isForward
 
 async function handleCallbackQuery(token: string, callbackQuery: Telegram.CallbackQuery) {
     try {
-        log.debug(`handleCallbackQuery`, callbackQuery);
+        log.info('handleCallbackQuery');
         if (!callbackQuery?.message || !callbackQuery?.data) {
             throw new Error('Not support callback query type');
         }
 
         const workContext = new WorkerContextBase(token, callbackQuery.message);
+
         const handlers: MessageHandler<any>[] = [
             new EnvChecker(),
             new WhiteListFilter(),

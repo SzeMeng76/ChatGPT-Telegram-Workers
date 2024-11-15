@@ -1,10 +1,10 @@
-import type { CoreAssistantMessage, CoreMessage, CoreToolChoice, LanguageModelV1, StepResult, ToolCallPart, ToolResultPart } from 'ai';
+import type { CoreMessage, CoreToolChoice, LanguageModelV1, StepResult } from 'ai';
 import type { AgentUserConfig } from '../config/env';
 import type { ChatStreamTextHandler, OpenAIFuncCallData, ResponseMessage } from './types';
 import { generateText, streamText, experimental_wrapLanguageModel as wrapLanguageModel } from 'ai';
 import { ENV } from '../config/env';
 import { log } from '../log/logger';
-import { executeTool, manualRequestTool, tools } from '../tools';
+import { manualRequestTool } from '../tools';
 import { AIMiddleware } from './model_middleware';
 import { Stream } from './stream';
 

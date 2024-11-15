@@ -62,7 +62,7 @@ export type ResponseMessage = CoreAssistantMessage | CoreToolMessage;
 export type ChatAgentRequest = (params: LLMChatParams, context: AgentUserConfig, onStream: ChatStreamTextHandler | null) => Promise<{ messages: ResponseMessage[]; content: string }>;
 
 export interface Agent<AgentRequest> {
-    name: string | string[];
+    name: string;
     modelKey: string;
     enable: (context: AgentUserConfig) => boolean;
     request: AgentRequest;

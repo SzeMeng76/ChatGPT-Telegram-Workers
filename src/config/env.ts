@@ -76,6 +76,7 @@ class Environment extends EnvironmentConfig {
     readonly USER_CONFIG: AgentUserConfig = createAgentUserConfig();
     readonly CUSTOM_COMMAND: Record<string, CommandConfig> = {};
     readonly PLUGINS_COMMAND: Record<string, CommandConfig> = {};
+    readonly PLUGINS_FUNCTION: Record<string, any> = {};
 
     DATABASE: KVNamespace = null as any;
     API_GUARD: APIGuard | null = null;
@@ -122,6 +123,13 @@ class Environment extends EnvironmentConfig {
             this.PLUGINS_ENV.JINA_API_KEY = source.JINA_API_KEY;
         }
 
+        // 读取外部插件
+        for (const key of Object.keys(source)) {
+            if (key.startsWith('PLUGIN_FUNCTION_')) {
+                this.PLUGINS_FUNCTION[key.substring('PLUGIN_FUNCTION_'.length)] = source[key];
+            }
+        }
+
         // 合并环境变量
         ConfigMerger.merge(this, source, [
             'BUILD_TIMESTAMP',
@@ -134,6 +142,7 @@ class Environment extends EnvironmentConfig {
             'DATABASE',
             'API_GUARD',
         ]);
+
         ConfigMerger.merge(this.USER_CONFIG, source);
         this.migrateOldEnv(source);
         this.USER_CONFIG.DEFINE_KEYS = [];

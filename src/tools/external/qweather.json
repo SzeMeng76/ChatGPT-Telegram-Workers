@@ -1,0 +1,38 @@
+{
+    "schema": {
+        "name": "qweather_weather_now",
+        "description": "Retrieve current weather information for a specific location using QWeather API. This can be used to get real-time weather details such as temperature, humidity, and weather conditions.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "location": {
+                    "type": "string",
+                    "description": "The location ID or coordinates (longitude,latitude) for which to retrieve the current weather. This ID is typically obtained from a city lookup API. For example, location=101010100 or location=116.41,39.92",
+                    "examples": ["101010100", "116.41,39.92"]
+                },
+                "lang": {
+                    "type": "string",
+                    "description": "Language setting for the response. Refer to the multi-language documentation for supported languages and settings.",
+                    "examples": ["en", "zh"]
+                },
+                "unit": {
+                    "type": "string",
+                    "description": "Unit of measurement for the response data. Options include unit=m (metric units, default) and unit=i (imperial units). Refer to the measurement units documentation for more options and details.",
+                    "enum": ["m", "i"],
+                    "default": "m"
+                }
+            },
+            "required": ["location"],
+            "additionalProperties": false
+        }
+    },
+    "payload": {
+        "url": "https://api.qweather.com/v7/weather/now?location={{location}}&lang={{lang}}&unit={{unit}}",
+        "headers": {
+            "Authorization": "Bearer {{QWEATHER_TOKEN}}",
+            "Content-Type": "application/json"
+        }
+    },
+    "type": "weather",
+    "required": ["QWEATHER_TOKEN"]
+}

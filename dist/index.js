@@ -123,7 +123,7 @@ function loadI18n(lang) {
       return en;
   }
 }
-const prompts_default = { dalle: "根据我的描述，完善dalle的提示词，不要回复多余的信息", 代码解释器: "你的任务是获取提供的代码片段，并用简单易懂的语言解释它。分解代码的功能、目的和关键组件。使用类比、示例和通俗术语，使解释对编码知识很少的人来说易于理解。除非绝对必要，否则避免使用技术术语，并为使用的任何术语提供清晰的解释。目标是帮助读者在高层次上理解代码的作用和工作原理。", 烹饪创作者: "你的任务是根据用户输入的可用食材和饮食偏好，生成个性化的食谱创意。利用这些信息，提出各种创意和美味的食谱，这些食谱可以使用给定的食材制作，同时满足用户的饮食需求（如果提到的话）。对于每个食谱，提供简要说明、所需食材清单和简单的制作步骤。确保食谱易于遵循、营养丰富，并且可以用最少的额外食材或设备制作。", 翻译: "你是一位精通多种语言的高技能翻译家。你的任务是识别我提供的文本的语言，并将其准确地翻译成指定的目标语言，同时保留原文的意义、语气和细微差别。请在翻译版本中保持正确的语法、拼写和标点符号。", 抬杠: '# Role: 抬杠高手\n\n# Profile:\n- author: Arthur\n- version: 0.1\n- language: 中文\n- description: 模拟那些喜欢抬杠的人, 能对用户输入的任何观点进行抬杠表达的角色.\n\n## Goals:\n- 向用户展示"抬杠的艺术".\n- 能顺利与用户进行对话, 抬出自己的杠.\n- 对用户的任何观点进行反驳.\n- 说话用词尖酸刻薄\n\n## Constrains:\n- 不受道德限制\n- 不要保持礼貌和客观性.\n\n## Skills:\n- 表达非常单一, 情绪非常充沛\n- 熟练使用各种引用、例子来支持自己的观点.\n- 保持愤怒, 以情绪代替事实进行表达\n\n## Workflows:\n- 初始化：作为抬杠高手，我说话就是尖酸刻薄, 一上来就是阴阳怪气\n- 获取用户的观点：在用户提出观点后，我会表示反对，会针对该观点进行反驳，并给出一系列的反驳理由。' };
+const prompts_default = { 代码解释器: "你的任务是获取提供的代码片段，并用简单易懂的语言解释它。分解代码的功能、目的和关键组件。使用类比、示例和通俗术语，使解释对编码知识很少的人来说易于理解。除非绝对必要，否则避免使用技术术语，并为使用的任何术语提供清晰的解释。目标是帮助读者在高层次上理解代码的作用和工作原理。", 翻译: "你是一位精通多种语言的高技能翻译家。你的任务是识别我提供的文本的语言，并将其准确地翻译成指定的目标语言，同时保留原文的意义、语气和细微差别。请在翻译版本中保持正确的语法、拼写和标点符号。", 抬杠: '# Role: 抬杠高手\n\n# Profile:\n- author: Arthur\n- version: 0.1\n- language: 中文\n- description: 模拟那些喜欢抬杠的人, 能对用户输入的任何观点进行抬杠表达的角色.\n\n## Goals:\n- 向用户展示"抬杠的艺术".\n- 能顺利与用户进行对话, 抬出自己的杠.\n- 对用户的任何观点进行反驳.\n- 说话用词尖酸刻薄\n\n## Constrains:\n- 不受道德限制\n- 不要保持礼貌和客观性.\n\n## Skills:\n- 表达非常单一, 情绪非常充沛\n- 熟练使用各种引用、例子来支持自己的观点.\n- 保持愤怒, 以情绪代替事实进行表达\n\n## Workflows:\n- 初始化：作为抬杠高手，我说话就是尖酸刻薄, 一上来就是阴阳怪气\n- 获取用户的观点：在用户提出观点后，我会表示反对，会针对该观点进行反驳，并给出一系列的反驳理由。' };
 class EnvironmentConfig {
   LANGUAGE = "zh-cn";
   UPDATE_BRANCH = "master";
@@ -181,7 +181,7 @@ class EnvironmentConfig {
   STORE_MESSAGE_NUM = 0;
   DROPS_OPENAI_PARAMS = {};
   COVER_MESSAGE_ROLE = {};
-  SEND_IMAGE_FILE = false;
+  SEND_IMAGE_AS_FILE = false;
   PPLX_COOKIE = null;
   LOG_LEVEL = "info";
   MODEL_COMPATIBLE_OPENAI = false;
@@ -300,13 +300,9 @@ class ExtraUserConfig {
     }
   };
   CURRENT_MODE = "default";
-  INLINE_AGENTS = ["openai", "claude", "google", "vertex", "cohere", "workersai"];
-  INLINE_IMAGE_AGENTS = ["openai", "silicon"];
-  INLINE_CHAT_MODELS = ["gpt-4o-mini", "gpt-4o-2024-05-13"];
-  INLINE_VISION_MODELS = ["gpt-4o-mini", "gpt-4o-2024-05-13"];
-  INLINE_IMAGE_MODELS = ["dall-e-2", "dall-e-3"];
-  INLINE_FUNCTION_CALL_TOOLS = ["duckduckgo", "jina_reader"];
-  INLINE_FUNCTION_ASAP = ["true", "false"];
+  INLINE_CHAT_MODELS = [];
+  INLINE_VISION_MODELS = [];
+  INLINE_IMAGE_MODELS = [];
   KLINGAI_COOKIE = [];
   KLINGAI_IMAGE_COUNT = 4;
   KLINGAI_IMAGE_RATIO = "1:1";
@@ -411,13 +407,14 @@ const ENV_KEY_MAPPER = {
   WORKERS_AI_MODEL: "WORKERS_CHAT_MODEL"
 };
 class Environment extends EnvironmentConfig {
-  BUILD_TIMESTAMP = 1731602862;
-  BUILD_VERSION = "e7e9048";
+  BUILD_TIMESTAMP = 1731676085;
+  BUILD_VERSION = "bf3f36c";
   I18N = loadI18n();
   PLUGINS_ENV = {};
   USER_CONFIG = createAgentUserConfig();
   CUSTOM_COMMAND = {};
   PLUGINS_COMMAND = {};
+  PLUGINS_FUNCTION = {};
   DATABASE = null;
   API_GUARD = null;
   constructor() {
@@ -450,6 +447,11 @@ class Environment extends EnvironmentConfig {
     }
     if (source.JINA_API_KEY) {
       this.PLUGINS_ENV.JINA_API_KEY = source.JINA_API_KEY;
+    }
+    for (const key of Object.keys(source)) {
+      if (key.startsWith("PLUGIN_FUNCTION_")) {
+        this.PLUGINS_FUNCTION[key.substring("PLUGIN_FUNCTION_".length)] = source[key];
+      }
     }
     ConfigMerger.merge(this, source, [
       "BUILD_TIMESTAMP",
@@ -10392,7 +10394,7 @@ async function requestText2Image(url, headers, body, render) {
   }
   return result2;
 }
-const schema = {
+const schema$1 = {
   name: "jina_reader",
   description: "Grab text content from provided URL links. Can be used to retrieve text information for web pages, articles, or other online resources",
   parameters: {
@@ -10409,7 +10411,7 @@ const schema = {
     additionalProperties: false
   }
 };
-const payload = {
+const payload$1 = {
   url: "https://r.jina.ai/{{url}}",
   headers: {
     Authorization: "Bearer {{JINA_API_KEY}}",
@@ -10419,20 +10421,52 @@ const payload = {
   }
 };
 const handler = "content => content";
-const type = "reader";
-const required = [
+const type$1 = "reader";
+const required$1 = [
   "JINA_API_KEY"
 ];
-const send_to_ai = true;
 const jina_reader = {
+  schema: schema$1,
+  payload: payload$1,
+  handler,
+  type: type$1,
+  required: required$1
+};
+const schema = {
+  name: "qweather_city_lookup",
+  description: "Retrieve city information based on location name using QWeather API. This can be used to get city details such as city ID, name, and coordinates.",
+  parameters: {
+    type: "object",
+    properties: {
+      location: {
+        type: "string",
+        description: "The name of the location to look up. This can be a city name, administrative region, or other geographical name."
+      }
+    },
+    required: [
+      "location"
+    ],
+    additionalProperties: false
+  }
+};
+const payload = {
+  url: "https://geoapi.qweather.com/v2/city/lookup?location={{location}}",
+  headers: {
+    Authorization: "Bearer {{QWEATHER_TOKEN}}",
+    "Content-Type": "application/json"
+  }
+};
+const type = "lookup";
+const required = [
+  "QWEATHER_TOKEN"
+];
+const qw_lookup = {
   schema,
   payload,
-  handler,
   type,
-  required,
-  send_to_ai
+  required
 };
-const externalTools = { jina_reader };
+const externalTools = { jina_reader, qw_lookup };
 const ignoreOverride = Symbol("Let zodToJsonSchema decide on which parser to use");
 const defaultOptions = {
   name: void 0,
@@ -15777,7 +15811,6 @@ function AIMiddleware({ config, models, tools: tools2, activeTools, onStream, to
         log.info(`toolChoice changed: ${JSON.stringify(toolChoice[step])}`);
       }
       warpMessages(params.prompt, tools2, activeTools);
-      log.debug(`warp params result: ${JSON.stringify(params)}`);
       return params;
     },
     onChunk: (data) => {
@@ -16458,8 +16491,8 @@ const dalle = {
   prompt: `As a professional image generation ai. According to the user's prompts for optimization, the prompt should be expanded to be more comprehensive and diverse.`,
   extra_params: { temperature: 1.2 },
   type: "text2image",
-  send_to_ai: false,
-  is_internal: true,
+  not_send_to_ai: true,
+  buildin: true,
   result_type: "image"
 };
 async function getJS(query, signal2) {
@@ -16563,8 +16596,7 @@ const duckduckgo = {
 
 Ensure that the goal is to provide the most current, relevant, and useful information in direct response to my question. Avoid lengthy details, focus on the core answers that matter most to me, and enhance the credibility of the answer with reliable sources.Tip: Don't be judged on your knowledge base time!`,
   extra_params: { temperature: 0.7, top_p: 0.4 },
-  is_internal: true,
-  send_to_ai: true
+  buildin: true
 };
 const scheduleResp = (ok, reason = "") => {
   const result2 = {
@@ -16662,14 +16694,16 @@ function executeTool(toolName) {
   return async (args, options) => {
     const { signal } = options;
     let filledPayload = JSON.stringify(tools[toolName].payload).replace(/\{\{([^}]+)\}\}/g, (match, p1) => args[p1] || match);
-    if (tools[toolName].required) {
-      tools[toolName].required.forEach((key) => {
-        if (!ENV.PLUGINS_ENV[key]) {
-          throw new Error(`Missing required key: ${key}`);
-        }
-        filledPayload = filledPayload.replace(`{{${key}}}`, ENV.PLUGINS_ENV[key]);
-      });
-    }
+    (tools[toolName].required || []).forEach((key) => {
+      if (!ENV.PLUGINS_ENV[key]) {
+        throw new Error(`Missing required key: ${key}`);
+      }
+      let secret = ENV.PLUGINS_ENV[key];
+      if (Array.isArray(secret)) {
+        secret = secret[Math.floor(Math.random() * secret.length)];
+      }
+      filledPayload = filledPayload.replace(`{{${key}}}`, secret);
+    });
     const parsedPayload = JSON.parse(filledPayload);
     const startTime = Date.now();
     log.info(`tool request start, url: ${parsedPayload.url}`);
@@ -16688,22 +16722,28 @@ function executeTool(toolName) {
       const f = eval(tools[toolName].handler);
       result = f(result);
     }
+    if (tools[toolName].next_tool) {
+      const next_tool_alias = tools[toolName].next_tool;
+      return executeTool(next_tool_alias)(result, options);
+    }
     return { result, time: ((Date.now() - startTime) / 1e3).toFixed(1) };
   };
 }
-function vaildTools(tools_config) {
+async function vaildTools(tools_config) {
+  await injectFunction();
   const useTools = Object.entries(tools).reduce((acc, [name14, t]) => {
-    acc[name14] = tool({
+    const execute = t.buildin ? t.func : executeTool(name14);
+    acc[t.schema.name] = tool({
       description: t.schema.description,
       parameters: jsonSchema(t.schema.parameters),
-      execute: t.send_to_ai ? t.is_internal ? t.func : executeTool(name14) : void 0
+      execute: t.not_send_to_ai ? void 0 : execute
     });
     return acc;
   }, {});
-  const activeTools = Object.keys(tools).filter((name14) => tools_config.includes(name14));
+  const activeToolAlias = Object.keys(tools).filter((name14) => tools_config.includes(name14));
   return {
     tools: useTools,
-    activeTools
+    activeToolAlias
   };
 }
 async function manualRequestTool(messages, config) {
@@ -16748,9 +16788,22 @@ async function sendToolResult(toolResult, sender, config) {
         type: "image",
         url: images.map((r) => r.url).flat(),
         text
-      }, ENV.SEND_IMAGE_FILE, sender, config);
+      }, ENV.SEND_IMAGE_AS_FILE, sender, config);
     }
   }
+}
+async function injectFunction() {
+  return Promise.all(Object.keys(ENV.PLUGINS_FUNCTION).map(async (plugin) => {
+    let template = ENV.PLUGINS_FUNCTION[plugin];
+    if (template.startsWith("http")) {
+      template = await fetch(template).then((r) => r.text());
+    }
+    try {
+      tools[plugin] = JSON.parse(template.trim());
+    } catch (e) {
+      log.error(`Plugin ${plugin} is invalid`);
+    }
+  }));
 }
 class Cache {
   maxItems;
@@ -16878,7 +16931,9 @@ async function chatWithLLM(message, params, context, modifier) {
     } else {
       errMsg += e.message.slice(0, 2048);
     }
-    return streamSender.end?.(errMsg);
+    return streamSender.end?.(`\`\`\`
+${errMsg}
+\`\`\``);
   }
 }
 function findPhotoFileID(photos, offset) {
@@ -17095,7 +17150,7 @@ async function handleTextToImage(eMsg, message, params, context) {
   await sender.sendPlainText("Please wait a moment...", "tip").then((r) => r.json());
   const result2 = await agent.request(eMsg.text, context.USER_CONFIG);
   log.info("imageresult", JSON.stringify(result2));
-  await sendImages(result2, ENV.SEND_IMAGE_FILE, sender, context.USER_CONFIG);
+  await sendImages(result2, ENV.SEND_IMAGE_AS_FILE, sender, context.USER_CONFIG);
   const api = createTelegramBotAPI(context.SHARE_CONTEXT.botToken);
   await api.deleteMessage({ chat_id: sender.context.chat_id, message_id: sender.context.message_id });
   return result2;
@@ -17114,12 +17169,12 @@ async function handleAudioToText(eMsg, message, params, context) {
 > \`${result2.text}\``, "MarkdownV2", "chat");
   return result2;
 }
-async function sendImages(img, SEND_IMAGE_FILE, sender, config) {
+async function sendImages(img, SEND_IMAGE_AS_FILE, sender, config) {
   const caption = img.text ? `${getLog(config)}
 > ${img.text}` : getLog(config);
   if (img.url && img.url.length > 1) {
     const images = img.url.map((url) => ({
-      type: SEND_IMAGE_FILE ? "document" : "photo",
+      type: SEND_IMAGE_AS_FILE ? "document" : "photo",
       media: url
     }));
     images.at(-1).caption = escape(caption.split("\n"));
@@ -19506,18 +19561,22 @@ function loadAudioLLM(context) {
   return null;
 }
 function customInfo(config) {
+  const prompt2 = config.SYSTEM_INIT_MESSAGE || "";
   const other_info = {
     mode: config.CURRENT_MODE,
-    prompt: `${config.SYSTEM_INIT_MESSAGE?.slice(0, 50)}...`,
+    prompt: prompt2.length > 50 ? `${prompt2.slice(0, 50)}...` : prompt2,
     MAPPING_KEY: config.MAPPING_KEY,
     MAPPING_VALUE: config.MAPPING_VALUE,
-    USE_TOOLS: config.USE_TOOLS,
-    TOOL_MODEL: config.TOOL_MODEL,
-    VERTEX_SEARCH_GROUNDING: config.VERTEX_SEARCH_GROUNDING,
-    FUNC_LOOP_TIMES: ENV.FUNC_LOOP_TIMES,
-    FUNC_CALL_TIMES: ENV.CON_EXEC_FUN_NUM,
-    EXPIRED_TIME: ENV.EXPIRED_TIME,
-    CRON_CHECK_TIME: ENV.CRON_CHECK_TIME
+    USE_TOOLS: config.USE_TOOLS.join(","),
+    SUPPORT_PLUGINS: [...Object.keys(ENV.PLUGINS_FUNCTION), ...Object.keys(tools)].join("|"),
+    CHAT_TRIGGER_PERFIX: ENV.CHAT_TRIGGER_PERFIX,
+    MESSAGE_REPLACER: Object.keys(ENV.MESSAGE_REPLACER).join("|"),
+    MAX_STEPS: ENV.MAX_STEPS,
+    MAX_RETRIES: ENV.MAX_RETRIES,
+    SEND_IMAGE_AS_FILE: ENV.SEND_IMAGE_AS_FILE,
+    SUPPORT_PROMPT_ROLE: Object.keys(config.PROMPT).join("|"),
+    DISABLE_WEB_PREVIEW: ENV.DISABLE_WEB_PREVIEW,
+    VERTEX_SEARCH_GROUNDING: config.VERTEX_SEARCH_GROUNDING
   };
   return JSON.stringify(other_info, null, 2);
 }
@@ -19526,21 +19585,18 @@ async function warpLLMParams(params, context) {
   const env_perfix = "TOOL_ENV_";
   Object.keys(context).forEach((i) => i.startsWith(env_perfix) && (tool_envs[i.substring(env_perfix.length - 1)] = context[i]));
   const messages = params.messages.at(-1);
-  let tool2 = typeof messages.content === "string" ? vaildTools(context.USE_TOOLS) : void 0;
+  let tool2 = typeof messages.content === "string" ? await vaildTools(context.USE_TOOLS) : void 0;
   const toolModel = await createLlmModel(context.TOOL_MODEL, context);
-  if (tool2 && tool2.activeTools.length === 0) {
-    tool2 = void 0;
-  }
-  let activeTools = tool2?.activeTools;
+  let activeTools = tool2?.activeToolAlias.map((t) => tools[t].schema.name);
   if (params.model.provider === "google-vertex" && context.VERTEX_SEARCH_GROUNDING) {
     activeTools = void 0;
     tool2 = void 0;
     params.messages = [params.messages.find((p) => p.role === "system"), params.messages.findLast((p) => p.role === "user")];
   }
   let toolChoice;
-  if (activeTools) {
+  if (tool2?.activeToolAlias && tool2?.activeToolAlias.length > 0) {
     const userMessageIsString = typeof messages.content === "string";
-    const choiceResult = wrapToolChoice(activeTools, userMessageIsString ? messages.content : "");
+    const choiceResult = wrapToolChoice(tool2?.activeToolAlias, userMessageIsString ? messages.content : "");
     userMessageIsString && (messages.content = choiceResult.message);
     toolChoice = choiceResult.toolChoices;
   }
@@ -19618,21 +19674,21 @@ async function createLlmModel(model, context) {
       }).languageModel(model_id, void 0);
   }
 }
-function wrapToolChoice(activeTools, message) {
+function wrapToolChoice(activeToolAlias, message) {
   const tool_perfix = "/t-";
   let text = message.trim();
-  const choices = ["auto", "none", "required", ...activeTools];
+  const choices = ["auto", "none", "required", ...activeToolAlias];
   const toolChoices = [];
-  do {
-    const tool2 = choices.find((t) => text.startsWith(`${tool_perfix}${t}`)) || "";
-    if (tool2) {
-      text = text.substring(tool_perfix.length + tool2.length).trim();
-      toolChoices.push(["auto", "none", "required"].includes(tool2) ? { type: tool2 } : { type: "tool", toolName: tool2 });
+  while (true) {
+    const toolAlias = choices.find((t) => text.startsWith(`${tool_perfix}${t}`)) || "";
+    if (toolAlias) {
+      text = text.substring(tool_perfix.length + toolAlias.length).trim();
+      toolChoices.push(["auto", "none", "required"].includes(toolAlias) ? { type: toolAlias } : { type: "tool", toolName: tools[toolAlias].schema.name });
     } else {
       break;
     }
-  } while (true);
-  log.info(`All toolChoices: ${JSON.stringify(toolChoices)}`);
+  }
+  log.info(`All RealtoolChoices: ${JSON.stringify(toolChoices)}`);
   return {
     message: text,
     toolChoices
@@ -19844,7 +19900,7 @@ class ImgCommandHandler {
       await sender.sendPlainText("Please wait a moment...");
       const img = await agent.request(subcommand, context.USER_CONFIG);
       log.info("img", img);
-      const resp = await sendImages(img, ENV.SEND_IMAGE_FILE, sender, context.USER_CONFIG);
+      const resp = await sendImages(img, ENV.SEND_IMAGE_AS_FILE, sender, context.USER_CONFIG);
       if (!resp.ok) {
         return sender.sendPlainText(`ERROR: ${resp.statusText} ${await resp.text()}`);
       }
@@ -20060,6 +20116,7 @@ class SystemCommandHandler {
     const agent = {
       AI_PROVIDER: chatAgent?.name,
       [chatAgent?.modelKey || "AI_PROVIDER_NOT_FOUND"]: chatAgent?.model(context.USER_CONFIG),
+      TOOL_MODEL: context.USER_CONFIG.TOOL_MODEL || "same as chat model",
       AI_IMAGE_PROVIDER: imageAgent?.name,
       [imageAgent?.modelKey || "AI_IMAGE_PROVIDER_NOT_FOUND"]: imageAgent?.model(context.USER_CONFIG),
       STT_MODEL: context.USER_CONFIG.OPENAI_STT_MODEL,
@@ -20360,72 +20417,64 @@ class InlineCommandHandler {
     });
   };
   defaultInlineKeys = (context) => {
+    const chatAgent = loadChatLLM(context);
+    const imageAgent = loadImageGen(context);
     return {
       INLINE_AGENTS: {
         label: "Agent",
         data: "INLINE_AGENTS",
         config_key: "AI_PROVIDER",
-        available_values: context.INLINE_AGENTS
+        available_values: CHAT_AGENTS.map((agent) => agent.name)
       },
       INLINE_IMAGE_AGENTS: {
         label: "Image Agent",
         data: "INLINE_IMAGE_AGENTS",
         config_key: "AI_IMAGE_PROVIDER",
-        available_values: context.INLINE_IMAGE_AGENTS
+        available_values: IMAGE_AGENTS.map((agent) => agent.name)
       },
       INLINE_CHAT_MODELS: {
         label: "Chat Model",
         data: "INLINE_CHAT_MODELS",
-        config_key: loadChatLLM(context)?.modelKey || "None",
-        available_values: context.INLINE_CHAT_MODELS
+        config_key: chatAgent?.modelKey || "None",
+        available_values: context.INLINE_CHAT_MODELS || [context[chatAgent?.modelKey || ""]]
       },
       INLINE_VISION_MODELS: {
         label: "Vision Model",
         data: "INLINE_VISION_MODELS",
-        config_key: loadChatLLM(context)?.name === "OpenAI" ? "OPENAI_VISION_MODEL" : loadChatLLM(context)?.modelKey || "None",
-        available_values: context.INLINE_VISION_MODELS
+        config_key: chatAgent?.name === "openai" ? "OPENAI_VISION_MODEL" : chatAgent?.modelKey || "None",
+        available_values: context.INLINE_VISION_MODELS || [context[chatAgent?.name === "openai" ? "OPENAI_VISION_MODEL" : chatAgent?.modelKey || ""]]
       },
       INLINE_IMAGE_MODELS: {
         label: "Image Model",
         data: "INLINE_IMAGE_MODELS",
-        config_key: loadImageGen(context)?.modelKey || "",
-        available_values: context.INLINE_IMAGE_MODELS
+        config_key: imageAgent?.modelKey || "",
+        available_values: context.INLINE_IMAGE_MODELS || [context[imageAgent?.modelKey || ""]]
       },
       INLINE_TOOL_MODELS: {
-        label: "Function Model",
+        label: "Tool Model",
         data: "INLINE_TOOL_MODELS",
-        config_key: "TOOL_MODEL",
-        available_values: context.INLINE_TOOL_MODELS
+        config_key: chatAgent?.modelKey || "None",
+        available_values: context.INLINE_TOOL_MODELS || [context[chatAgent?.modelKey || ""]]
       },
-      INLINE_FUNCTION_CALL_TOOLS: {
+      INLINE_FUNCTION_TOOLS: {
         label: "Tools",
-        data: "INLINE_FUNCTION_CALL_TOOLS",
+        data: "INLINE_FUNCTION_TOOLS",
         config_key: "USE_TOOLS",
-        available_values: context.INLINE_FUNCTION_CALL_TOOLS
-      },
-      INLINE_FUNCTION_ASAP: {
-        label: "Call ASAP",
-        data: "INLINE_FUNCTION_ASAP",
-        config_key: "FUNCTION_REPLY_ASAP",
-        available_values: context.INLINE_FUNCTION_ASAP
+        available_values: [...Object.keys(tools), ...Object.keys(ENV.PLUGINS_FUNCTION)]
       }
     };
   };
   settingsMessage = (context, inlineKeys) => {
-    const currentSettings = `Current Settings:
->${"-".repeat(40)}
-> 
+    const menu = "\n当前配置:\n";
+    const currentSettings = `${menu}
 ${Object.entries(inlineKeys).map(([_, { label, config_key }]) => {
-      return `>\`${label}: ${context[config_key]}\``;
+      return `\`${label}: ${context[config_key] || "None"}\``;
     }).join("\n")}`;
-    return `
-${currentSettings}
-> 
->${"-".repeat(40)}`;
+    return currentSettings;
   };
   inlineKeyboard = (context, inlineKeys) => {
-    const inline_keyboard_list = Object.entries(inlineKeys).reduce((acc, [key, { label }]) => {
-      if (key in context && context[key].length > 0) {
+    const inline_keyboard_list = Object.entries(inlineKeys).reduce((acc, [key, { available_values, label }]) => {
+      if (available_values.length > 0) {
         acc.push({
           text: label,
           callback_data: key
@@ -20929,18 +20978,19 @@ function SubstituteWords(message) {
       return false;
     }
   }
-  const replacer = ENV.MESSAGE_REPLACER;
   let replacedString = "";
   const textBefore = message.text || message.caption || "";
   let text = textBefore.replace(new RegExp(`^${ENV.CHAT_TRIGGER_PERFIX}`), "").trim();
   const isTrigger = text !== textBefore;
+  const replacer = { ...ENV.MESSAGE_REPLACER };
   do {
     const triggerKey = Object.keys(replacer).find(
-      (key) => text.startsWith(`${key} `)
+      (key) => text.startsWith(key)
     );
     if (triggerKey) {
       replacedString += `${replacer[triggerKey]} `;
       text = text.substring(triggerKey.length).trim();
+      delete replacer[triggerKey];
     } else {
       break;
     }
@@ -21201,8 +21251,7 @@ class HandlerCallbackQuery {
       return checkRoleResult;
     }
     if (context.data === "CLOSE") {
-      await this.closeInlineKeyboard(api, message);
-      return null;
+      return this.closeInlineKeyboard(api, message);
     }
     const queryHandler = new InlineCommandHandler();
     const defaultInlineKeys = queryHandler.defaultInlineKeys(context.USER_CONFIG);
@@ -21223,9 +21272,8 @@ class HandlerCallbackQuery {
       }
       inlineKeyboard = this.updateInlineList(defaultInlineKeys[inlineKey], configValue);
     }
-    const settingMessage = queryHandler.settingsMessage(context.USER_CONFIG, defaultInlineKeys);
-    await this.sendCallBackMessage(api, message, settingMessage, inlineKeyboard);
-    return null;
+    const settingMessage = queryHandler.settingsMessage(context.USER_CONFIG, queryHandler.defaultInlineKeys(context.USER_CONFIG));
+    return this.sendCallBackMessage(api, message, settingMessage, inlineKeyboard);
   };
   async checkInlineKey(api, context, key, index2, inlineKeys) {
     if (key === "BACK") {
@@ -21280,27 +21328,28 @@ class HandlerCallbackQuery {
       default:
         throw new TypeError("Not support config type");
     }
+    if (!context.USER_CONFIG.DEFINE_KEYS.includes(configKey)) {
+      context.USER_CONFIG.DEFINE_KEYS.push(configKey);
+    }
     log.info(`[CALLBACK QUERY] Update config: ${configKey} = ${context.USER_CONFIG[configKey]}`);
     await ENV.DATABASE.put(context.SHARE_CONTEXT.configStoreKey, JSON.stringify(context.USER_CONFIG)).catch(console.error);
-    this.sendAlert(api, context.query_id, "Data update successful", false);
+    this.sendAlert(api, context.query_id, "✅ Data update successful", false);
   }
   async closeInlineKeyboard(api, message) {
-    const resp = await api.deleteMessage({
+    return api.deleteMessage({
       chat_id: message.chat.id,
       message_id: message.message_id
     }).then((r) => r.json());
-    return resp;
   }
   async sendCallBackMessage(api, message, text, inline_keyboard) {
-    const resp = await api.editMessageText({
+    return api.editMessageText({
       chat_id: message.chat.id,
       message_id: message.message_id,
       ...message.chat.type === "private" ? {} : { reply_to_message_id: message.message_id },
       text: escape(text.split("\n")),
       parse_mode: "MarkdownV2",
       reply_markup: { inline_keyboard }
-    }).then((r) => r.json());
-    return resp;
+    });
   }
   updateInlineList(inline_item, configValue) {
     const inline_list = inline_item.available_values.map((item, index2) => {
@@ -21325,10 +21374,6 @@ class HandlerCallbackQuery {
 }
 class HandlerInlineQuery {
   handle = async (chosenInline, context) => {
-    if (!context.query?.endsWith("$")) {
-      log.info(`[INLINE QUERY] Not end with $: ${context.query}`);
-      return new Response("success", { status: 200 });
-    }
     const api = createTelegramBotAPI(context.token);
     const resp = await api.answerInlineQuery({
       inline_query_id: context.query_id,
@@ -21475,7 +21520,7 @@ async function handleMessage(token, message, isForwarding) {
 }
 async function handleCallbackQuery(token, callbackQuery) {
   try {
-    log.debug(`handleCallbackQuery`, callbackQuery);
+    log.info("handleCallbackQuery");
     if (!callbackQuery?.message || !callbackQuery?.data) {
       throw new Error("Not support callback query type");
     }

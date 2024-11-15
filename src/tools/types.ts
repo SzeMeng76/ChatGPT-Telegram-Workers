@@ -20,12 +20,12 @@ export interface SchemaData<T extends Record<string, any>> {
  * @extra_params tool extra params
  * @type options: search, web_crawler, command, llm, workflow
  * @required tool required env variables
- * @send_to_ai send tool output to ai, default: true
- * @is_stream is tool output stream, default: false
+ * @not_send_to_ai not send tool output to ai, default: fasle
+ * - @is_stream is tool output stream, default: false
  * @scope tool scope, options: private, supergroup, group
  * @handler tool handler, default is content => content
  * @payload tool payload, default is {}
- * @is_internal is internal tool, default: false
+ * @buildin is internal tool, default: false
  */
 
 export interface FuncTool {
@@ -35,13 +35,15 @@ export interface FuncTool {
     extra_params?: Record<string, any>;
     type?: 'search' | 'web_crawler' | 'command' | 'text2image';
     required?: string[];
-    send_to_ai?: boolean;
-    is_stream?: boolean;
+    not_send_to_ai?: boolean;
+    // is_stream?: boolean;
     scope?: 'private' | 'supergroup' | 'group';
     handler?: string;
     payload?: Record<string, any>;
-    is_internal?: boolean;
+    buildin?: boolean;
     result_type?: 'text' | 'image' | 'audio' | 'file';
+    next_tool?: string;
+
 }
 
 export interface ToolResult {

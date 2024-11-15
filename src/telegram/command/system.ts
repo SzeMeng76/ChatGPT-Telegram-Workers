@@ -8,7 +8,7 @@ import type { AgentUserConfig } from '../../config/env';
 import type { UnionData } from '../utils/utils';
 import type { CommandHandler, InlineItem, ScopeType } from './types';
 import { authChecker } from '.';
-import { customInfo, loadChatLLM, loadImageGen } from '../../agent';
+import { CHAT_AGENTS, customInfo, IMAGE_AGENTS, loadChatLLM, loadImageGen } from '../../agent';
 import { WssRequest } from '../../agent/wsrequest';
 import { ENV, ENV_KEY_MAPPER } from '../../config/env';
 import { ConfigMerger } from '../../config/merger';
@@ -56,7 +56,7 @@ export class ImgCommandHandler implements CommandHandler {
             await sender.sendPlainText('Please wait a moment...');
             const img = await agent.request(subcommand, context.USER_CONFIG);
             log.info('img', img);
-            const resp = await sendImages(img, ENV.SEND_IMAGE_FILE, sender, context.USER_CONFIG);
+            const resp = await sendImages(img, ENV.SEND_IMAGE_AS_FILE, sender, context.USER_CONFIG);
 
             if (!resp.ok) {
                 return sender.sendPlainText(`ERROR: ${resp.statusText} ${await resp.text()}`);
@@ -285,12 +285,12 @@ export class SystemCommandHandler implements CommandHandler {
         const agent = {
             AI_PROVIDER: chatAgent?.name,
             [chatAgent?.modelKey || 'AI_PROVIDER_NOT_FOUND']: chatAgent?.model(context.USER_CONFIG),
+            TOOL_MODEL: context.USER_CONFIG.TOOL_MODEL || 'same as chat model',
             AI_IMAGE_PROVIDER: imageAgent?.name,
             [imageAgent?.modelKey || 'AI_IMAGE_PROVIDER_NOT_FOUND']: imageAgent?.model(context.USER_CONFIG),
             STT_MODEL: context.USER_CONFIG.OPENAI_STT_MODEL,
             VISION_MODEL: context.USER_CONFIG.OPENAI_VISION_MODEL,
             IMAGE_MODEL: context.USER_CONFIG.IMAGE_MODEL,
-
         };
         let msg = `<pre>AGENT: ${JSON.stringify(agent, null, 2)}\nOTHERS: ${customInfo(context.USER_CONFIG)
         }\n</pre>`;
@@ -628,68 +628,65 @@ export class InlineCommandHandler implements CommandHandler {
     };
 
     defaultInlineKeys = (context: AgentUserConfig): Record<string, InlineItem> => {
+        const chatAgent = loadChatLLM(context);
+        const imageAgent = loadImageGen(context);
         return {
             INLINE_AGENTS: {
                 label: 'Agent',
                 data: 'INLINE_AGENTS',
                 config_key: 'AI_PROVIDER',
-                available_values: context.INLINE_AGENTS,
+                available_values: CHAT_AGENTS.map(agent => agent.name),
             },
             INLINE_IMAGE_AGENTS: {
                 label: 'Image Agent',
                 data: 'INLINE_IMAGE_AGENTS',
                 config_key: 'AI_IMAGE_PROVIDER',
-                available_values: context.INLINE_IMAGE_AGENTS,
+                available_values: IMAGE_AGENTS.map(agent => agent.name),
             },
             INLINE_CHAT_MODELS: {
                 label: 'Chat Model',
                 data: 'INLINE_CHAT_MODELS',
-                config_key: loadChatLLM(context)?.modelKey || 'None',
-                available_values: context.INLINE_CHAT_MODELS,
+                config_key: chatAgent?.modelKey || 'None',
+                available_values: context.INLINE_CHAT_MODELS || [context[chatAgent?.modelKey || '']],
             },
             INLINE_VISION_MODELS: {
                 label: 'Vision Model',
                 data: 'INLINE_VISION_MODELS',
-                config_key: loadChatLLM(context)?.name === 'OpenAI' ? 'OPENAI_VISION_MODEL' : loadChatLLM(context)?.modelKey || 'None',
-                available_values: context.INLINE_VISION_MODELS,
+                config_key: chatAgent?.name === 'openai' ? 'OPENAI_VISION_MODEL' : chatAgent?.modelKey || 'None',
+                available_values: context.INLINE_VISION_MODELS || [context[chatAgent?.name === 'openai' ? 'OPENAI_VISION_MODEL' : chatAgent?.modelKey || '']],
             },
             INLINE_IMAGE_MODELS: {
                 label: 'Image Model',
                 data: 'INLINE_IMAGE_MODELS',
-                config_key: loadImageGen(context)?.modelKey || '',
-                available_values: context.INLINE_IMAGE_MODELS,
+                config_key: imageAgent?.modelKey || '',
+                available_values: context.INLINE_IMAGE_MODELS || [context[imageAgent?.modelKey || '']],
             },
             INLINE_TOOL_MODELS: {
-                label: 'Function Model',
+                label: 'Tool Model',
                 data: 'INLINE_TOOL_MODELS',
-                config_key: 'TOOL_MODEL',
-                available_values: context.INLINE_TOOL_MODELS,
+                config_key: chatAgent?.modelKey || 'None',
+                available_values: context.INLINE_TOOL_MODELS || [context[chatAgent?.modelKey || '']],
             },
-            INLINE_FUNCTION_CALL_TOOLS: {
+            INLINE_FUNCTION_TOOLS: {
                 label: 'Tools',
-                data: 'INLINE_FUNCTION_CALL_TOOLS',
+                data: 'INLINE_FUNCTION_TOOLS',
                 config_key: 'USE_TOOLS',
-                available_values: context.INLINE_FUNCTION_CALL_TOOLS,
-            },
-            INLINE_FUNCTION_ASAP: {
-                label: 'Call ASAP',
-                data: 'INLINE_FUNCTION_ASAP',
-                config_key: 'FUNCTION_REPLY_ASAP',
-                available_values: context.INLINE_FUNCTION_ASAP,
+                available_values: [...Object.keys(tools), ...Object.keys(ENV.PLUGINS_FUNCTION)],
             },
         };
     };
 
     settingsMessage = (context: AgentUserConfig, inlineKeys: Record<string, InlineItem>) => {
-        const currentSettings = `Current Settings:\n>${'-'.repeat(40)}\n> \n${Object.entries(inlineKeys).map(([_, { label, config_key }]) => {
-            return `>\`${label}: ${context[config_key]}\``;
+        const menu = '\n当前配置:\n';
+        const currentSettings = `${menu}\n${Object.entries(inlineKeys).map(([_, { label, config_key }]) => {
+            return `\`${label}: ${context[config_key] || 'None'}\``;
         }).join('\n')}`;
-        return `\n${currentSettings}\n> \n>${'-'.repeat(40)}`;
+        return currentSettings;
     };
 
     inlineKeyboard = (context: AgentUserConfig, inlineKeys: Record<string, InlineItem>) => {
-        const inline_keyboard_list = Object.entries(inlineKeys).reduce<Telegram.InlineKeyboardButton[]>((acc, [key, { label }]) => {
-            if (key in context && context[key].length > 0) {
+        const inline_keyboard_list = Object.entries(inlineKeys).reduce<Telegram.InlineKeyboardButton[]>((acc, [key, { available_values, label }]) => {
+            if (available_values.length > 0) {
                 acc.push({
                     text: label,
                     callback_data: key,

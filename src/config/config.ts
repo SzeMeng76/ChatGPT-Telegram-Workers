@@ -132,7 +132,7 @@ export class EnvironmentConfig {
     // COVER_MESSAGE_ROLE = { 'o1-mini,o1-preview': 'system:user' };
     COVER_MESSAGE_ROLE: Record<string, string> = {};
     // Send pictures via files format
-    SEND_IMAGE_FILE: boolean = false;
+    SEND_IMAGE_AS_FILE: boolean = false;
     // Perplexity cookie
     PPLX_COOKIE: string | null = null;
     // Log level
@@ -368,19 +368,17 @@ export class ExtraUserConfig {
     CURRENT_MODE = 'default';
 
     // INLINE_AGENTS
-    INLINE_AGENTS = ['openai', 'claude', 'google', 'vertex', 'cohere', 'workersai'];
+    // INLINE_AGENTS = ['openai', 'claude', 'google', 'vertex', 'cohere', 'workersai'];
     // INLINE_IMAGE_AGENTS
-    INLINE_IMAGE_AGENTS = ['openai', 'silicon'];
+    // INLINE_IMAGE_AGENTS = ['openai', 'silicon'];
     // INLINE_CHAT_MODELS
-    INLINE_CHAT_MODELS: string[] = ['gpt-4o-mini', 'gpt-4o-2024-05-13'];
+    INLINE_CHAT_MODELS: string[] = [];
     // INLINE_VISION_MODELS
-    INLINE_VISION_MODELS: string[] = ['gpt-4o-mini', 'gpt-4o-2024-05-13'];
+    INLINE_VISION_MODELS: string[] = [];
     // INLINE_IMAGE_MODELS
-    INLINE_IMAGE_MODELS: string[] = ['dall-e-2', 'dall-e-3'];
-    // INLINE_FUNCTION_CALL_TOOLS
-    INLINE_FUNCTION_CALL_TOOLS: string[] = ['duckduckgo', 'jina_reader'];
-    // INLINE_FUNCTION_ASAP
-    INLINE_FUNCTION_ASAP: string[] = ['true', 'false'];
+    INLINE_IMAGE_MODELS: string[] = [];
+    // INLINE_FUNCTION_TOOLS
+    // INLINE_FUNCTION_TOOLS: string[] = [];
     // KlingAI Cookie
     KLINGAI_COOKIE: string[] = [];
     // KlingAI Image Count

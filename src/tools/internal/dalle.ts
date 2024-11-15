@@ -53,7 +53,7 @@ export const dalle: FuncTool = {
 
     extra_params: { temperature: 1.2 },
     type: 'text2image',
-    send_to_ai: false,
-    is_internal: true,
+    not_send_to_ai: true,
+    buildin: true,
     result_type: 'image',
 };

@@ -1,5 +1,6 @@
+/* eslint-disable unused-imports/no-unused-vars */
 import type { ToolCallPart, ToolResultPart } from 'ai';
-import type { ImageResult, ResponseMessage } from '../agent/types';
+import type { ResponseMessage } from '../agent/types';
 import type { AgentUserConfig } from '../config/env';
 import type { MessageSender } from '../telegram/utils/send';
 /* eslint-disable no-eval */
@@ -15,19 +16,22 @@ export const tools = {
     ...externalTools,
     ...internalTools,
 } as Record<string, FuncTool>;
-
 export function executeTool(toolName: string) {
-    return async (args: any, options: Record<string, any> & { signal?: AbortSignal }) => {
+    return async (args: any, options: Record<string, any> & { signal?: AbortSignal }): Promise<{ result: any; time: string }> => {
         const { signal } = options;
         let filledPayload = JSON.stringify(tools[toolName].payload).replace(/\{\{([^}]+)\}\}/g, (match, p1) => args[p1] || match);
-        if (tools[toolName].required) {
-            tools[toolName].required.forEach((key: string) => {
-                if (!ENV.PLUGINS_ENV[key]) {
-                    throw new Error(`Missing required key: ${key}`);
-                }
-                filledPayload = filledPayload.replace(`{{${key}}}`, ENV.PLUGINS_ENV[key]);
-            });
-        }
+
+        (tools[toolName].required || []).forEach((key: string) => {
+            if (!ENV.PLUGINS_ENV[key]) {
+                throw new Error(`Missing required key: ${key}`);
+            }
+            let secret = ENV.PLUGINS_ENV[key];
+            // if secret is array, choose one randomly
+            if (Array.isArray(secret)) {
+                secret = secret[Math.floor(Math.random() * secret.length)];
+            }
+            filledPayload = filledPayload.replace(`{{${key}}}`, secret);
+        });
 
         const parsedPayload = JSON.parse(filledPayload);
         const startTime = Date.now();
@@ -47,24 +51,31 @@ export function executeTool(toolName: string) {
             const f = eval(tools[toolName].handler);
             result = f(result);
         }
+        if (tools[toolName].next_tool) {
+            const next_tool_alias = tools[toolName].next_tool;
+            return executeTool(next_tool_alias)(result, options);
+        }
         return { result, time: ((Date.now() - startTime) / 1e3).toFixed(1) };
     };
 }
 
-export function vaildTools(tools_config: string[]) {
+export async function vaildTools(tools_config: string[]) {
+    await injectFunction();
+    // real tool name, not the key name
     const useTools = Object.entries(tools).reduce((acc: Record<string, any>, [name, t]) => {
-        acc[name] = tool({
+        const execute = t.buildin ? t.func : executeTool(name) as any;
+        acc[t.schema.name] = tool({
             description: t.schema.description,
             parameters: jsonSchema(t.schema.parameters as any),
-            execute: t.send_to_ai ? (t.is_internal ? t.func : executeTool(name)) : undefined as any,
+            execute: t.not_send_to_ai ? undefined : execute,
         });
         return acc;
     }, {});
-
-    const activeTools = Object.keys(tools).filter(name => tools_config.includes(name));
+    // tools key name
+    const activeToolAlias = Object.keys(tools).filter(name => tools_config.includes(name));
     return {
         tools: useTools,
-        activeTools,
+        activeToolAlias,
     };
 }
 
@@ -113,9 +124,23 @@ export async function sendToolResult(toolResult: ToolResultPart[], sender: Messa
                 type: 'image',
                 url: images.map(r => r.url).flat(),
                 text,
-            }, ENV.SEND_IMAGE_FILE, sender, config);
+            }, ENV.SEND_IMAGE_AS_FILE, sender, config);
         }
         default:
             break;
     }
+}
+
+async function injectFunction() {
+    return Promise.all(Object.keys(ENV.PLUGINS_FUNCTION).map(async (plugin) => {
+        let template = ENV.PLUGINS_FUNCTION[plugin];
+        if (template.startsWith('http')) {
+            template = await fetch(template).then(r => r.text());
+        }
+        try {
+            tools[plugin] = JSON.parse(template.trim());
+        } catch (e) {
+            log.error(`Plugin ${plugin} is invalid`);
+        }
+    }));
 }

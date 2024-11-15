@@ -8,7 +8,7 @@ import { createOpenAI } from '@ai-sdk/openai';
 import { type AgentUserConfig, ENV } from '../config/env';
 import { log } from '../log/logger';
 import { isCfWorker } from '../telegram/utils/utils';
-import { vaildTools } from '../tools';
+import { tools, vaildTools } from '../tools';
 import { Anthropic } from './anthropic';
 import { AzureChatAI, AzureImageAI } from './azure';
 import { Cohere } from './cohere';
@@ -20,7 +20,7 @@ import { OpenAILike, OpenAILikeImage } from './openailike';
 import { Vertex } from './vertex';
 import { WorkersChat, WorkersImage } from './workersai';
 
-const CHAT_AGENTS: ChatAgent[] = [
+export const CHAT_AGENTS: ChatAgent[] = [
     new Anthropic(),
     new AzureChatAI(),
     new Cohere(),
@@ -49,7 +49,7 @@ export function loadChatLLM(context: AgentUserConfig): ChatAgent | null {
     return null;
 }
 
-const IMAGE_AGENTS: ImageAgent[] = [
+export const IMAGE_AGENTS: ImageAgent[] = [
     new AzureImageAI(),
     new Dalle(),
     new WorkersImage(),
@@ -97,19 +97,26 @@ export function loadAudioLLM(context: AgentUserConfig) {
  * @return {string} info
  */
 export function customInfo(config: AgentUserConfig): string {
+    const prompt = config.SYSTEM_INIT_MESSAGE || '';
     const other_info = {
         mode: config.CURRENT_MODE,
-        prompt: `${(config.SYSTEM_INIT_MESSAGE?.slice(0, 50))}...`,
+        prompt: prompt.length > 50 ? `${prompt.slice(0, 50)}...` : prompt,
         MAPPING_KEY: config.MAPPING_KEY,
         MAPPING_VALUE: config.MAPPING_VALUE,
-        USE_TOOLS: config.USE_TOOLS,
-        TOOL_MODEL: config.TOOL_MODEL,
-        // FUNCTION_REPLY_ASAP: config.FUNCTION_REPLY_ASAP,
+        USE_TOOLS: config.USE_TOOLS.join(','),
+        // FUNC_LOOP_TIMES: ENV.FUNC_LOOP_TIMES,
+        // FUNC_CALL_TIMES: ENV.CON_EXEC_FUN_NUM,
+        // EXPIRED_TIME: ENV.EXPIRED_TIME,
+        // CRON_CHECK_TIME: ENV.CRON_CHECK_TIME,
+        SUPPORT_PLUGINS: [...Object.keys(ENV.PLUGINS_FUNCTION), ...Object.keys(tools)].join('|'),
+        CHAT_TRIGGER_PERFIX: ENV.CHAT_TRIGGER_PERFIX,
+        MESSAGE_REPLACER: Object.keys(ENV.MESSAGE_REPLACER).join('|'),
+        MAX_STEPS: ENV.MAX_STEPS,
+        MAX_RETRIES: ENV.MAX_RETRIES,
+        SEND_IMAGE_AS_FILE: ENV.SEND_IMAGE_AS_FILE,
+        SUPPORT_PROMPT_ROLE: Object.keys(config.PROMPT).join('|'),
+        DISABLE_WEB_PREVIEW: ENV.DISABLE_WEB_PREVIEW,
         VERTEX_SEARCH_GROUNDING: config.VERTEX_SEARCH_GROUNDING,
-        FUNC_LOOP_TIMES: ENV.FUNC_LOOP_TIMES,
-        FUNC_CALL_TIMES: ENV.CON_EXEC_FUN_NUM,
-        EXPIRED_TIME: ENV.EXPIRED_TIME,
-        CRON_CHECK_TIME: ENV.CRON_CHECK_TIME,
     };
     return JSON.stringify(other_info, null, 2);
 }
@@ -122,15 +129,11 @@ export async function warpLLMParams(params: { messages: CoreMessage[]; model: La
 
     const messages = params.messages.at(-1) as CoreUserMessage;
     let tool = typeof messages.content === 'string'
-        ? vaildTools(context.USE_TOOLS)
+        ? await vaildTools(context.USE_TOOLS)
         : undefined;
     const toolModel = await createLlmModel(context.TOOL_MODEL, context);
 
-    if (tool && tool.activeTools.length === 0) {
-        tool = undefined;
-    }
-
-    let activeTools = tool?.activeTools;
+    let activeTools = tool?.activeToolAlias.map(t => tools[t].schema.name);
     // if vertex use search grounding, do not use other tools
     if (params.model.provider === 'google-vertex' && context.VERTEX_SEARCH_GROUNDING) {
         activeTools = undefined;
@@ -140,9 +143,9 @@ export async function warpLLMParams(params: { messages: CoreMessage[]; model: La
     }
 
     let toolChoice;
-    if (activeTools) {
+    if (tool?.activeToolAlias && tool?.activeToolAlias.length > 0) {
         const userMessageIsString = typeof messages.content === 'string';
-        const choiceResult = wrapToolChoice(activeTools, userMessageIsString ? messages.content as string : '');
+        const choiceResult = wrapToolChoice(tool?.activeToolAlias, userMessageIsString ? messages.content as string : '');
         userMessageIsString && (messages.content = choiceResult.message);
         toolChoice = choiceResult.toolChoices;
     }
@@ -287,25 +290,25 @@ export async function createLlmModel(model: string, context: AgentUserConfig) {
 //     return createProviderRegistry(providers);
 // }
 
-function wrapToolChoice(activeTools: string[], message: string): {
+function wrapToolChoice(activeToolAlias: string[], message: string): {
     message: string;
     toolChoices: ({ type: string } | { type: 'tool'; toolName: string })[];
 } {
     const tool_perfix = '/t-';
     let text = message.trim();
-    const choices = ['auto', 'none', 'required', ...activeTools];
+    const choices = ['auto', 'none', 'required', ...activeToolAlias];
     const toolChoices: ({ type: string } | { type: 'tool'; toolName: string })[] = [];
-    do {
-        const tool = choices.find(t => text.startsWith(`${tool_perfix}${t}`)) || '';
-        if (tool) {
-            text = text.substring(tool_perfix.length + tool.length).trim();
-            toolChoices.push(['auto', 'none', 'required'].includes(tool) ? { type: tool } : { type: 'tool', toolName: tool });
+    while (true) {
+        const toolAlias = choices.find(t => text.startsWith(`${tool_perfix}${t}`)) || '';
+        if (toolAlias) {
+            text = text.substring(tool_perfix.length + toolAlias.length).trim();
+            toolChoices.push(['auto', 'none', 'required'].includes(toolAlias) ? { type: toolAlias } : { type: 'tool', toolName: tools[toolAlias].schema.name });
         } else {
             break;
         }
-    } while (true);
+    }
 
-    log.info(`All toolChoices: ${JSON.stringify(toolChoices)}`);
+    log.info(`All RealtoolChoices: ${JSON.stringify(toolChoices)}`);
 
     return {
         message: text,
