@@ -186,7 +186,6 @@ export async function requestChatCompletionsV2(params: { model: LanguageModelV1;
     try {
         const middleware = AIMiddleware({
             config: params.context,
-            models: {},
             tools: params.tools || {},
             activeTools: params.activeTools || [],
             onStream,
@@ -195,12 +194,12 @@ export async function requestChatCompletionsV2(params: { model: LanguageModelV1;
         });
         const hander_params = {
             model: wrapLanguageModel({
-                model: params.activeTools ? params?.toolModel || params.model : params.model,
+                model: params.model,
                 middleware,
             }),
             messages: params.messages,
-            maxSteps: ENV.MAX_STEPS,
-            maxRetries: ENV.MAX_RETRIES,
+            maxSteps: params.context.MAX_STEPS,
+            maxRetries: params.context.MAX_RETRIES,
             temperature: (params.activeTools?.length || 0) > 0 ? params.context.FUNCTION_CALL_TEMPERATURE : params.context.CHAT_TEMPERATURE,
             tools: params.tools,
             activeTools: params.activeTools,

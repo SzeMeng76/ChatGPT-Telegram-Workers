@@ -140,7 +140,7 @@ export class MessageSender {
         return lastMessageResponse;
     }
 
-    sendRichText(message: string, parseMode: Telegram.ParseMode | null = (ENV.DEFAULT_PARSE_MODE as Telegram.ParseMode), type: 'tip' | 'chat' = 'chat'): Promise<Response> {
+    sendRichText(message: string, parseMode: Telegram.ParseMode | null = ENV.DEFAULT_PARSE_MODE as Telegram.ParseMode, type: 'tip' | 'chat' = 'chat'): Promise<Response> {
         if (!this.context) {
             throw new Error('Message context not set');
         }
@@ -297,13 +297,23 @@ export class TelegraphSender {
     private async createOrEditPage(url: string, title: string, content: string, raw?: string): Promise<CreateOrEditPageResponse> {
         const contentNode = md2node(content);
         if (raw) {
-            contentNode.push(...[{
-                tag: 'p',
-                children: ['raw data:'],
-            }, {
-                tag: 'code',
-                children: [raw],
-            }]);
+            contentNode.push(...[
+                { tag: 'hr' },
+                {
+                    tag: 'blockquote',
+                    children: ['raw data:'],
+                },
+                {
+                    tag: 'pre',
+                    children: [
+                        {
+                            tag: 'code',
+                            attrs: { class: 'language-plaintext' },
+                            children: [raw.trim()],
+                        },
+                    ],
+                },
+            ]);
         }
         const body = {
             access_token: this.telegraphAccessToken,

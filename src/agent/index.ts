@@ -104,15 +104,11 @@ export function customInfo(config: AgentUserConfig): string {
         MAPPING_KEY: config.MAPPING_KEY,
         MAPPING_VALUE: config.MAPPING_VALUE,
         USE_TOOLS: config.USE_TOOLS.join(','),
-        // FUNC_LOOP_TIMES: ENV.FUNC_LOOP_TIMES,
-        // FUNC_CALL_TIMES: ENV.CON_EXEC_FUN_NUM,
-        // EXPIRED_TIME: ENV.EXPIRED_TIME,
-        // CRON_CHECK_TIME: ENV.CRON_CHECK_TIME,
         SUPPORT_PLUGINS: [...Object.keys(ENV.PLUGINS_FUNCTION), ...Object.keys(tools)].join('|'),
         CHAT_TRIGGER_PERFIX: ENV.CHAT_TRIGGER_PERFIX,
         MESSAGE_REPLACER: Object.keys(ENV.MESSAGE_REPLACER).join('|'),
-        MAX_STEPS: ENV.MAX_STEPS,
-        MAX_RETRIES: ENV.MAX_RETRIES,
+        MAX_STEPS: config.MAX_STEPS,
+        MAX_RETRIES: config.MAX_RETRIES,
         SEND_IMAGE_AS_FILE: ENV.SEND_IMAGE_AS_FILE,
         SUPPORT_PROMPT_ROLE: Object.keys(config.PROMPT).join('|'),
         DISABLE_WEB_PREVIEW: ENV.DISABLE_WEB_PREVIEW,
@@ -131,7 +127,6 @@ export async function warpLLMParams(params: { messages: CoreMessage[]; model: La
     let tool = typeof messages.content === 'string'
         ? await vaildTools(context.USE_TOOLS)
         : undefined;
-    const toolModel = await createLlmModel(context.TOOL_MODEL, context);
 
     let activeTools = tool?.activeToolAlias.map(t => tools[t].schema.name);
     // if vertex use search grounding, do not use other tools
@@ -154,7 +149,6 @@ export async function warpLLMParams(params: { messages: CoreMessage[]; model: La
 
     return {
         model: params.model,
-        toolModel,
         messages: params.messages,
         tools: tool?.tools,
         activeTools,

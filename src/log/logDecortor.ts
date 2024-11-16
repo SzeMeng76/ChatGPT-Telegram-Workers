@@ -105,7 +105,7 @@ export function getLogSingleton(config: AgentUserConfig): Logs {
 }
 
 // 获取日志
-export function getLog(context: AgentUserConfig, returnModel: boolean = false, isTelegraph?: boolean): any {
+export function getLog(context: AgentUserConfig, returnModel: boolean = false, fold: boolean = true): any {
     if (!context.ENABLE_SHOWINFO)
         return '';
 
@@ -119,7 +119,6 @@ export function getLog(context: AgentUserConfig, returnModel: boolean = false, i
         return logObj.chat.model?.at(-1) || logObj.tool.model || 'UNKNOWN';
     }
 
-    // console.log('logObj:\n', JSON.stringify(logObj, null, 2));
     // tool
     if (logObj.tool.model) {
         let toolsLog = `${logObj.tool.model}`;
@@ -169,7 +168,7 @@ export function getLog(context: AgentUserConfig, returnModel: boolean = false, i
     }
 
     const formattedEntries = logList.filter(Boolean).map(entry => `>\`${entry}\``).join('\n');
-    return isTelegraph ? formattedEntries : `LOGSTART\n${formattedEntries}LOGEND\n`;
+    return fold ? `LOGSTART\n${formattedEntries}LOGEND\n` : formattedEntries;
 }
 
 export function clearLog(context: AgentUserConfig) {

@@ -171,10 +171,6 @@ export class EnvironmentConfig {
     // qstash timeout
     // free account max timeout 15m
     QSTASH_TIMEOUT = '15m';
-    // chat agent max steps
-    MAX_STEPS = 3;
-    // chat agent max retries
-    MAX_RETRIES = 0;
     // Only relax /set command temporarily modifies permissions
     RELAX_AUTH_KEYS: string[] = [];
     // inline query send interval
@@ -394,4 +390,8 @@ export class ExtraUserConfig {
     CHAT_MAX_TOKENS = 8192;
     // function call max tokens
     FUNCTION_CALL_MAX_TOKENS = 1024;
+    // chat agent max steps
+    MAX_STEPS = 3;
+    // chat agent max retries
+    MAX_RETRIES = 0;
 }
