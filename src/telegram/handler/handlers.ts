@@ -105,10 +105,7 @@ export class MessageFilter implements MessageHandler<WorkerContextBase> {
         const messageInfo = extractMessageInfo(message, context.SHARE_CONTEXT.botId);
         const supportMessageType = ENV.ENABLE_FILE ? ['text', 'photo', 'voice', 'audio', 'image'] : ['text'];
         if (!supportMessageType.includes(messageInfo.type)) {
-            // throw new Error('Not supported message type');
-            return MessageSender
-                .from(context.SHARE_CONTEXT.botToken, message)
-                .sendPlainText('Not supported message type');
+            throw new Error('Not supported message type');
         };
         context.MIDDEL_CONTEXT.originalMessageInfo = messageInfo;
         if (ENV.IGNORE_TEXT_PERFIX && (message.text || message.caption || '').startsWith(ENV.IGNORE_TEXT_PERFIX)) {
