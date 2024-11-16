@@ -85,7 +85,6 @@ Each user's custom configuration can only be modified by sending a message throu
 | AI_PROVIDER              | AI provider                          | `auto`                        | Options `auto, openai, azure, workers, gemini, mistral, cohere, anthropic` |
 | AI_IMAGE_PROVIDER        | AI image provider                    | `auto`                        | Options `auto, openai, azure, workers`                                     |
 | SYSTEM_INIT_MESSAGE      | Default initialization message.      | `You are a helpful assistant` | Automatically select default values based on the bound language.           |
-| SYSTEM_INIT_MESSAGE_ROLE | Default initialization message role. | `system`                      |                                                                            |
 
 ### OpenAI
 

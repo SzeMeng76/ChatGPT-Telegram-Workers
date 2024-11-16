@@ -187,8 +187,6 @@ export class AgentShareConfig {
     AI_IMAGE_PROVIDER = 'openai';
     // 全局默认初始化消息
     SYSTEM_INIT_MESSAGE: string | null = null;
-    // 全局默认初始化消息角色
-    SYSTEM_INIT_MESSAGE_ROLE = 'system';
 }
 
 // -- Open AI 配置 --

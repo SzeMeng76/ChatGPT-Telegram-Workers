@@ -97,8 +97,6 @@ AI_PROVIDER = 'auto'
 AI_IMAGE_PROVIDER = 'auto'
 ## 全局默认初始化消息
 #SYSTEM_INIT_MESSAGE = 'You are a useful assistant.'
-## 全局默认初始化消息角色
-#SYSTEM_INIT_MESSAGE_ROLE = 'system'
 
 ## -- Open AI 配置 --
 ##

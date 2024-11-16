@@ -85,7 +85,6 @@ OPENAI_API_BASE,GOOGLE_API_BASE,MISTRAL_API_BASE,COHERE_API_BASE,ANTHROPIC_API_B
 | AI_PROVIDER              | AI提供商       | `auto`      | 可选值 `auto, openai, azure, workers, google, vertex, mistral, cohere, anthropic` |
 | AI_IMAGE_PROVIDER        | AI图片提供商     | `auto`      | 可选值 `auto, openai, azure, workers`                                     |
 | SYSTEM_INIT_MESSAGE      | 全局默认初始化消息   | `你是一个得力的助手` | 根据绑定的语言自动选择默认值                                                         |
-| SYSTEM_INIT_MESSAGE_ROLE | 全局默认初始化消息角色 | `system`    |                                                                        |
 
 ### OpenAI
 

@@ -1,3 +1,4 @@
+/* eslint-disable unused-imports/no-unused-vars */
 import type { FilePart, ToolResultPart } from 'ai';
 import type * as Telegram from 'telegram-bot-api-types';
 import type { ChatStreamTextHandler, HistoryModifier, ImageResult, LLMChatRequestParams } from '../../agent/types';
@@ -8,7 +9,7 @@ import type { MessageHandler } from './types';
 import { loadAudioLLM, loadChatLLM, loadImageGen } from '../../agent';
 import { loadHistory, requestCompletionsFromLLM } from '../../agent/chat';
 import { ENV } from '../../config/env';
-import { clearLog, getLog, logSingleton } from '../../log/logDecortor';
+import { getLog, logSingleton } from '../../log/logDecortor';
 import { log } from '../../log/logger';
 import { sendToolResult } from '../../tools';
 import { imageToBase64String, renderBase64DataURI } from '../../utils/image';
@@ -21,9 +22,9 @@ async function messageInitialize(sender: MessageSender, streamSender: ChatStream
     if (!sender.context.message_id) {
         try {
             setTimeout(() => sendAction(sender.api.token, sender.context.chat_id, 'typing'), 0);
-            if (!ENV.SEND_INIT_MESSAGE) {
-                return;
-            }
+            // if (!ENV.SEND_INIT_MESSAGE) {
+            //     return;
+            // }
             log.info(`send init message`);
             streamSender.send('...', 'chat');
         } catch (e) {
@@ -37,7 +38,7 @@ export async function chatWithLLM(
     params: LLMChatRequestParams | null,
     context: WorkerContext,
     modifier: HistoryModifier | null,
-): Promise<UnionData | Response> {
+): Promise<Response> {
     const sender = MessageSender.from(context.SHARE_CONTEXT.botToken, message);
     const streamSender = OnStreamHander(sender, context, message.text || '');
     messageInitialize(sender, streamSender);
@@ -93,7 +94,7 @@ export class ChatHandler implements MessageHandler<WorkerContext> {
             // 处理原始消息
             const params = await this.processOriginalMessage(message, context);
             // 执行工作流
-            await workflow(context, flowDetail?.workflow || [{}], message, params);
+            await workflow(context, message, params);
             return null;
         } catch (e) {
             console.error('Error:', e);
@@ -260,17 +261,12 @@ async function sendTelegraph(context: WorkerContext, sender: MessageSender | Cho
     return resp;
 }
 
-function clearMessageContext(context: WorkerContext) {
-    clearLog(context.USER_CONFIG);
-    context.MIDDEL_CONTEXT.sender = null;
-}
-
 type WorkflowHandler = (
     eMsg: any,
     message: Telegram.Message,
     params: LLMChatRequestParams,
     context: WorkerContext
-) => Promise<UnionData | Response | void>;
+) => Promise<Response | void>;
 
 const workflowHandlers: Record<string, WorkflowHandler> = {
     'text:text': handleTextToText,
@@ -282,35 +278,13 @@ const workflowHandlers: Record<string, WorkflowHandler> = {
 
 async function workflow(
     context: WorkerContext,
-    flows: Record<string, any>[],
     message: Telegram.Message,
     params: LLMChatRequestParams,
 ): Promise<Response | void> {
-    const MiddleResult = context.MIDDEL_CONTEXT.middleResult;
-
-    for (let i = 0; i < flows.length; i++) {
-        const eMsg = i === 0 ? context.MIDDEL_CONTEXT.originalMessage : MiddleResult[i - 1];
-
-        const handlerKey = `${eMsg?.type || 'text'}:${flows[i]?.type || 'text'}`;
-        const handler = workflowHandlers[handlerKey];
-
-        if (!handler) {
-            throw new Error(`Unsupported type: ${handlerKey}`);
-        }
-
-        const result = await handler(eMsg, message, params, context) as UnionData | Response;
-
-        if (result instanceof Response) {
-            return result;
-        }
-
-        if (i < flows.length - 1 && ['image', 'text'].includes(result?.type)) {
-            injectHistory(context, result, flows[i + 1].type);
-        }
-
-        MiddleResult.push(result);
-        clearMessageContext(context);
-    }
+    const eMsg = context.MIDDEL_CONTEXT.originalMessage;
+    const handlerKey = `${eMsg?.type || 'text'}:text`;
+    const handler = workflowHandlers[handlerKey];
+    return handler(eMsg, message, params, context);
 }
 
 async function handleTextToText(
@@ -318,7 +292,7 @@ async function handleTextToText(
     message: Telegram.Message,
     params: LLMChatRequestParams,
     context: WorkerContext,
-): Promise<UnionData | Response> {
+): Promise<Response> {
     return chatWithLLM(message, params, context, null);
 }
 
@@ -327,7 +301,7 @@ async function handleTextToImage(
     message: Telegram.Message,
     params: LLMChatRequestParams,
     context: WorkerContext,
-): Promise<UnionData | Response> {
+): Promise<Response> {
     const agent = loadImageGen(context.USER_CONFIG);
     const sender = MessageSender.from(context.SHARE_CONTEXT.botToken, message);
     if (!agent) {
@@ -339,8 +313,7 @@ async function handleTextToImage(
     log.info('imageresult', JSON.stringify(result));
     await sendImages(result, ENV.SEND_IMAGE_AS_FILE, sender, context.USER_CONFIG);
     const api = createTelegramBotAPI(context.SHARE_CONTEXT.botToken);
-    await api.deleteMessage({ chat_id: sender.context.chat_id, message_id: sender.context.message_id! });
-    return result as UnionData;
+    return api.deleteMessage({ chat_id: sender.context.chat_id, message_id: sender.context.message_id! });
 }
 
 async function handleAudioToText(
@@ -348,7 +321,7 @@ async function handleAudioToText(
     message: Telegram.Message,
     params: LLMChatRequestParams,
     context: WorkerContext,
-): Promise<UnionData | Response> {
+): Promise<Response> {
     const agent = loadAudioLLM(context.USER_CONFIG);
     const sender = MessageSender.from(context.SHARE_CONTEXT.botToken, message);
     if (!agent) {
@@ -358,8 +331,7 @@ async function handleAudioToText(
     const audio = await fetch(url).then(b => b.blob());
     const result = await agent.request(audio, context.USER_CONFIG);
     context.MIDDEL_CONTEXT.history.push({ role: 'user', content: result.text || '' });
-    await sender.sendRichText(`${getLog(context.USER_CONFIG)}\n> \`${result.text}\``, 'MarkdownV2', 'chat');
-    return result;
+    return sender.sendRichText(`${getLog(context.USER_CONFIG)}\n> \`${result.text}\``, 'MarkdownV2', 'chat');
 }
 
 export async function sendImages(img: ImageResult, SEND_IMAGE_AS_FILE: boolean, sender: MessageSender, config: AgentUserConfig) {
