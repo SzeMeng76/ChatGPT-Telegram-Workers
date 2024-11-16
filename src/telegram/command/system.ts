@@ -671,7 +671,7 @@ export class InlineCommandHandler implements CommandHandler {
                 label: 'Tools',
                 data: 'INLINE_FUNCTION_TOOLS',
                 config_key: 'USE_TOOLS',
-                available_values: [...Object.keys(tools), ...Object.keys(ENV.PLUGINS_FUNCTION)],
+                available_values: [...new Set([...Object.keys(tools), ...Object.keys(ENV.PLUGINS_FUNCTION)])],
             },
         };
     };
