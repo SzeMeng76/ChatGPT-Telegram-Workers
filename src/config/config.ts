@@ -121,10 +121,8 @@ export class EnvironmentConfig {
     ALL_COMPLETE_API_TIMEOUT = 180;
     // Function call timeout
     FUNC_TIMEOUT = 15;
-    // Store message whitelist
-    STORE_MESSAGE_WHITELIST: number[] = [];
-    // Store message num
-    STORE_MESSAGE_NUM = 0;
+    // If true, will store media message id
+    STORE_MEDIA_MESSAGE: boolean = false;
     // Drop openai params, the key is the model name, separated by commas, and the value is the parameters to be dropped, separated by commas.
     // DROPS_OPENAI_PARAMS = { 'o1-mini,o1-preview': 'max_tokens,temperature,stream' };
     DROPS_OPENAI_PARAMS: Record<string, string> = {};

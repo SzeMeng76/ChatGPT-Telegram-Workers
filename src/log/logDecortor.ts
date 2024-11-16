@@ -4,7 +4,7 @@ import type { WorkerContext } from '../config/context';
 import type { AgentUserConfig } from '../config/env';
 
 export const logSingleton = new WeakMap<AgentUserConfig, Logs>();
-export const tagMessageIds = new WeakMap<Message, number[]>();
+export const tagMessageIds = new WeakMap<Message, Set<number>>();
 
 export function Log(
     value: any,

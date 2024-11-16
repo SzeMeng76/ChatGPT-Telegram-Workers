@@ -16,7 +16,7 @@ import { imageToBase64String, renderBase64DataURI } from '../../utils/image';
 import { createTelegramBotAPI } from '../api';
 import { escape } from '../utils/md2tgmd';
 import { MessageSender, sendAction, TelegraphSender } from '../utils/send';
-import { type UnionData, waitUntil } from '../utils/utils';
+import { getStoreMediaIds, type UnionData, waitUntil } from '../utils/utils';
 
 async function messageInitialize(sender: MessageSender, streamSender: ChatStreamTextHandler): Promise<void> {
     if (!sender.context.message_id) {
@@ -82,14 +82,8 @@ export function findPhotoFileID(photos: Telegram.PhotoSize[], offset: number): s
 export class ChatHandler implements MessageHandler<WorkerContext> {
     handle = async (message: Telegram.Message, context: WorkerContext): Promise<Response | null> => {
         try {
-            const mode = context.USER_CONFIG.CURRENT_MODE;
-            const originalType = context.MIDDEL_CONTEXT.originalMessage.type;
-            log.info(`message type: ${originalType}`);
-            const flowDetail = context.USER_CONFIG?.MODES?.[mode]?.[originalType] || {};
-
-            if (!flowDetail?.disableHistory) {
-                await this.initializeHistory(context);
-            }
+            log.info(`message type: ${context.MIDDEL_CONTEXT.originalMessageInfo.type}`);
+            await this.initializeHistory(context);
 
             // 处理原始消息
             const params = await this.processOriginalMessage(message, context);
@@ -116,14 +110,16 @@ export class ChatHandler implements MessageHandler<WorkerContext> {
         message: Telegram.Message,
         context: WorkerContext,
     ): Promise<LLMChatRequestParams> {
-        const { type, id, text } = context.MIDDEL_CONTEXT.originalMessage;
+        const { type, id, text } = context.MIDDEL_CONTEXT.originalMessageInfo;
 
         const params: LLMChatRequestParams = {
             role: 'user',
             content: text || '',
         };
 
-        if ((type === 'image' || type === 'audio') && id) {
+        if (type !== 'text' && id) {
+            const fileIds = await getStoreMediaIds(context.SHARE_CONTEXT, context.MIDDEL_CONTEXT.originalMessageInfo.media_group_id);
+            id.push(...fileIds.filter(i => !id.includes(i)));
             const api = createTelegramBotAPI(context.SHARE_CONTEXT.botToken);
             const files = await Promise.all(id.map(i => api.getFileWithReturns({ file_id: i })));
             const paths = files.map(f => f.result.file_path).filter(Boolean) as string[];
@@ -137,14 +133,14 @@ export class ChatHandler implements MessageHandler<WorkerContext> {
                         text,
                     });
                 }
-                if (type === 'image') {
+                if (type === 'image' || type === 'photo') {
                     for (const url of urls) {
                         params.content.push({
                             type: 'image',
                             image: ENV.TELEGRAM_IMAGE_TRANSFER_MODE === 'url' ? url : renderBase64DataURI(await imageToBase64String(url)),
                         });
                     }
-                } else if (type === 'audio') {
+                } else if (type === 'audio' || type === 'voice') {
                     params.content.push({
                         type: 'file',
                         data: urls[0],
@@ -268,22 +264,30 @@ type WorkflowHandler = (
     context: WorkerContext
 ) => Promise<Response | void>;
 
-const workflowHandlers: Record<string, WorkflowHandler> = {
-    'text:text': handleTextToText,
-    'image:text': handleTextToText,
-    'text:image': handleTextToImage,
-    'audio:text': handleAudioToText,
-    // 'image:image': handleImageToImage,
-};
+function workflowHandlers(type: string): WorkflowHandler {
+    switch (type) {
+        case 'text:text':
+        case 'image:text':
+        case 'photo:text':
+            return handleTextToText;
+        case 'text:image':
+            return handleTextToImage;
+        case 'voice:text':
+        case 'audio:text':
+            return handleAudioToText;
+        default:
+            throw new Error(`Unsupported message type: ${type}`);
+    }
+}
 
 async function workflow(
     context: WorkerContext,
     message: Telegram.Message,
     params: LLMChatRequestParams,
 ): Promise<Response | void> {
-    const eMsg = context.MIDDEL_CONTEXT.originalMessage;
+    const eMsg = context.MIDDEL_CONTEXT.originalMessageInfo;
     const handlerKey = `${eMsg?.type || 'text'}:text`;
-    const handler = workflowHandlers[handlerKey];
+    const handler = workflowHandlers(handlerKey);
     return handler(eMsg, message, params, context);
 }
 

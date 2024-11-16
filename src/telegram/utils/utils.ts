@@ -1,4 +1,5 @@
 import type * as Telegram from 'telegram-bot-api-types';
+import type { ShareContext } from '../../config/context';
 import { ENV } from '../../config/env';
 import { findPhotoFileID } from '../handler/chat';
 
@@ -6,9 +7,11 @@ export function isTelegramChatTypeGroup(type: string): boolean {
     return type === 'group' || type === 'supergroup';
 }
 
-type MsgType = 'text' | 'audio' | 'image'; // animation sticker.emoji video
+type MsgType = 'text' | 'photo' | 'voice' | 'image' | 'audio' | 'document' | 'sticker' | 'video' | 'animation' | 'unknown' | 'unsupported';
 export interface UnionData {
     type: MsgType;
+    mime_type?: string;
+    media_group_id?: string;
     text?: string;
     // reply_text?: string;
     id?: string[];
@@ -16,67 +19,69 @@ export interface UnionData {
     raw?: Blob[];
 }
 
-export function extractMessage(message: Telegram.Message, currentBotId: number): UnionData | null {
-    const acceptMsgType: string[] = ENV.ENABLE_FILE ? ['document', 'photo', 'voice', 'audio', 'text'] : ['text'];
-    const messageData = extractTypeFromMessage(message, acceptMsgType);
+export function extractMessageInfo(message: Telegram.Message, currentBotId: number): UnionData {
+    const messageData = extractTypeFromMessage(message);
 
     if (messageData && messageData.type === 'text' && isNeedGetReplyMessage(message, currentBotId)) {
-        const { type, id /* , text = '' */ } = extractTypeFromMessage(message.reply_to_message as any, acceptMsgType) || {};
-        if (type && type !== 'text')
+        const { type, id, mime_type, media_group_id } = extractTypeFromMessage(message.reply_to_message as any) || {};
+        if (type && type !== 'text' && type !== 'unknown')
             messageData.type = type;
-        // if (text)
-        //     messageData.reply_text = text;
         if (id && id.length > 0)
             messageData.id = id;
+        if (mime_type)
+            messageData.mime_type = mime_type;
+        if (media_group_id)
+            messageData.media_group_id = media_group_id;
     }
 
     return messageData;
 }
 
-function extractTypeFromMessage(message: Telegram.Message, supportType: string[]): UnionData | null {
-    let msgType = supportType.find(t => t in message);
-    // const text = message.text ?? message.caption ?? '';
-    if (!msgType)
-        return null;
+function extractTypeFromMessage(message: Telegram.Message): UnionData {
+    const msgTypes: string[] = ['text', 'photo', 'voice', 'document', 'audio', 'animation', 'sticker'];
+    const msgType = Object.keys(message).find(t => msgTypes.includes(t));
+    const typeInfo = {
+        type: msgType ?? 'unknown',
+    } as UnionData;
 
     switch (msgType) {
         case 'text':
-            return {
-                type: 'text',
-                // text,
-            };
+            return typeInfo;
         case 'photo':
         {
             const file_id = findPhotoFileID(message.photo as Telegram.PhotoSize[], ENV.TELEGRAM_PHOTO_SIZE_OFFSET);
             if (!file_id) {
-                return { type: 'text' /* , text */ };
+                console.error('photo file_id not found', message);
             }
             return {
-                type: 'image',
-                id: [file_id],
-                // text,
+                type: msgType,
+                id: file_id ? [file_id] : undefined,
+                media_group_id: message.media_group_id,
             };
         }
         case 'document':
         case 'audio':
         case 'voice':
+        case 'animation':
+        case 'sticker':
         {
-            if (msgType === 'document') {
-                const type = message.document?.mime_type?.match(/(audio|image)/)?.[1];
-                if (!type) {
-                    return null;
-                }
-                msgType = type;
+            const id = message[msgType]?.file_id;
+            if (!id) {
+                console.error('file_id not found', message);
             }
-            const id = message[msgType as 'document' | 'voice' | 'audio']?.file_id;
+            if (msgType === 'document') {
+                const testSupport = message.document?.mime_type?.match(/(audio|image)/)?.[1];
+                testSupport && (typeInfo.type = testSupport as UnionData['type']);
+            }
             return {
-                type: ['audio', 'voice'].includes(msgType) ? 'audio' : 'image',
-                ...(id && { id: [id] }),
-                // text,
+                type: msgType,
+                id: id ? [id] : undefined,
+                media_group_id: message.media_group_id,
             };
         }
+        default:
+            return typeInfo;
     }
-    return null;
 }
 
 function isNeedGetReplyMessage(message: Telegram.Message, currentBotId: number) {
@@ -105,4 +110,12 @@ export function chunckArray(arr: any[], size: number): any[][] {
 
 export async function waitUntil(timestamp: number) {
     return new Promise(resolve => setTimeout(resolve, Math.max(0, timestamp - Date.now())));
+}
+
+export async function getStoreMediaIds(context: ShareContext, media_group_id: string | undefined): Promise<string[]> {
+    if (!media_group_id || !context.storeMessageKey) {
+        return [];
+    }
+    const fileIds = JSON.parse(await ENV.DATABASE.get(context.storeMessageKey) || '{}');
+    return fileIds[media_group_id] || [];
 }

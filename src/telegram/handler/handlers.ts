@@ -14,7 +14,7 @@ import { loadChatRoleWithContext } from '../command/auth';
 import { COMMAND_AUTH_CHECKER, InlineCommandHandler } from '../command/system';
 import { escape } from '../utils/md2tgmd';
 import { MessageSender } from '../utils/send';
-import { chunckArray, extractMessage, isTelegramChatTypeGroup } from '../utils/utils';
+import { chunckArray, extractMessageInfo, isTelegramChatTypeGroup } from '../utils/utils';
 import { AnswerChatInlineQuery } from './query';
 
 export class SaveLastMessage implements MessageHandler<WorkerContextBase> {
@@ -102,16 +102,19 @@ export class WhiteListFilter implements MessageHandler<WorkerContextBase> {
 
 export class MessageFilter implements MessageHandler<WorkerContextBase> {
     handle = async (message: Telegram.Message, context: WorkerContextBase): Promise<Response | null> => {
+        const messageInfo = extractMessageInfo(message, context.SHARE_CONTEXT.botId);
+        const supportMessageType = ENV.ENABLE_FILE ? ['text', 'photo', 'voice', 'audio', 'image'] : ['text'];
+        if (!supportMessageType.includes(messageInfo.type)) {
+            // throw new Error('Not supported message type');
+            return MessageSender
+                .from(context.SHARE_CONTEXT.botToken, message)
+                .sendPlainText('Not supported message type');
+        };
+        context.MIDDEL_CONTEXT.originalMessageInfo = messageInfo;
         if (ENV.IGNORE_TEXT_PERFIX && (message.text || message.caption || '').startsWith(ENV.IGNORE_TEXT_PERFIX)) {
             log.info(`[IGNORE MESSAGE] Ignore message`);
             return new Response('success', { status: 200 });
         }
-
-        const extractMessageData = extractMessage(message, context.SHARE_CONTEXT.botId);
-        if (extractMessageData === null) {
-            throw new Error('Not supported message type');
-        };
-        context.MIDDEL_CONTEXT.originalMessage = extractMessageData;
         return null;
     };
 }
@@ -152,9 +155,9 @@ export class StoreHistory implements MessageHandler<WorkerContext> {
 export class TagNeedDelete implements MessageHandler<WorkerContext> {
     handle = async (message: Telegram.Message, context: WorkerContext): Promise<Response | null> => {
         // 未记录消息
-        if ((tagMessageIds.get(message) ?? []).length === 0) {
+        if ((tagMessageIds.get(message) ?? new Set()).size === 0) {
             log.info(`[TAG MESSAGE] No message id to tag`);
-            return new Response('success', { status: 200 });
+            return null;
         }
         const botName = context.SHARE_CONTEXT?.botName;
         if (!botName) {
@@ -172,27 +175,40 @@ export class TagNeedDelete implements MessageHandler<WorkerContext> {
         }
         const offsetInMillisenconds = ENV.EXPIRED_TIME * 60 * 1000;
         scheduledData[botName][chatId].push({
-            id: tagMessageIds.get(message) || [],
+            id: [...(tagMessageIds.get(message) || [])],
             ttl: Date.now() + offsetInMillisenconds,
         });
 
         await ENV.DATABASE.put(scheduleDeteleKey, JSON.stringify(scheduledData));
-        log.info(`[TAG MESSAGE] Record chat ${chatId}, message ids: ${tagMessageIds.get(message) || []}`);
+        log.info(`[TAG MESSAGE] Record chat ${chatId}, message ids: ${[...(tagMessageIds.get(message) || [])]}`);
 
-        return new Response('success', { status: 200 });
+        return null;
     };
 }
 
-export class StoreWhiteListMessage implements MessageHandler<WorkerContext> {
+export class StoreMessageMediaId implements MessageHandler<WorkerContext> {
     handle = async (message: Telegram.Message, context: WorkerContext): Promise<Response | null> => {
         const storeMessageKey = context.SHARE_CONTEXT?.storeMessageKey;
-        if (storeMessageKey) {
-            const data: UnionData[] = JSON.parse(await ENV.DATABASE.get(storeMessageKey) || '[]');
-            data.push(context.MIDDEL_CONTEXT.originalMessage);
-            if (data.length > ENV.STORE_MESSAGE_NUM) {
-                data.splice(0, data.length - ENV.STORE_MESSAGE_NUM);
+        const msgInfo = context.MIDDEL_CONTEXT.originalMessageInfo;
+        if (storeMessageKey && msgInfo.media_group_id && ['photo', 'image'].includes(msgInfo.type) && Array.isArray(msgInfo.id)) {
+            const maxMediaGroupNum = 25;
+            const data: Record<string, string[]> = JSON.parse(await ENV.DATABASE.get(storeMessageKey) || '{}');
+            if (!data[msgInfo.media_group_id]) {
+                data[msgInfo.media_group_id] = [];
+            }
+            const needStoreIds = msgInfo.id.filter(id => !data[msgInfo.media_group_id!].includes(id));
+            if (needStoreIds.length === 0) {
+                return new Response('no need store', { status: 200 });
+            }
+            data[msgInfo.media_group_id].push(...needStoreIds);
+            if (Object.keys(data).length > maxMediaGroupNum) {
+                const groupIds = Object.keys(data).sort((a, b) => Number(a) - Number(b));
+                groupIds.splice(0, groupIds.length - maxMediaGroupNum).forEach((key) => {
+                    delete data[key];
+                });
             }
             await ENV.DATABASE.put(storeMessageKey, JSON.stringify(data));
+            log.info(`[STORE MESSAGE] Store message media, group_id: ${msgInfo.media_group_id}, id: ${msgInfo.id}`);
         }
         return new Response('ok');
     };

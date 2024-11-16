@@ -388,9 +388,9 @@ async function checkIsNeedTagIds(context: MessageContext, resp: Promise<Response
             || (!isGroup && ENV.SCHEDULE_PRIVATE_DELETE_TYPE.includes(msgType));
         if (isNeedTag) {
             if (!tagMessageIds.has(context.message)) {
-                tagMessageIds.set(context.message, []);
+                tagMessageIds.set(context.message, new Set());
             }
-            message_id.forEach(id => tagMessageIds.get(context.message)?.push(id));
+            message_id.forEach(id => tagMessageIds.get(context.message)?.add(id));
         }
     } while (false);
 

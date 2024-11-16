@@ -81,8 +81,9 @@ export class ShareContext {
         this.lastMessageKey = `last_message_id:${historyKey}`;
         this.configStoreKey = configStoreKey;
 
-        if (message?.from?.id && ENV.STORE_MESSAGE_WHITELIST.includes(message.from.id) && ENV.STORE_MESSAGE_NUM > 0) {
-            this.storeMessageKey = `store_message:${message.chat.id}:${message?.from?.id || message.chat.id}`;
+        // 不区分是否开启群组共享模式
+        if (ENV.STORE_MEDIA_MESSAGE) {
+            this.storeMessageKey = `store_media_message:${message.chat.id}`;
         }
 
         if (ENV.TELEGRAPH_NUM_LIMIT > 0) {
@@ -90,31 +91,10 @@ export class ShareContext {
         }
     };
 }
-interface Llmlogs {
-    type: 'chat' | 'function';
-    model: string;
-    token: string;
-    time: string;
-    error?: string;
-}
-
-interface Toollogs {
-    name: string;
-    type: string;
-    internal?: boolean;
-    params: string;
-    result?: string;
-    time: string;
-    error?: string;
-}
-
-type Logs = (Llmlogs | Toollogs)[] | null;
 
 export class MiddleContext {
-    originalMessage: UnionData = { type: 'text' };
+    originalMessageInfo: UnionData = { type: 'text' };
     history: HistoryItem[] = [];
-    logs: Logs = null;
-    middleResult: UnionData[] = [];
     sender: MessageSender | null = null;
 }
 
@@ -208,7 +188,7 @@ export class ChosenInlineWorkerContext {
         this.botToken = token;
         // 模拟私聊消息
         this.MIDDEL_CONTEXT = {
-            originalMessage: { type: 'text' },
+            originalMessageInfo: { type: 'text' },
         };
         this.SHARE_CONTEXT = {
             botName: 'AI',

@@ -93,14 +93,14 @@ export class GroupMention implements MessageHandler {
         // 非群组消息不作判断，交给下一个中间件处理
         if (!isTelegramChatTypeGroup(message.chat.type)) {
             // 缓存修整后的消息
-            context.MIDDEL_CONTEXT.originalMessage.text = message.text || message.caption || '';
+            context.MIDDEL_CONTEXT.originalMessageInfo.text = message.text || message.caption || '';
             return null;
         }
 
         // 处理回复消息, 如果回复的是当前机器人的消息交给下一个中间件处理
         const replyMe = `${message.reply_to_message?.from?.id}` === `${context.SHARE_CONTEXT.botId}`;
         if (replyMe) {
-            context.MIDDEL_CONTEXT.originalMessage.text = message.text || message.caption || '';
+            context.MIDDEL_CONTEXT.originalMessageInfo.text = message.text || message.caption || '';
             return null;
         }
 
@@ -132,14 +132,15 @@ export class GroupMention implements MessageHandler {
             isMention = true;
         }
         if (!isMention) {
-            throw new Error('Not mention');
+            console.error('no mention');
+            return new Response('no mention', { status: 200 });
         }
         // 开启引用消息，并且不是回复bot，则将引用消息和当前消息合并
         if (ENV.EXTRA_MESSAGE_CONTEXT && !replyMe && message.reply_to_message?.text) {
             message.text = `${message.text || message.caption || ''}\n> ${message.reply_to_message.text}`;
         }
         // 缓存修整后的消息
-        context.MIDDEL_CONTEXT.originalMessage.text = message.text;
+        context.MIDDEL_CONTEXT.originalMessageInfo.text = message.text;
 
         return null;
     };

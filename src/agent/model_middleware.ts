@@ -64,6 +64,7 @@ export function AIMiddleware({ config, tools, activeTools, onStream, toolChoice,
                 params.mode.tools = params.mode.tools?.filter(i => activeTools.includes(i.name));
             }
             warpMessages(params, tools, activeTools, rawSystemPrompt);
+            log.info(`request params: ${JSON.stringify(params, null, 2)}`);
             return params;
         },
 
@@ -78,11 +79,11 @@ export function AIMiddleware({ config, tools, activeTools, onStream, toolChoice,
         },
 
         onStepFinish: (data: StepResult<any>) => {
-            const { text, toolResults, finishReason, usage, response } = data;
+            const { text, toolResults, finishReason, usage, request, response } = data;
             const logs = getLogSingleton(config);
             log.info('llm request end');
-            log.info(finishReason);
             log.info('step text:', text);
+            // log.debug('step raw request:', request);
             log.debug('step raw response:', response);
 
             const time = ((Date.now() - startTime!) / 1e3).toFixed(1);
