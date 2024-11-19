@@ -112,10 +112,10 @@ export async function waitUntil(timestamp: number) {
     return new Promise(resolve => setTimeout(resolve, Math.max(0, timestamp - Date.now())));
 }
 
-export async function getStoreMediaIds(context: ShareContext, media_group_id: string | undefined): Promise<string[]> {
-    if (!media_group_id || !context.storeMessageKey) {
-        return [];
-    }
-    const fileIds = JSON.parse(await ENV.DATABASE.get(context.storeMessageKey) || '{}');
-    return fileIds[media_group_id] || [];
-}
+// export async function getStoreMediaIds(context: ShareContext, media_group_id: string | undefined): Promise<string[]> {
+//     if (!media_group_id || !context.storeMediaMessageKey) {
+//         return [];
+//     }
+//     const fileIds = JSON.parse(await ENV.DATABASE.get(context.storeMediaMessageKey) || '{}');
+//     return fileIds[media_group_id] || [];
+// }

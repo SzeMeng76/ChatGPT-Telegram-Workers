@@ -152,7 +152,7 @@ export async function warpLLMParams(params: { messages: CoreMessage[]; model: La
         messages: params.messages,
         tools: tool?.tools,
         activeTools,
-        toolChoice: toolChoice as CoreToolChoice<any>[],
+        toolChoice,
         context,
     };
 }
@@ -286,19 +286,24 @@ export async function createLlmModel(model: string, context: AgentUserConfig) {
 //     return createProviderRegistry(providers);
 // }
 
+export type ToolChoice = { type: 'auto' | 'none' | 'required' } | { type: 'tool'; toolName: string };
+
 function wrapToolChoice(activeToolAlias: string[], message: string): {
     message: string;
-    toolChoices: ({ type: string } | { type: 'tool'; toolName: string })[];
+    toolChoices: ToolChoice[] | [];
 } {
     const tool_perfix = '/t-';
     let text = message.trim();
     const choices = ['auto', 'none', 'required', ...activeToolAlias];
-    const toolChoices: ({ type: string } | { type: 'tool'; toolName: string })[] = [];
+    const toolChoices = [];
     while (true) {
         const toolAlias = choices.find(t => text.startsWith(`${tool_perfix}${t}`)) || '';
         if (toolAlias) {
             text = text.substring(tool_perfix.length + toolAlias.length).trim();
-            toolChoices.push(['auto', 'none', 'required'].includes(toolAlias) ? { type: toolAlias } : { type: 'tool', toolName: tools[toolAlias].schema.name });
+            const choice = ['auto', 'none', 'required'].includes(toolAlias)
+                ? { type: toolAlias as 'auto' | 'none' | 'required' }
+                : { type: 'tool', toolName: tools[toolAlias].schema.name };
+            toolChoices.push(choice);
         } else {
             break;
         }
@@ -308,6 +313,6 @@ function wrapToolChoice(activeToolAlias: string[], message: string): {
 
     return {
         message: text,
-        toolChoices,
+        toolChoices: toolChoices as ToolChoice[],
     };
 }

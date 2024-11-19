@@ -5,6 +5,7 @@ import type { ChatStreamTextHandler, HistoryModifier, ImageResult, LLMChatReques
 import type { WorkerContext } from '../../config/context';
 import type { AgentUserConfig } from '../../config/env';
 import type { ChosenInlineSender } from '../utils/send';
+import type { UnionData } from '../utils/utils';
 import type { MessageHandler } from './types';
 import { loadAudioLLM, loadChatLLM, loadImageGen } from '../../agent';
 import { loadHistory, requestCompletionsFromLLM } from '../../agent/chat';
@@ -16,7 +17,7 @@ import { imageToBase64String, renderBase64DataURI } from '../../utils/image';
 import { createTelegramBotAPI } from '../api';
 import { escape } from '../utils/md2tgmd';
 import { MessageSender, sendAction, TelegraphSender } from '../utils/send';
-import { getStoreMediaIds, type UnionData, waitUntil } from '../utils/utils';
+import { waitUntil } from '../utils/utils';
 
 async function messageInitialize(sender: MessageSender, streamSender: ChatStreamTextHandler): Promise<void> {
     if (!sender.context.message_id) {
@@ -110,16 +111,15 @@ export class ChatHandler implements MessageHandler<WorkerContext> {
         message: Telegram.Message,
         context: WorkerContext,
     ): Promise<LLMChatRequestParams> {
-        const { type, id, text } = context.MIDDEL_CONTEXT.originalMessageInfo;
-
+        const { type, id } = context.MIDDEL_CONTEXT.originalMessageInfo;
         const params: LLMChatRequestParams = {
             role: 'user',
-            content: text || '',
+            content: message.text || message.caption || '',
         };
 
         if (type !== 'text' && id) {
-            const fileIds = await getStoreMediaIds(context.SHARE_CONTEXT, context.MIDDEL_CONTEXT.originalMessageInfo.media_group_id);
-            id.push(...fileIds.filter(i => !id.includes(i)));
+            // const fileIds = await getStoreMediaIds(context.SHARE_CONTEXT, context.MIDDEL_CONTEXT.originalMessageInfo.media_group_id);
+            // id.push(...fileIds.filter(i => !id.includes(i)));
             const api = createTelegramBotAPI(context.SHARE_CONTEXT.botToken);
             const files = await Promise.all(id.map(i => api.getFileWithReturns({ file_id: i })));
             const paths = files.map(f => f.result.file_path).filter(Boolean) as string[];
@@ -127,10 +127,10 @@ export class ChatHandler implements MessageHandler<WorkerContext> {
             log.info(`File URLs:\n${urls.join('\n')}`);
             if (urls.length > 0) {
                 params.content = [];
-                if (text) {
+                if (message.text || message.caption) {
                     params.content.push({
                         type: 'text',
-                        text,
+                        text: message.text || message.caption || '',
                     });
                 }
                 if (type === 'image' || type === 'photo') {
@@ -156,7 +156,7 @@ export class ChatHandler implements MessageHandler<WorkerContext> {
 
 export function OnStreamHander(sender: MessageSender | ChosenInlineSender, context?: WorkerContext, question?: string): ChatStreamTextHandler {
     let sentPromise = null as Promise<Response> | null;
-    let nextEnableTime = Date.now();
+    let nextEnableTime: number | null = null;
     let sentError = false;
     const isMessageSender = sender instanceof MessageSender;
     const sendInterval = isMessageSender ? ENV.TELEGRAM_MIN_STREAM_INTERVAL : ENV.INLINE_QUERY_SEND_INTERVAL;
@@ -181,6 +181,8 @@ export function OnStreamHander(sender: MessageSender | ChosenInlineSender, conte
                 return;
             }
 
+            await sentPromise;
+
             // 设置最小流间隔
             if (sendInterval > 0) {
                 nextEnableTime = Date.now() + sendInterval;
@@ -196,7 +198,7 @@ export function OnStreamHander(sender: MessageSender | ChosenInlineSender, conte
                 const retryAfter = Number.parseInt(resp.headers.get('Retry-After') || '');
                 if (retryAfter) {
                     nextEnableTime = Date.now() + retryAfter * 1000;
-                    log.info(`Status 429, need wait: ${nextEnableTime - Date.now()}ms`);
+                    log.error(`Status 429, need wait: ${nextEnableTime - Date.now()}ms`);
                     return;
                 }
             }
@@ -204,6 +206,7 @@ export function OnStreamHander(sender: MessageSender | ChosenInlineSender, conte
             if (!resp.ok) {
                 log.error(`send message failed: ${resp.status} ${resp.statusText}`);
                 sentError = true;
+                log.error(`send message failed: ${escape(data.split('\n'))}`);
                 return sentPromise = sender.sendPlainText(text);
             }
         } catch (e) {
@@ -212,6 +215,7 @@ export function OnStreamHander(sender: MessageSender | ChosenInlineSender, conte
     };
 
     streamSender.end = async (text: string): Promise<any> => {
+        log.info('--- start end ---');
         await sentPromise;
         await waitUntil((nextEnableTime || 0) + 10);
         if (isSendTelegraph(text)) {
@@ -219,19 +223,29 @@ export function OnStreamHander(sender: MessageSender | ChosenInlineSender, conte
         }
         const data = context ? `${getLog(context.USER_CONFIG)}\n${text}` : text;
         log.info(`sent message ids: ${isMessageSender ? [...sender.context.sentMessageIds] : sender.context.inline_message_id}`);
-        const finalResp = await sender.sendRichText(data);
-        if (sentError || !finalResp.ok) {
-            (sender as MessageSender).context.sentMessageIds.clear();
-            return sendTelegraph(context!, sender, question || 'Redo Question', text, true);
+        while (true) {
+            const finalResp = await (sentError ? sender.sendPlainText(data) : sender.sendRichText(data));
+            if (finalResp.status === 429) {
+                const retryAfter = Number.parseInt(finalResp.headers.get('Retry-After') || '');
+                if (retryAfter) {
+                    log.error(`Status 429, need wait: ${retryAfter}s`);
+                    await new Promise(resolve => setTimeout(resolve, retryAfter * 1000));
+                    continue;
+                }
+            }
+            if (sentError || !finalResp.ok) {
+                (sender as MessageSender).context.sentMessageIds.clear();
+                return sendTelegraph(context!, sender, question || 'Redo Question', text, true);
+            }
+            return finalResp;
         }
-        return finalResp;
     };
 
     return streamSender as unknown as ChatStreamTextHandler;
 }
 
 async function sendTelegraph(context: WorkerContext, sender: MessageSender | ChosenInlineSender, question: string, text: string, containRaw?: boolean) {
-    log.info(`send telegraph`);
+    log.info(`start send telegraph`);
     if (question.length > 600) {
         question = `${question.slice(0, 300)}...${question.slice(-300)}`;
     }
@@ -241,8 +255,8 @@ async function sendTelegraph(context: WorkerContext, sender: MessageSender | Cho
     log.info(logSingleton);
     log.info(getLog(context.USER_CONFIG));
 
-    const telegraph_prefix = `${prefix}\n#Answer\n🤖 **${getLog(context.USER_CONFIG, false, false)}**\n`;
-    const debug_info = `debug info:\n${getLog(context.USER_CONFIG) as string}`;
+    const telegraph_prefix = `${prefix}\n#Answer\n🤖 **${getLog(context.USER_CONFIG, true, false)}**\n`;
+    const debug_info = `debug info:\n${getLog(context.USER_CONFIG, true, false) as string}`;
     const telegraph_suffix = `\n---\n\`\`\`\n${debug_info}\n\`\`\``;
     const telegraphSender = new TelegraphSender(botName, context.SHARE_CONTEXT.telegraphAccessTokenKey!);
     const resp = await telegraphSender.send(
@@ -253,12 +267,10 @@ async function sendTelegraph(context: WorkerContext, sender: MessageSender | Cho
     const url = `https://telegra.ph/${telegraphSender.teleph_path}`;
     const msg = `${containRaw ? '由于渲染出现错误 ' : ''}回答已经转换成完整文章。\n[🔗点击进行查看](${url})`.trim();
     log.info(`send telegraph message: ${msg}`);
-    await sender.sendRichText(msg);
-    return resp;
+    return sender.sendRichText(msg);
 }
 
 type WorkflowHandler = (
-    eMsg: any,
     message: Telegram.Message,
     params: LLMChatRequestParams,
     context: WorkerContext
@@ -285,14 +297,13 @@ async function workflow(
     message: Telegram.Message,
     params: LLMChatRequestParams,
 ): Promise<Response | void> {
-    const eMsg = context.MIDDEL_CONTEXT.originalMessageInfo;
-    const handlerKey = `${eMsg?.type || 'text'}:text`;
+    const msgType = context.MIDDEL_CONTEXT.originalMessageInfo.type;
+    const handlerKey = `${msgType}:text`;
     const handler = workflowHandlers(handlerKey);
-    return handler(eMsg, message, params, context);
+    return handler(message, params, context);
 }
 
 async function handleTextToText(
-    eMsg: any,
     message: Telegram.Message,
     params: LLMChatRequestParams,
     context: WorkerContext,
@@ -301,7 +312,6 @@ async function handleTextToText(
 }
 
 async function handleTextToImage(
-    eMsg: any,
     message: Telegram.Message,
     params: LLMChatRequestParams,
     context: WorkerContext,
@@ -313,7 +323,7 @@ async function handleTextToImage(
     }
     sendAction(context.SHARE_CONTEXT.botToken, message.chat.id);
     await sender.sendPlainText('Please wait a moment...', 'tip').then(r => r.json());
-    const result = await agent.request(eMsg.text, context.USER_CONFIG);
+    const result = await agent.request(message.text || message.caption || '', context.USER_CONFIG);
     log.info('imageresult', JSON.stringify(result));
     await sendImages(result, ENV.SEND_IMAGE_AS_FILE, sender, context.USER_CONFIG);
     const api = createTelegramBotAPI(context.SHARE_CONTEXT.botToken);
@@ -321,7 +331,6 @@ async function handleTextToImage(
 }
 
 async function handleAudioToText(
-    eMsg: any,
     message: Telegram.Message,
     params: LLMChatRequestParams,
     context: WorkerContext,

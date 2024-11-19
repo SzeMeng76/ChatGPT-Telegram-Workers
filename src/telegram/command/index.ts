@@ -25,6 +25,7 @@ import {
     SystemCommandHandler,
     VersionCommandHandler,
 } from './system';
+import { log } from '../../log/logger';
 
 const SYSTEM_COMMANDS: CommandHandler[] = [
     new StartCommandHandler(),
@@ -151,6 +152,7 @@ export async function handleCommandMessage(message: Telegram.Message, context: W
     // 查找系统命令
     for (const cmd of SYSTEM_COMMANDS) {
         if (text === cmd.command || text.startsWith(`${cmd.command} `)) {
+            log.info(`[SYSTEM COMMAND] handle system command: ${cmd.command}`);
             return await handleSystemCommand(message, text, cmd, context);
         }
     }

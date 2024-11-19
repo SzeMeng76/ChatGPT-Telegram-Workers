@@ -8,7 +8,7 @@ export class UpstashRedis {
     }
 
     // upstash REST API
-    async fetchFromRedis(endpoint: string, method = 'GET', body = null) {
+    async fetchFromRedis(method = 'GET', body: any = null) {
         const headers = {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${this.token}`,
@@ -16,10 +16,10 @@ export class UpstashRedis {
         const options: RequestInit = {
             method,
             headers,
-            ...(body ? { body } : {}),
+            ...(body ? { body: JSON.stringify(body) } : {}),
         };
 
-        const response = await fetch(`${this.baseUrl}/${endpoint}`, options);
+        const response = await fetch(this.baseUrl, options);
         if (!response.ok) {
             throw new Error(`Failed to fetch from Redis: ${response.statusText}`);
         }
@@ -28,8 +28,8 @@ export class UpstashRedis {
 
     async get(key: string, info: any) {
         try {
-            const raw = await this.fetchFromRedis(`get/${key}`);
-            // console.log(raw)
+            const data = ['get', key];
+            const raw = await this.fetchFromRedis('POST', data);
             if (!raw) {
                 return null;
             }
@@ -49,21 +49,52 @@ export class UpstashRedis {
         }
     }
 
-    async put(key: string, value: any, info: any) {
-        let endpoint = `set/${key}`;
-        let expiration = -1;
-        if (info?.expiration) {
-            expiration = Math.round(info.expirationTtl);
-        } else if (info?.expirationTtl) {
-            expiration = Math.round(Date.now() / 1000 + info.expirationTtl);
+    async mget(keys: string[], info?: any) {
+        try {
+            const data = ['mget'];
+            data.push(...keys);
+            const raw = await this.fetchFromRedis('POST', data);
+            if (!raw) {
+                return null;
+            }
+            switch (info?.type || 'string') {
+                case 'string':
+                    return raw.result;
+                case 'json':
+                    return raw.result.map((i: string) => JSON.parse(i));
+                case 'arrayBuffer':
+                    return raw.result.map((i: string) => new Uint8Array(Buffer.from(i)));
+                default:
+                    return raw.result;
+            }
+        } catch (error) {
+            console.error(`Error getting keys ${keys}:`, error);
+            return null;
         }
-        if (expiration > 0) {
-            endpoint += `?exat=${expiration}`;
-        }
-        await this.fetchFromRedis(endpoint, 'POST', value);
     }
 
-    async delete(key: string) {
-        await this.fetchFromRedis(`del/${key}`, 'POST');
+    async put(key: string, value: any, info: any) {
+        const data = ['set', key, value];
+        if (info?.expiration) {
+            data.push(...['pxat', info.expiration]);
+        } else if (info?.expirationTtl) {
+            data.push(...['ex', info.expirationTtl]);
+        }
+        if (info?.condition === 'NX') {
+            data.push(...['nx']);
+        } else if (info?.condition === 'XX') {
+            data.push(...['xx']);
+        }
+        return this.fetchFromRedis('POST', data)
+            .then(res => info?.condition && ['NX', 'XX']
+                .includes(info.condition)
+                ? res.result === 'OK'
+                : undefined);
+    }
+
+    async delete(key: string | string[]) {
+        const data = ['del'];
+        Array.isArray(key) ? data.push(...key) : data.push(key);
+        return this.fetchFromRedis('POST', data);
     }
 }

@@ -1,3 +1,4 @@
+/* eslint-disable no-cond-assign */
 /* eslint-disable style/brace-style */
 interface Node {
     tag: string;
@@ -15,36 +16,43 @@ function markdownToTelegraphNodes(markdown: string): Node[] {
     const lines = markdown.split('\n');
     const nodes = [];
     // let currentList = null;
-    let inCodeBlock = false;
-    let codeBlockContent = '';
+    let inCodeBlock = 0;
     let codeBlockLanguage = '';
+    let codeBlockContent = '';
+    let codeMatch: RegExpMatchArray | null;
 
     for (let line of lines) {
-        if (line.trim().startsWith('```')) {
-            if (inCodeBlock) {
-                // 结束代码块
+        if (codeMatch = (line.trim().match(/^```(.*)/))) {
+            if (inCodeBlock === 1 && codeMatch[1] === '') {
                 nodes.push({
                     tag: 'pre',
                     children: [
                         {
                             tag: 'code',
-                            attrs: codeBlockLanguage ? { class: `language-${codeBlockLanguage}` } : {},
+                            // attrs: codeBlockLanguage ? { class: `language-${codeBlockLanguage}` } : {},
+                            attrs: codeBlockLanguage ? { class: codeBlockLanguage } : {},
                             children: [codeBlockContent.trim()],
                         },
                     ],
                 });
-                inCodeBlock = false;
+                inCodeBlock--;
                 codeBlockContent = '';
                 codeBlockLanguage = '';
+            } else if (inCodeBlock > 1 && codeMatch[1] === '') {
+                inCodeBlock--;
+                codeBlockContent += `${line}\n`;
+            } else if (inCodeBlock > 0 && codeMatch[1] !== '') {
+                inCodeBlock++;
+                codeBlockContent += `${line}\n`;
             } else {
                 // 开始代码块
-                inCodeBlock = true;
-                codeBlockLanguage = line.trim().slice(3).trim(); // 获取语言标识符
+                inCodeBlock++;
+                codeBlockLanguage = codeMatch[1];
             }
             continue;
         }
 
-        if (inCodeBlock) {
+        if (inCodeBlock > 0) {
             codeBlockContent += `${line}\n`;
             continue;
         }
@@ -100,14 +108,14 @@ function markdownToTelegraphNodes(markdown: string): Node[] {
     }
 
     // 处理可能的未闭合代码块
-    if (inCodeBlock) {
+    if (inCodeBlock > 0) {
         nodes.push({
             tag: 'pre',
             children: [
                 {
                     tag: 'code',
-                    attrs: codeBlockLanguage ? { class: `language-${codeBlockLanguage}` } : {},
-                    children: [codeBlockContent.trim()],
+                    attrs: codeBlockLanguage ? { class: codeBlockLanguage } : {},
+                    children: [codeBlockContent.trim() + (inCodeBlock > 1 ? '```\n'.repeat(inCodeBlock - 1) : '')],
                 },
             ],
         });

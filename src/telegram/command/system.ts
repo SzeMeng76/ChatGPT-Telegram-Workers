@@ -412,7 +412,6 @@ export class SetCommandHandler implements CommandHandler {
 
             if (remainingText) {
                 message.text = remainingText;
-                context.MIDDEL_CONTEXT.originalMessageInfo.text = remainingText;
                 return null;
             }
 

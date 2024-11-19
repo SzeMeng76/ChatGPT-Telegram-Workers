@@ -60,8 +60,8 @@ async function runPolling() {
         console.log(`@${name.result.username} Webhook deleted, If you want to use webhook, please set it up again.`);
     }
 
-    while (true) {
-        for (const token of ENV.TELEGRAM_AVAILABLE_TOKENS) {
+    ENV.TELEGRAM_AVAILABLE_TOKENS.forEach(async (token) => {
+        while (true) {
             try {
                 const resp = await clients[token].getUpdates({
                     offset: offset[token],
@@ -88,7 +88,7 @@ async function runPolling() {
                 console.error(e);
             }
         }
-    }
+    });
 }
 
 try {

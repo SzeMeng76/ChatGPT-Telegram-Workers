@@ -18,7 +18,10 @@ export class ShareContext {
     groupAdminsKey?: string;
     telegraphAccessTokenKey?: string;
     readonly scheduleDeteleKey: string = 'schedule_detele_message';
-    storeMessageKey?: string;
+    storeMediaMessageKey?: string;
+    chunkMessageKey?: string;
+    // mediaMessageLock?: string;
+    // chunkMessageLock?: string;
     isForwarding: boolean = false;
 
     constructor(token: string, message: Telegram.Message) {
@@ -47,9 +50,13 @@ export class ShareContext {
         // 没有开启群组共享模式时，要加上发言人id
         //  chatHistoryKey = history:chat_id:bot_id:(from_id)
         //  configStoreKey =  user_config:chat_id:bot_id:(from_id)
+        //  storeMediaMessageKey = store_media_message:chat_id:(from_id)
+        //  chunkMessageKey = chunk_message:chat_id:(from_id)
 
         let historyKey = `history:${id}`;
         let configStoreKey = `user_config:${id}`;
+        let chunkMessageKey = ENV.STORE_TEXT_CHUNK_MESSAGE ? `chunk_message:${id}` : undefined;
+        let storeMediaMessageKey = ENV.STORE_MEDIA_MESSAGE ? `store_media_message:${id}` : undefined;
 
         if (botId) {
             historyKey += `:${botId}`;
@@ -64,6 +71,10 @@ export class ShareContext {
                     configStoreKey += `:${message.from.id}`;
                 }
                 this.groupAdminsKey = `group_admin:${id}`;
+                if (message.from?.id) {
+                    chunkMessageKey = chunkMessageKey ? `${chunkMessageKey}:${message.from.id}` : undefined;
+                    storeMediaMessageKey = storeMediaMessageKey ? `${storeMediaMessageKey}:${message.from.id}` : undefined;
+                }
                 break;
             default:
                 break;
@@ -80,11 +91,10 @@ export class ShareContext {
         this.chatHistoryKey = historyKey;
         this.lastMessageKey = `last_message_id:${historyKey}`;
         this.configStoreKey = configStoreKey;
+        this.chunkMessageKey = chunkMessageKey;
+        this.storeMediaMessageKey = storeMediaMessageKey;
 
         // 不区分是否开启群组共享模式
-        if (ENV.STORE_MEDIA_MESSAGE) {
-            this.storeMessageKey = `store_media_message:${message.chat.id}`;
-        }
 
         if (ENV.TELEGRAPH_NUM_LIMIT > 0) {
             this.telegraphAccessTokenKey = `telegraph_access_token:${id}`;

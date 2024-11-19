@@ -105,7 +105,7 @@ export function getLogSingleton(config: AgentUserConfig): Logs {
 }
 
 // 获取日志
-export function getLog(context: AgentUserConfig, returnModel: boolean = false, fold: boolean = true): any {
+export function getLog(context: AgentUserConfig, onlyModel: boolean = false, fold: boolean = true): any {
     if (!context.ENABLE_SHOWINFO)
         return '';
 
@@ -115,7 +115,7 @@ export function getLog(context: AgentUserConfig, returnModel: boolean = false, f
 
     if (!logObj)
         return '';
-    if (returnModel) {
+    if (onlyModel) {
         return logObj.chat.model?.at(-1) || logObj.tool.model || 'UNKNOWN';
     }
 

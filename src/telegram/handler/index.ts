@@ -18,7 +18,6 @@ import {
     OldMessageFilter,
     SaveLastMessage,
     StoreHistory,
-    StoreMessageMediaId,
     TagNeedDelete,
     WhiteListFilter,
 } from './handlers';
@@ -41,7 +40,7 @@ function loadMessage(body: Telegram.Update, isForwarding: boolean) {
     }
 }
 
-const exitHanders: MessageHandler<any>[] = [new TagNeedDelete(), new StoreMessageMediaId()];
+const exitHanders: MessageHandler<any>[] = [new TagNeedDelete()];
 
 export async function handleUpdate(token: string, update: Telegram.Update, headers?: Headers): Promise<Response | null> {
     log.debug(`handleUpdate`, update.message?.chat);
@@ -86,6 +85,7 @@ async function handleMessage(token: string, message: Telegram.Message, isForward
                 break;
             }
         }
+        log.info(`[MESSAGE HANDLER] handle message end, to handle exit handlers`);
 
         for (const handler of exitHanders) {
             const result = await handler.handle(message, context);

@@ -33,12 +33,12 @@ export class OpenAI extends OpenAIBase implements ChatAgent {
         return Array.isArray(params?.content) ? ctx.OPENAI_VISION_MODEL : ctx.OPENAI_CHAT_MODEL;
     };
 
-    readonly transformModel = (model: string, context: AgentUserConfig): string => {
-        if (context.OPENAI_NEED_TRANSFORM_MODEL.includes(model)) {
-            return `${OpenAI.transformModelPerfix}${model}`;
-        }
-        return model;
-    };
+    // readonly transformModel = (model: string, context: AgentUserConfig): string => {
+    //     if (context.OPENAI_NEED_TRANSFORM_MODEL.includes(model)) {
+    //         return `${OpenAI.transformModelPerfix}${model}`;
+    //     }
+    //     return model;
+    // };
 
     // 仅文本对话使用该地址
     readonly base_url = (context: AgentUserConfig): string => {
@@ -51,15 +51,15 @@ export class OpenAI extends OpenAIBase implements ChatAgent {
     readonly request = async (params: LLMChatParams, context: AgentUserConfig, onStream: ChatStreamTextHandler | null): Promise<{ messages: ResponseMessage[]; content: string }> => {
         const userMessage = params.messages.at(-1) as CoreUserMessage;
         const originalModel = this.model(context, userMessage);
-        const transformedModel = this.transformModel(originalModel, context);
+        // const transformedModel = this.transformModel(originalModel, context);
         const provider = createOpenAI({
             baseURL: context.OPENAI_API_BASE,
             apiKey: this.apikey(context),
             compatibility: 'strict',
-            fetch: originalModel === transformedModel ? undefined : this.fetch,
+            // fetch: originalModel === transformedModel ? undefined : this.fetch,
         });
 
-        const languageModelV1 = provider.languageModel(transformedModel, undefined);
+        const languageModelV1 = provider.languageModel(originalModel, undefined);
         const { messages, onStream: newOnStream } = this.extraHandle(originalModel, params.messages, context, onStream);
 
         return requestChatCompletionsV2(await warpLLMParams({

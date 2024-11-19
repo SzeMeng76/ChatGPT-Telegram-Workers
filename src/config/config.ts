@@ -61,8 +61,6 @@ export class EnvironmentConfig {
     AUTO_TRIM_HISTORY = true;
     // 最大历史记录长度
     MAX_HISTORY_LENGTH = 12;
-    // 最大消息长度
-    MAX_TOKEN_LENGTH = -1;
     // Image占位符: 当此环境变量存在时，则历史记录中的图片将被替换为此占位符
     HISTORY_IMAGE_PLACEHOLDER: string | null = '[A IMAGE]';
 
@@ -121,8 +119,6 @@ export class EnvironmentConfig {
     ALL_COMPLETE_API_TIMEOUT = 180;
     // Function call timeout
     FUNC_TIMEOUT = 15;
-    // If true, will store media message id
-    STORE_MEDIA_MESSAGE: boolean = false;
     // Drop openai params, the key is the model name, separated by commas, and the value is the parameters to be dropped, separated by commas.
     // DROPS_OPENAI_PARAMS = { 'o1-mini,o1-preview': 'max_tokens,temperature,stream' };
     DROPS_OPENAI_PARAMS: Record<string, string> = {};
@@ -175,6 +171,10 @@ export class EnvironmentConfig {
     INLINE_QUERY_SEND_INTERVAL = 2000;
     // inline query show info
     INLINE_QUERY_SHOW_INFO = false;
+    // If true, will store media group file id
+    STORE_MEDIA_MESSAGE: boolean = false;
+    // If true, will store text chunk when message separated to multiple chunks
+    STORE_TEXT_CHUNK_MESSAGE: boolean = false;
 }
 
 // -- 通用配置 --
@@ -203,7 +203,10 @@ export class OpenAIConfig {
     OPENAI_VISION_MODEL = 'gpt-4o-mini';
     // OpenAI TTS Model
     OPENAI_TTS_MODEL = 'tts-1';
-    // OpenAI need transform model
+    /**
+     * OpenAI need transform model
+     * @deprecated
+     */
     OPENAI_NEED_TRANSFORM_MODEL: string[] = ['o1-mini-all', 'o1-mini-preview-all'];
 }
 

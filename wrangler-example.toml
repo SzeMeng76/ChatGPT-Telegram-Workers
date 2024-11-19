@@ -64,9 +64,7 @@ GROUP_CHAT_BOT_ENABLE = 'true'
 ## 为了避免4096字符限制，将消息删减
 #AUTO_TRIM_HISTORY = 'true'
 ## 最大历史记录长度
-#MAX_HISTORY_LENGTH = 20
-## 最大消息长度
-#MAX_TOKEN_LENGTH = 2048
+#MAX_HISTORY_LENGTH = 12
 
 
 ## -- 特性开关 --

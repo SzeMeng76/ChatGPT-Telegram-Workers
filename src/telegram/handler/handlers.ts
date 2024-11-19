@@ -23,7 +23,7 @@ export class SaveLastMessage implements MessageHandler<WorkerContextBase> {
             return null;
         }
         const lastMessageKey = `last_message:${context.SHARE_CONTEXT.chatHistoryKey}`;
-        await ENV.DATABASE.put(lastMessageKey, JSON.stringify(message), { expirationTtl: 3600 });
+        await ENV.DATABASE.put(lastMessageKey, JSON.stringify(message));
         return null;
     };
 }
@@ -180,34 +180,6 @@ export class TagNeedDelete implements MessageHandler<WorkerContext> {
         log.info(`[TAG MESSAGE] Record chat ${chatId}, message ids: ${[...(tagMessageIds.get(message) || [])]}`);
 
         return null;
-    };
-}
-
-export class StoreMessageMediaId implements MessageHandler<WorkerContext> {
-    handle = async (message: Telegram.Message, context: WorkerContext): Promise<Response | null> => {
-        const storeMessageKey = context.SHARE_CONTEXT?.storeMessageKey;
-        const msgInfo = context.MIDDEL_CONTEXT.originalMessageInfo;
-        if (storeMessageKey && msgInfo.media_group_id && ['photo', 'image'].includes(msgInfo.type) && Array.isArray(msgInfo.id)) {
-            const maxMediaGroupNum = 25;
-            const data: Record<string, string[]> = JSON.parse(await ENV.DATABASE.get(storeMessageKey) || '{}');
-            if (!data[msgInfo.media_group_id]) {
-                data[msgInfo.media_group_id] = [];
-            }
-            const needStoreIds = msgInfo.id.filter(id => !data[msgInfo.media_group_id!].includes(id));
-            if (needStoreIds.length === 0) {
-                return new Response('no need store', { status: 200 });
-            }
-            data[msgInfo.media_group_id].push(...needStoreIds);
-            if (Object.keys(data).length > maxMediaGroupNum) {
-                const groupIds = Object.keys(data).sort((a, b) => Number(a) - Number(b));
-                groupIds.splice(0, groupIds.length - maxMediaGroupNum).forEach((key) => {
-                    delete data[key];
-                });
-            }
-            await ENV.DATABASE.put(storeMessageKey, JSON.stringify(data));
-            log.info(`[STORE MESSAGE] Store message media, group_id: ${msgInfo.media_group_id}, id: ${msgInfo.id}`);
-        }
-        return new Response('ok');
     };
 }
 

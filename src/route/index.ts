@@ -38,7 +38,7 @@ async function bindWebHookAction(request: RouterRequest): Promise<Response> {
         html += `<p style="color: red">Please set the <strong> TELEGRAM_AVAILABLE_TOKENS </strong> environment variable in Cloudflare Workers.</p> `;
     } else {
         for (const [key, res] of Object.entries(result)) {
-            html += `<h3>Bot: ${key}</h3>`;
+            html += `<h3>Bot: ${`${key.slice(0, 2)}***${key.slice(-2)}`}</h3>`;
             for (const [s, data] of Object.entries(res)) {
                 html += `<p style="color: ${data.ok ? 'green' : 'red'}">${s}: ${JSON.stringify(data)}</p>`;
             }

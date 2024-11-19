@@ -6,6 +6,7 @@ import type {
     Experimental_LanguageModelV1Middleware as LanguageModelV1Middleware,
     StepResult,
 } from 'ai';
+import type { ToolChoice } from '.';
 import type { AgentUserConfig } from '../config/env';
 import type { ChatStreamTextHandler } from './types';
 import { createLlmModel } from '.';
@@ -15,36 +16,25 @@ import { OpenAI } from './openai';
 
 type Writeable<T> = { -readonly [P in keyof T]: T[P] };
 
-export function AIMiddleware({ config, tools, activeTools, onStream, toolChoice, messageReferencer }: { config: AgentUserConfig; tools: Record<string, any>; activeTools: string[]; onStream: ChatStreamTextHandler | null; toolChoice: CoreToolChoice<any>[] | []; messageReferencer: string[] }): LanguageModelV1Middleware & { onChunk: (data: any) => boolean; onStepFinish: (data: StepResult<any>, context: AgentUserConfig) => void } {
+export function AIMiddleware({ config, tools, activeTools, onStream, toolChoice, messageReferencer, chatModel }: { config: AgentUserConfig; tools: Record<string, any>; activeTools: string[]; onStream: ChatStreamTextHandler | null; toolChoice: ToolChoice[] | []; messageReferencer: string[]; chatModel: string }): LanguageModelV1Middleware & { onChunk: (data: any) => boolean; onStepFinish: (data: StepResult<any>, context: AgentUserConfig) => void } {
     let startTime: number | undefined;
     let sendToolCall = false;
     let step = 0;
     let rawSystemPrompt: string | undefined;
-    const openaiTransformModelRegex = new RegExp(`^${OpenAI.transformModelPerfix}`);
     return {
         wrapGenerate: async ({ doGenerate, params, model }) => {
             log.info('doGenerate called');
-            await warpModel(model, activeTools, config);
-            log.info(`provider: ${model.provider}, modelId: ${model.modelId} `);
-            const logs = getLogSingleton(config);
-            const modelId = model.provider === 'openai' ? model.modelId.replace(openaiTransformModelRegex, '') : model.modelId;
-            activeTools.length > 0 ? logs.tool.model = modelId : logs.chat.model.push(modelId);
+            await warpModel(model, config, activeTools, (params.mode as any).toolChoice, chatModel);
+            recordModelLog(config, model, activeTools, (params.mode as any).toolChoice);
             const result = await doGenerate();
             log.info(`generated text: ${result.text}`);
             return result;
         },
 
-        wrapStream: async ({ doStream, model }) => {
+        wrapStream: async ({ doStream, params, model }) => {
             log.info('doStream called');
-            await warpModel(model, activeTools, config);
-            log.info(`provider: ${model.provider}, modelId: ${model.modelId} `);
-            const logs = getLogSingleton(config);
-            const modelId = model.provider === 'openai' ? model.modelId.replace(openaiTransformModelRegex, '') : model.modelId;
-            if (activeTools.length > 0) {
-                logs.tool.model = modelId;
-            } else {
-                logs.chat.model.push(modelId);
-            }
+            await warpModel(model, config, activeTools, (params.mode as any).toolChoice, chatModel);
+            recordModelLog(config, model, activeTools, (params.mode as any).toolChoice);
             return doStream();
         },
 
@@ -64,7 +54,7 @@ export function AIMiddleware({ config, tools, activeTools, onStream, toolChoice,
                 params.mode.tools = params.mode.tools?.filter(i => activeTools.includes(i.name));
             }
             warpMessages(params, tools, activeTools, rawSystemPrompt);
-            log.info(`request params: ${JSON.stringify(params, null, 2)}`);
+            // log.info(`request params: ${JSON.stringify(params, null, 2)}`);
             return params;
         },
 
@@ -83,8 +73,8 @@ export function AIMiddleware({ config, tools, activeTools, onStream, toolChoice,
             const logs = getLogSingleton(config);
             log.info('llm request end');
             log.info('step text:', text);
-            // log.debug('step raw request:', request);
-            log.debug('step raw response:', response);
+            log.info('step raw request:', request);
+            // log.debug('step raw response:', response);
 
             const time = ((Date.now() - startTime!) / 1e3).toFixed(1);
             if (toolResults.length > 0) {
@@ -100,7 +90,8 @@ export function AIMiddleware({ config, tools, activeTools, onStream, toolChoice,
                         arguments: Object.values(i.args),
                     };
                 });
-                log.info(func_logs);
+                log.info(`func logs: ${JSON.stringify(func_logs, null, 2)}`);
+                log.info(`func result: ${JSON.stringify(toolResults, null, 2)}`);
                 logs.functions.push(...func_logs);
                 logs.tool.time.push((+time - maxFuncTime).toFixed(1));
                 const toolNames = [...new Set(toolResults.map(i => i.toolName))];
@@ -108,7 +99,7 @@ export function AIMiddleware({ config, tools, activeTools, onStream, toolChoice,
                 log.info(`finish ${toolNames}`);
                 onStream?.send(`${messageReferencer.join('')}...\n` + `finish ${toolNames}`);
             } else {
-                activeTools.length > 0 ? logs.tool.time.push(time) : logs.chat.time.push(time);
+                activeTools.length > 0 && toolChoice[step]?.type !== 'none' ? logs.tool.time.push(time) : logs.chat.time.push(time);
             }
 
             if (usage && !Number.isNaN(usage.promptTokens) && !Number.isNaN(usage.completionTokens)) {
@@ -148,12 +139,9 @@ function warpMessages(params: LanguageModelV1CallOptions, tools: Record<string, 
     }
 }
 
-async function warpModel(model: LanguageModelV1, activeTools: string[], config: AgentUserConfig) {
+async function warpModel(model: LanguageModelV1, config: AgentUserConfig, activeTools: string[], toolChoice: ToolChoice, chatModel: string) {
     const mutableModel = model as Writeable<LanguageModelV1>;
-    // if (model.provider === 'openai' && model.modelId.startsWith(OpenAI.transformModelPerfix)) {
-    //     mutableModel.modelId = mutableModel.modelId.slice(OpenAI.transformModelPerfix.length);
-    // }
-    const effectiveModel = activeTools.length > 0 ? (config.TOOL_MODEL || model.modelId) : model.modelId;
+    const effectiveModel = (activeTools.length > 0 && toolChoice?.type !== 'none') ? (config.TOOL_MODEL || chatModel) : chatModel;
     if (effectiveModel !== mutableModel.modelId) {
         let newModel: LanguageModelV1 | undefined;
         if (effectiveModel.includes(':')) {
@@ -169,4 +157,16 @@ async function warpModel(model: LanguageModelV1, activeTools: string[], config: 
 
 function trimActiveTools(activeTools: string[], toolNames: string[]) {
     return activeTools.length > 0 ? activeTools.filter(name => !toolNames.includes(name)) : [];
+}
+
+function recordModelLog(config: AgentUserConfig, model: LanguageModelV1, activeTools: string[], toolChoice: ToolChoice) {
+    const logs = getLogSingleton(config);
+    // const openaiTransformModelRegex = new RegExp(`^${OpenAI.transformModelPerfix}`);
+    // const modelId = model.provider.includes('openai') ? model.modelId.replace(openaiTransformModelRegex, '') : model.modelId;
+    log.info(`provider: ${model.provider}, modelId: ${model.modelId} `);
+    if (activeTools.length > 0 && toolChoice?.type !== 'none') {
+        logs.tool.model = model.modelId;
+    } else {
+        logs.chat.model.push(model.modelId);
+    }
 }

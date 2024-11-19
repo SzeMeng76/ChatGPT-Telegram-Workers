@@ -1,4 +1,5 @@
 import type { CoreMessage, CoreToolChoice, LanguageModelV1, StepResult } from 'ai';
+import type { ToolChoice } from '.';
 import type { AgentUserConfig } from '../config/env';
 import type { ChatStreamTextHandler, OpenAIFuncCallData, ResponseMessage } from './types';
 import { generateText, streamText, experimental_wrapLanguageModel as wrapLanguageModel } from 'ai';
@@ -181,7 +182,7 @@ export async function streamHandler(stream: AsyncIterable<any>, contentExtractor
     return contentFull;
 }
 
-export async function requestChatCompletionsV2(params: { model: LanguageModelV1; toolModel?: LanguageModelV1; prompt?: string; messages: CoreMessage[]; tools?: any; activeTools?: string[]; toolChoice?: CoreToolChoice<any>[]; context: AgentUserConfig }, onStream: ChatStreamTextHandler | null, onResult: OnResult | null = null): Promise<{ messages: ResponseMessage[]; content: string }> {
+export async function requestChatCompletionsV2(params: { model: LanguageModelV1; toolModel?: LanguageModelV1; prompt?: string; messages: CoreMessage[]; tools?: any; activeTools?: string[]; toolChoice?: ToolChoice[] | undefined; context: AgentUserConfig }, onStream: ChatStreamTextHandler | null, onResult: OnResult | null = null): Promise<{ messages: ResponseMessage[]; content: string }> {
     const messageReferencer = [] as string[];
     try {
         const middleware = AIMiddleware({
@@ -190,6 +191,7 @@ export async function requestChatCompletionsV2(params: { model: LanguageModelV1;
             activeTools: params.activeTools || [],
             onStream,
             toolChoice: params.toolChoice || [],
+            chatModel: params.model.modelId,
             messageReferencer,
         });
         const hander_params = {

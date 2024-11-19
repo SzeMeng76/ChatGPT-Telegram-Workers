@@ -60,7 +60,7 @@ OPENAI_API_BASE,GOOGLE_API_BASE,MISTRAL_API_BASE,COHERE_API_BASE,ANTHROPIC_API_B
 |--------------------|---------------------------------------|---------|---------------------------------------------------------------|
 | AUTO_TRIM_HISTORY  | Automatic trimming of message history | `true`  | Automatically trim messages to avoid the 4096 character limit |
 | MAX_HISTORY_LENGTH | Maximum length of message history     | `20`    | Maximum number of message history entries to keep             |
-| MAX_TOKEN_LENGTH   | Maximum token length                  | `20480` | Maximum token length for message history                      |
+|Maximum token length                  |Maximum token length for message history                      |
 
 ### Feature configuration
 

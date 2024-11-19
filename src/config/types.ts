@@ -1,7 +1,8 @@
 export interface KVNamespace {
-    get: (key: string) => Promise<string | any>;
-    put: (key: string, value: string, info?: { expirationTtl?: number; expiration?: number }) => Promise<void>;
+    get: (key: string | string[]) => Promise<string | any>;
+    put: (key: string, value: string, info?: { expirationTtl?: number; expiration?: number; condition?: 'NX' | 'XX' }) => Promise<any>;
     delete: (key: string) => Promise<void>;
+    list: (prefix?: string) => Promise<string[]>;
 }
 
 export interface APIGuard {
