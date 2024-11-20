@@ -53,10 +53,12 @@ export function executeTool(toolName: string) {
         } else {
             result = await result.text();
         }
+        /*
         if (tools[toolName].handler) {
             const f = eval(tools[toolName].handler);
             result = f(result);
         }
+        */
         if (tools[toolName].next_tool) {
             const next_tool_alias = tools[toolName].next_tool;
             return executeTool(next_tool_alias)(result, options);
