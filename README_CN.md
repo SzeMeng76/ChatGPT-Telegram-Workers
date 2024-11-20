@@ -1,3 +1,4 @@
+[![Build and Push Docker Image](https://github.com/adolphnov/ChatGPT-Telegram-Workers/actions/workflows/build-docker.yml/badge.svg)](https://github.com/adolphnov/ChatGPT-Telegram-Workers/actions/workflows/build-docker.yml)
 <h1 align="center">
 ChatGPT-Telegram-Workers
 </h1>
