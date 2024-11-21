@@ -5,6 +5,7 @@ import { createAnthropic } from '@ai-sdk/anthropic';
 import { createCohere } from '@ai-sdk/cohere';
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { createOpenAI } from '@ai-sdk/openai';
+import { createXai } from '@ai-sdk/xai';
 import { type AgentUserConfig, ENV } from '../config/env';
 import { log } from '../log/logger';
 import { isCfWorker } from '../telegram/utils/utils';
@@ -13,12 +14,12 @@ import { Anthropic } from './anthropic';
 import { AzureChatAI, AzureImageAI } from './azure';
 import { Cohere } from './cohere';
 import { Google } from './google';
-
 import { Mistral } from './mistralai';
 import { Dalle, OpenAI, Transcription } from './openai';
 import { OpenAILike, OpenAILikeImage } from './openailike';
 import { Vertex } from './vertex';
 import { WorkersChat, WorkersImage } from './workersai';
+import { XAI } from './xai';
 
 export const CHAT_AGENTS: ChatAgent[] = [
     new Anthropic(),
@@ -30,6 +31,7 @@ export const CHAT_AGENTS: ChatAgent[] = [
     new WorkersChat(),
     new OpenAILike(),
     new Vertex(),
+    new XAI(),
 ];
 
 export function loadChatLLM(context: AgentUserConfig): ChatAgent | null {
@@ -213,6 +215,11 @@ export async function createLlmModel(model: string, context: AgentUserConfig) {
                 ],
                 useSearchGrounding: context.VERTEX_SEARCH_GROUNDING,
             });
+        case 'xai':
+            return createXai({
+                baseURL: context.XAI_API_BASE,
+                apiKey: context.XAI_API_KEY || undefined,
+            }).languageModel(model_id, undefined);
         default:
             return createOpenAI({
                 name: 'olike',

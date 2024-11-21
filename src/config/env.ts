@@ -15,6 +15,7 @@ import {
     OpenAILikeConfig,
     VertexConfig,
     WorkersConfig,
+    XAIConfig,
 } from './config';
 import { ConfigMerger } from './merger';
 
@@ -31,7 +32,8 @@ export type AgentUserConfig = Record<string, any> &
     AnthropicConfig &
     OpenAILikeConfig &
     ExtraUserConfig &
-    VertexConfig;
+    VertexConfig &
+    XAIConfig;
 
 function createAgentUserConfig(): AgentUserConfig {
     return Object.assign(
@@ -49,6 +51,7 @@ function createAgentUserConfig(): AgentUserConfig {
         new OpenAILikeConfig(),
         new ExtraUserConfig(),
         new VertexConfig(),
+        new XAIConfig(),
     );
 }
 

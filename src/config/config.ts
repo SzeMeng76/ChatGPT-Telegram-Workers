@@ -310,7 +310,7 @@ export class XAIConfig {
     // XAI api key
     XAI_API_KEY: string | null = null;
     // XAI api base
-    XAI_API_BASE = 'https://api.xai.com/v1';
+    XAI_API_BASE = 'https://api.x.ai/v1';
     // XAI api model
     XAI_CHAT_MODEL = 'grok-beta';
     XAI_VISION_MODEL = 'grok-vision-beta';
