@@ -67,7 +67,7 @@ export async function chatWithLLM(
         } else {
             errMsg += (e as Error).message.slice(0, 2048);
         }
-        return streamSender.end?.(`\`\`\`\n${errMsg}\n\`\`\``);
+        return streamSender.end?.(`\`\`\`\n${errMsg.replace(context.SHARE_CONTEXT.botToken, '[REDACTED]')}\n\`\`\``);
     }
 }
 
@@ -91,7 +91,8 @@ export class ChatHandler implements MessageHandler<WorkerContext> {
         } catch (e) {
             console.error('Error:', e);
             const sender = context.MIDDEL_CONTEXT.sender ?? MessageSender.from(context.SHARE_CONTEXT.botToken, message);
-            return sender.sendPlainText(`Error: ${(e as Error).message}`);
+            const filtered = (e as Error).message.replace(context.SHARE_CONTEXT.botToken, '[REDACTED]');
+            return sender.sendPlainText(`Error: ${filtered.substring(0, 4000)}`);
         }
     };
 

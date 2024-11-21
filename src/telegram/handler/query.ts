@@ -38,8 +38,9 @@ export class AnswerChatInlineQuery implements answerInlineQuery {
                 return OnStream.end?.('No response');
             }
             return OnStream.end?.(answer);
-        } catch (error) {
-            return OnStream.end?.(`Error: ${(error as Error).message.substring(0, 4000)}`);
+        } catch (e) {
+            const filtered = (e as Error).message.replace(context.botToken, '[REDACTED]');
+            return OnStream.end?.(`Error: ${filtered.substring(0, 4000)}`);
         }
     };
 

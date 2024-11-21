@@ -3,6 +3,7 @@ import type { ChatAgent, ChatStreamTextHandler, LLMChatParams, LLMChatRequestPar
 import { createXai } from '@ai-sdk/xai';
 import { warpLLMParams } from '.';
 import { requestChatCompletionsV2 } from './request';
+import { CoreUserMessage } from 'ai';
 
 export class XAI implements ChatAgent {
     readonly name = 'xai';
@@ -21,7 +22,8 @@ export class XAI implements ChatAgent {
             baseURL: context.XAI_API_BASE,
             apiKey: context.XAI_API_KEY || undefined,
         });
-        const languageModelV1 = provider.languageModel(this.model(context), undefined);
+        const userMessage = params.messages.at(-1) as CoreUserMessage;
+        const languageModelV1 = provider.languageModel(this.model(context, userMessage), undefined);
         return requestChatCompletionsV2(await warpLLMParams({
             model: languageModelV1,
             messages: params.messages,
