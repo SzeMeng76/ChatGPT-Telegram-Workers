@@ -14,7 +14,7 @@ import { log } from '../log/logger';
 
 type Writeable<T> = { -readonly [P in keyof T]: T[P] };
 
-export function AIMiddleware({ config, tools, activeTools, onStream, toolChoice, messageReferencer, chatModel }: { config: AgentUserConfig; tools: Record<string, any>; activeTools: string[]; onStream: ChatStreamTextHandler | null; toolChoice: ToolChoice[] | []; messageReferencer: string[]; chatModel: string }): LanguageModelV1Middleware & { onChunk: (data: any) => boolean; onStepFinish: (data: StepResult<any>, context: AgentUserConfig) => void } {
+export function AIMiddleware({ config, tools, activeTools, onStream, toolChoice, messageReferencer, chatModel }: { config: AgentUserConfig; tools: Record<string, any>; activeTools: string[]; onStream: ChatStreamTextHandler | null; toolChoice: ToolChoice[] | []; messageReferencer: string[]; chatModel: string }): LanguageModelV1Middleware & { onChunk: (data: any) => void; onStepFinish: (data: StepResult<any>, context: AgentUserConfig) => void } {
     let startTime: number | undefined;
     let sendToolCall = false;
     let step = 0;
@@ -22,7 +22,7 @@ export function AIMiddleware({ config, tools, activeTools, onStream, toolChoice,
     return {
         wrapGenerate: async ({ doGenerate, params, model }) => {
             log.info('doGenerate called');
-            await warpModel(model, config, activeTools, (params.mode as any).toolChoice, chatModel);
+            // await warpModel(model, config, activeTools, (params.mode as any).toolChoice, chatModel);
             recordModelLog(config, model, activeTools, (params.mode as any).toolChoice);
             const result = await doGenerate();
             log.info(`generated text: ${result.text}`);
@@ -31,7 +31,7 @@ export function AIMiddleware({ config, tools, activeTools, onStream, toolChoice,
 
         wrapStream: async ({ doStream, params, model }) => {
             log.info('doStream called');
-            await warpModel(model, config, activeTools, (params.mode as any).toolChoice, chatModel);
+            // await warpModel(model, config, activeTools, (params.mode as any).toolChoice, chatModel);
             recordModelLog(config, model, activeTools, (params.mode as any).toolChoice);
             return doStream();
         },
@@ -60,7 +60,6 @@ export function AIMiddleware({ config, tools, activeTools, onStream, toolChoice,
                 sendToolCall = true;
                 log.info(`will start tool: ${chunk.toolName}`);
             }
-            return sendToolCall;
         },
 
         onStepFinish: (data: StepResult<any>) => {
@@ -140,7 +139,7 @@ async function warpModel(model: LanguageModelV1, config: AgentUserConfig, active
         let newModel: LanguageModelV1 | undefined;
         if (effectiveModel.includes(':')) {
             newModel = await createLlmModel(effectiveModel, config);
-            mutableModel.provider = newModel.provider;
+            // mutableModel.provider = newModel.provider;
             mutableModel.specificationVersion = newModel.specificationVersion;
             mutableModel.doStream = newModel.doStream;
             mutableModel.doGenerate = newModel.doGenerate;

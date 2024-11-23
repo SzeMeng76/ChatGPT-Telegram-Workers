@@ -6,7 +6,6 @@ import type { HistoryItem } from '../../agent/types';
 import type { WorkerContext } from '../../config/context';
 import type { AgentUserConfig } from '../../config/env';
 import type { MessageSender } from '../utils/send';
-import type { UnionData } from '../utils/utils';
 import type { CommandHandler, InlineItem, ScopeType } from './types';
 import { authChecker } from '.';
 import { CHAT_AGENTS, customInfo, IMAGE_AGENTS, loadChatLLM, loadImageGen } from '../../agent';
@@ -322,7 +321,7 @@ export class SystemCommandHandler implements CommandHandler {
 export class RedoCommandHandler implements CommandHandler {
     command = '/redo';
     scopes: ScopeType[] = ['all_private_chats', 'all_group_chats', 'all_chat_administrators'];
-    handle = async (message: Telegram.Message, subcommand: string, context: WorkerContext): Promise<UnionData | Response> => {
+    handle = async (message: Telegram.Message, subcommand: string, context: WorkerContext): Promise< Response> => {
         const mf = (history: HistoryItem[], message: CoreUserMessage | null): any => {
             let nextMessage = message;
             if (!(history && Array.isArray(history) && history.length > 0)) {
@@ -349,7 +348,7 @@ export class RedoCommandHandler implements CommandHandler {
             }
             return { history: historyCopy, message: nextMessage };
         };
-        return chatWithLLM(message, null, context, mf);
+        return chatWithLLM(message, null, context, mf) as unknown as Response;
     };
 }
 
@@ -535,9 +534,7 @@ export class SetCommandHandler implements CommandHandler {
         if (!this.relaxAuth && ENV.RELAX_AUTH_KEYS.length === 0) {
             return;
         }
-        if (needUpdate) {
-            await authChecker(this, message, context);
-        } else if (keys.length > 0 && keys.some(key => !ENV.RELAX_AUTH_KEYS.includes(key))) {
+        if (needUpdate || (keys.length > 0 && keys.some(key => !ENV.RELAX_AUTH_KEYS.includes(key)))) {
             await authChecker(this, message, context);
         }
     }

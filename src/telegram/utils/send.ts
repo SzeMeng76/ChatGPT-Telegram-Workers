@@ -226,7 +226,7 @@ export class MessageSender {
         return this.api.sendDocument(params);
     }
 
-    editMessageMedia(media: Telegram.InputMedia, caption?: string, parse_mode?: Telegram.ParseMode): Promise<Response> {
+    async editMessageMedia(media: Telegram.InputMedia, parse_mode?: Telegram.ParseMode, file?: File | Blob): Promise<Response> {
         if (!this.context) {
             throw new Error('Message context not set');
         }
@@ -238,11 +238,12 @@ export class MessageSender {
             message_id: this.context.message_id,
             media: {
                 ...media,
-                ...(caption ? { caption: parse_mode ? renderMessage(parse_mode, caption)[0] : caption } : {}),
                 parse_mode,
+                caption: media.caption && parse_mode ? renderMessage(parse_mode, media.caption)[0] : media.caption,
             },
         };
-        const resp = this.api.editMessageMedia(params);
+
+        const resp = this.api.request('editMessageMedia', { ...params, file });
         return checkIsNeedTagIds(this.context, resp, 'chat');
     }
 }
@@ -511,13 +512,12 @@ export class ChosenInlineSender {
         });
     }
 
-    editMessageMedia(media: string, type: 'photo' | 'video' | 'audio' | 'document', caption?: string | undefined, parse_mode?: Telegram.ParseMode): Promise<Response> {
+    editMessageMedia(media: Telegram.InputMedia, parse_mode?: Telegram.ParseMode): Promise<Response> {
         return this.api.editMessageMedia({
             inline_message_id: this.context.inline_message_id,
             media: {
-                type,
-                media,
-                ...(caption ? { caption: renderMessage(parse_mode || null, caption)[0] } : {}),
+                ...media,
+                parse_mode,
             },
         });
     }

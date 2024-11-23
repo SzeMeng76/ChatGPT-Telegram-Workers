@@ -9,6 +9,7 @@ import type { UnionData } from '../utils/utils';
 import type { MessageHandler } from './types';
 import { loadAudioLLM, loadChatLLM, loadImageGen } from '../../agent';
 import { loadHistory, requestCompletionsFromLLM } from '../../agent/chat';
+import { ASR } from '../../agent/openai';
 import { ENV } from '../../config/env';
 import { clearLog, getLog, logSingleton } from '../../log/logDecortor';
 import { log } from '../../log/logger';
@@ -19,16 +20,12 @@ import { escape } from '../utils/md2tgmd';
 import { MessageSender, sendAction, TelegraphSender } from '../utils/send';
 import { waitUntil } from '../utils/utils';
 
-async function messageInitialize(sender: MessageSender, streamSender: ChatStreamTextHandler): Promise<void> {
-    if (!sender.context.message_id) {
-        try {
-            setTimeout(() => sendAction(sender.api.token, sender.context.chat_id, 'typing'), 0);
-            log.info(`send init message`);
-            streamSender.send('...', 'chat');
-        } catch (e) {
-            console.error('Failed to initialize message:', e);
-        }
-    }
+async function messageInitialize(sender: MessageSender, context?: WorkerContext): Promise<ChatStreamTextHandler> {
+    setTimeout(() => sendAction(sender.api.token, sender.context.chat_id, 'typing'), 0);
+    log.info(`send init message`);
+    const streamSender = OnStreamHander(sender, context);
+    streamSender.send('...');
+    return streamSender;
 }
 
 export async function chatWithLLM(
@@ -36,28 +33,30 @@ export async function chatWithLLM(
     params: LLMChatRequestParams | null,
     context: WorkerContext,
     modifier: HistoryModifier | null,
-): Promise<Response> {
-    const sender = MessageSender.from(context.SHARE_CONTEXT.botToken, message);
-    const streamSender = OnStreamHander(sender, context, message.text || '');
-    messageInitialize(sender, streamSender);
-
+    sender?: ChatStreamTextHandler,
+    isMiddle?: boolean,
+): Promise<Response | string> {
     const agent = loadChatLLM(context.USER_CONFIG);
+    const streamSender = sender ?? OnStreamHander(MessageSender.from(context.SHARE_CONTEXT.botToken, message), context);
     if (!agent) {
         return streamSender.end?.('LLM is not enabled');
     }
 
     try {
         log.info(`start chat with LLM`);
-        const answer = await requestCompletionsFromLLM(params, context, agent, modifier, ENV.STREAM_MODE ? streamSender : null);
+        const answer = await requestCompletionsFromLLM(params, context, agent, modifier, ENV.STREAM_MODE && !isMiddle ? streamSender : null);
         log.info(`chat with LLM done`);
         if (answer.messages.at(-1)?.role === 'tool') {
-            const result = await sendToolResult(answer.messages.at(-1)?.content as ToolResultPart[], sender, context.USER_CONFIG);
+            const result = await sendToolResult(answer.messages.at(-1)?.content as ToolResultPart[], streamSender.sender!, context.USER_CONFIG);
             if (result instanceof Response) {
                 return result;
             }
         }
         if (answer.content === '') {
             return streamSender.end?.('No response');
+        }
+        if (isMiddle) {
+            return answer.content;
         }
         return streamSender.end?.(answer.content);
     } catch (e) {
@@ -92,7 +91,7 @@ export class ChatHandler implements MessageHandler<WorkerContext> {
             console.error('Error:', e);
             const sender = context.MIDDEL_CONTEXT.sender ?? MessageSender.from(context.SHARE_CONTEXT.botToken, message);
             const filtered = (e as Error).message.replace(context.SHARE_CONTEXT.botToken, '[REDACTED]');
-            return sender.sendRichText(`<pre>Error:${filtered.substring(0, 4000)}</pre>`, 'HTML');
+            return sender.sendRichText(`<pre>Error: ${filtered.substring(0, 4000)}</pre>`, 'HTML');
         }
     };
 
@@ -163,8 +162,9 @@ export function OnStreamHander(sender: MessageSender | ChosenInlineSender, conte
     };
 
     const streamSender = {
-        send: null as ((text: string, isEnd: boolean, sendType?: 'chat' | 'telegraph') => Promise<any>) | null,
+        send: null as ((text: string, isEnd: boolean) => Promise<any>) | null,
         end: null as ((text: string) => Promise<any>) | null,
+        sender,
     };
     streamSender.send = async (text: string): Promise<any> => {
         try {
@@ -220,7 +220,6 @@ export function OnStreamHander(sender: MessageSender | ChosenInlineSender, conte
         }
         const data = context ? `${getLog(context.USER_CONFIG)}\n${text}` : text;
         log.info(`sent message ids: ${isMessageSender ? [...sender.context.sentMessageIds] : sender.context.inline_message_id}`);
-        isMessageSender && sendAction(sender.api.token, sender.context.chat_id, 'typing');
         while (true) {
             const finalResp = await (sentError ? sender.sendPlainText(data) : sender.sendRichText(data));
             if (finalResp.status === 429) {
@@ -271,20 +270,27 @@ async function sendTelegraph(context: WorkerContext, sender: MessageSender | Cho
 type WorkflowHandler = (
     message: Telegram.Message,
     params: LLMChatRequestParams,
-    context: WorkerContext
-) => Promise<Response | void>;
+    context: WorkerContext,
+    streamSender: ChatStreamTextHandler,
+    handleKey: string,
+) => Promise<Response | Blob | string>;
 
 function workflowHandlers(type: string): WorkflowHandler {
     switch (type) {
         case 'text:text':
+        case 'text:audio':
+        case 'asr:text':
+        case 'asr:audio':
         case 'image:text':
         case 'photo:text':
-            return handleTextToText;
+            return handleText;
         case 'text:image':
             return handleTextToImage;
-        case 'voice:text':
         case 'audio:text':
-            return handleAudioToText;
+        case 'audio:audio':
+        case 'trans:text':
+        case 'trans:audio':
+            return handleAudio;
         default:
             throw new Error(`Unsupported message type: ${type}`);
     }
@@ -294,28 +300,47 @@ async function workflow(
     context: WorkerContext,
     message: Telegram.Message,
     params: LLMChatRequestParams,
-): Promise<Response | void> {
+): Promise<Response | Blob | string> {
     const msgType = context.MIDDEL_CONTEXT.originalMessageInfo.type;
-    const handlerKey = `${msgType}:text`;
+    let handlerKey = `${msgType}:`;
+    if (msgType === 'text') {
+        handlerKey = `${context.USER_CONFIG.TEXT_HANDLE_TYPE}:${context.USER_CONFIG.TEXT_OUTPUT}`;
+    } else if (msgType === 'audio' || msgType === 'voice') {
+        handlerKey = `${context.USER_CONFIG.AUDIO_HANDLE_TYPE}:${context.USER_CONFIG.AUDIO_OUTPUT}`;
+    } else {
+        handlerKey += 'text';
+    }
     const handler = workflowHandlers(handlerKey);
-    return handler(message, params, context);
+    const sender = MessageSender.from(context.SHARE_CONTEXT.botToken, message);
+    const streamSender = await messageInitialize(sender, context);
+    return handler(message, params, context, streamSender, handlerKey);
 }
 
-async function handleTextToText(
+async function handleText(
     message: Telegram.Message,
     params: LLMChatRequestParams,
     context: WorkerContext,
-): Promise<Response> {
-    return chatWithLLM(message, params, context, null);
+    streamSender: ChatStreamTextHandler,
+    handleKey: string,
+): Promise<Response | string> {
+    switch (handleKey) {
+        case 'asr:audio':
+        case 'text:audio':
+            return handleTextToAudio(message, params, context, streamSender, handleKey);
+        default:
+            return chatWithLLM(message, params, context, null, streamSender);
+    }
 }
 
 async function handleTextToImage(
     message: Telegram.Message,
     params: LLMChatRequestParams,
     context: WorkerContext,
+    streamSender: ChatStreamTextHandler,
+    handleKey: string,
 ): Promise<Response> {
     const agent = loadImageGen(context.USER_CONFIG);
-    const sender = MessageSender.from(context.SHARE_CONTEXT.botToken, message);
+    const sender = streamSender.sender!;
     if (!agent) {
         return sender.sendPlainText('ERROR: Image generator not found');
     }
@@ -328,27 +353,84 @@ async function handleTextToImage(
     return api.deleteMessage({ chat_id: sender.context.chat_id, message_id: sender.context.message_id! });
 }
 
-async function handleAudioToText(
+async function handleAudio(
     message: Telegram.Message,
     params: LLMChatRequestParams,
     context: WorkerContext,
-): Promise<Response> {
-    const agent = loadAudioLLM(context.USER_CONFIG);
-    const sender = MessageSender.from(context.SHARE_CONTEXT.botToken, message);
-    if (!agent) {
-        return sender.sendPlainText('ERROR: Audio agent not found');
-    }
+    streamSender: ChatStreamTextHandler,
+    handleKey: string,
+): Promise<Response | string> {
     const url = (params.content as FilePart[]).at(-1)?.data as string;
     const audio = await fetch(url).then(b => b.blob());
-    const result = await agent.request(audio, context.USER_CONFIG);
-    context.MIDDEL_CONTEXT.history.push({ role: 'user', content: result.text || '' });
-    await sender.sendRichText(`${getLog(context.USER_CONFIG, false, false)}\n> \n${result.text}`, 'MarkdownV2', 'chat');
-    if (ENV.AUDIO_HANDLE_TYPE === 'chat' && result.text) {
-        clearLog(context.USER_CONFIG);
-        const otherText = (params.content as TextPart[]).filter(c => c.type === 'text').map(c => c.text).join('\n').trim();
-        return chatWithLLM(message, { role: 'user', content: `[AUDIO]: ${result.text}\n${otherText}` }, context, null);
+    const text = await transcription(audio, context.USER_CONFIG);
+    context.MIDDEL_CONTEXT.history.push({ role: 'user', content: text });
+    const sender = streamSender.sender!;
+    if (handleKey === 'audio:text' || !ENV.HIDE_MIDDLE_MESSAGE) {
+        await sender.sendRichText(`${getLog(context.USER_CONFIG, false, false)}\n> \n${text}`);
     }
-    return new Response('audio handle done');
+    if (handleKey === 'trans:text') {
+        return new Response('audio handle done');
+    }
+    clearLog(context.USER_CONFIG);
+    !ENV.HIDE_MIDDLE_MESSAGE && sender.context.sentMessageIds.clear();
+    const isMiddle = handleKey === 'audio:audio';
+    const otherText = (params.content as TextPart[]).filter(c => c.type === 'text').map(c => c.text).join('\n').trim();
+    const resp = await chatWithLLM(message, { role: 'user', content: `[AUDIO TRANSCRIPTION]: ${text}\n${otherText}` }, context, null, streamSender, isMiddle);
+    if (isMiddle) {
+        const voice = await asr(resp as string, context.USER_CONFIG);
+        ENV.HIDE_MIDDLE_MESSAGE && sender.api.deleteMessage({ chat_id: sender.context.chat_id, message_id: sender.context.message_id! });
+        return sender.api.sendVoice({
+            chat_id: sender.context.chat_id,
+            voice,
+        });
+    }
+    return resp;
+}
+
+async function handleTextToAudio(
+    message: Telegram.Message,
+    params: LLMChatRequestParams,
+    context: WorkerContext,
+    streamSender: ChatStreamTextHandler,
+    handleKey: string,
+): Promise<Response> {
+    let text = params.content as string;
+    const sender = streamSender.sender!;
+    if (handleKey === 'text:audio') {
+        !ENV.HIDE_MIDDLE_MESSAGE && streamSender.send('Chat with LLM in progress');
+        text = await chatWithLLM(message, params, context, null, streamSender, true) as string;
+        !ENV.HIDE_MIDDLE_MESSAGE && streamSender.send('Chat with LLM done');
+    }
+    const agent = new ASR();
+    const audio = await agent.hander(text, context.USER_CONFIG);
+    // const sendPromise = sender.sendPlainText('Audio generation in progress.');
+    // sender.update({ message_id: await sendPromise.then(r => r.json()).then(r => r.result.message_id) });
+    // const mediaParams: Telegram.InputMediaAudio = {
+    //     type: 'audio',
+    //     media: 'attach://file',
+    // };
+    sendAction(context.SHARE_CONTEXT.botToken, sender.context.chat_id, 'upload_voice');
+    const voiceParams: Telegram.SendVoiceParams = {
+        chat_id: sender.context.chat_id,
+        voice: audio,
+    };
+    if (context.USER_CONFIG.AUDIO_CONTAINS_TEXT) {
+        voiceParams.caption = text;
+        if (['spoiler', 'bold', 'italic', 'underline', 'strikethrough', 'code', 'pre'].includes(context.USER_CONFIG.AUDIO_TEXT_FORMAT || '')) {
+            voiceParams.caption_entities = [{
+                type: context.USER_CONFIG.AUDIO_TEXT_FORMAT as Telegram.MessageEntityType,
+                offset: 0,
+                length: text.length,
+            }];
+        }
+    }
+    const resp = await sender.api.sendVoice(voiceParams);
+    if (resp.ok) {
+        return sender.api.deleteMessage({ chat_id: sender.context.chat_id, message_id: sender.context.message_id! });
+    }
+    log.error(`Failed to send voice message: ${resp.status} ${await resp.text()}`);
+    throw new Error(`Failed to send voice message: ${resp.status} ${resp.statusText}`);
+    // return sender.editMessageMedia(mediaParams, undefined, audio);
 }
 
 export async function sendImages(img: ImageResult, SEND_IMAGE_AS_FILE: boolean, sender: MessageSender, config: AgentUserConfig) {
@@ -365,7 +447,8 @@ export async function sendImages(img: ImageResult, SEND_IMAGE_AS_FILE: boolean, 
         return sender.editMessageMedia({
             type: 'photo',
             media: img.url[0],
-        }, caption, ENV.DEFAULT_PARSE_MODE as Telegram.ParseMode);
+            caption,
+        }, ENV.DEFAULT_PARSE_MODE as Telegram.ParseMode);
     } else if (img.url || img.raw) {
         return sender.sendPhoto((img.url || img.raw)![0], caption, 'MarkdownV2');
     } else {
@@ -377,4 +460,17 @@ function injectHistory(context: WorkerContext, result: UnionData, nextType: stri
     if (context.MIDDEL_CONTEXT.history.at(-1)?.role === 'user' || nextType !== 'text')
         return;
     context.MIDDEL_CONTEXT.history.push({ role: 'user', content: result.text || '', ...(result.url && result.url.length > 0 && { images: result.url }) });
+}
+
+function transcription(audio: Blob, config: AgentUserConfig) {
+    const agent = loadAudioLLM(config);
+    if (!agent) {
+        throw new Error('Audio agent not found');
+    }
+    return agent.request(audio, config);
+}
+
+function asr(text: string, config: AgentUserConfig) {
+    const agent = new ASR();
+    return agent.hander(text, config);
 }

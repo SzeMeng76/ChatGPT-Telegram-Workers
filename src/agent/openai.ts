@@ -1,5 +1,4 @@
 import type { CoreMessage, CoreUserMessage } from 'ai';
-import type { UnionData } from '../telegram/utils/utils';
 import type { AudioAgent, ChatAgent, ChatStreamTextHandler, ImageAgent, ImageResult, LLMChatParams, LLMChatRequestParams, ResponseMessage } from './types';
 import { createOpenAI } from '@ai-sdk/openai';
 import { warpLLMParams } from '.';
@@ -143,7 +142,7 @@ export class Transcription extends OpenAIBase implements AudioAgent {
     };
 
     @Log
-    request = async (audio: Blob, context: AgentUserConfig): Promise<UnionData> => {
+    request = async (audio: Blob, context: AgentUserConfig): Promise<string> => {
         const url = `${context.OPENAI_API_BASE}/audio/transcriptions`;
         const header = {
             Authorization: `Bearer ${this.apikey(context)}`,
@@ -173,9 +172,28 @@ export class Transcription extends OpenAIBase implements AudioAgent {
             throw new Error(resp);
         }
         log.info(`Transcription: ${resp.text}`);
-        return {
-            type: 'text',
-            text: resp.text,
+        return resp.text;
+    };
+}
+
+export class ASR extends OpenAIBase {
+    readonly modelKey = 'OPENAI_TTS_MODEL';
+    hander = (text: string, context: AgentUserConfig): Promise<Blob> => {
+        const url = `${context.OPENAI_API_BASE}/audio/speech`;
+        const headers = {
+            'Authorization': `Bearer ${this.apikey(context)}`,
+            'Content-Type': 'application/json',
         };
+        return fetch(url, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({
+                model: context.OPENAI_TTS_MODEL,
+                input: text,
+                voice: context.OPENAI_TTS_VOICE,
+                response_format: 'opus',
+                speed: 1,
+            }),
+        }).then(r => r.blob());
     };
 }

@@ -1,8 +1,8 @@
 import type { CoreMessage, LanguageModelV1, StepResult } from 'ai';
-import type { ToolChoice } from '.';
 import type { AgentUserConfig } from '../config/env';
 import type { ChatStreamTextHandler, OpenAIFuncCallData, ResponseMessage } from './types';
 import { generateText, streamText, experimental_wrapLanguageModel as wrapLanguageModel } from 'ai';
+import { createLlmModel, type ToolChoice } from '.';
 import { ENV } from '../config/env';
 import { log } from '../log/logger';
 import { manualRequestTool } from '../tools';
@@ -196,7 +196,7 @@ export async function requestChatCompletionsV2(params: { model: LanguageModelV1;
         });
         const hander_params = {
             model: wrapLanguageModel({
-                model: params.model,
+                model: params.activeTools?.length ? await createLlmModel(params.context.TOOL_MODEL, params.context) : params.model,
                 middleware,
             }),
             messages: params.messages,
@@ -208,7 +208,7 @@ export async function requestChatCompletionsV2(params: { model: LanguageModelV1;
             onStepFinish: middleware.onStepFinish as (data: StepResult<any>) => void,
         };
         if (onStream !== null) {
-            const stream = await streamText({
+            const stream = streamText({
                 ...hander_params,
                 onChunk: middleware.onChunk as (data: any) => void,
             });

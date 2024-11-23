@@ -1,5 +1,6 @@
 import type { CoreAssistantMessage, CoreMessage, CoreToolMessage, CoreUserMessage } from 'ai';
 import type { AgentUserConfig } from '../config/env';
+import type { MessageSender } from '../telegram/utils/send';
 import type { UnionData } from '../telegram/utils/utils';
 
 export interface OpenAIFuncCallData {
@@ -43,7 +44,8 @@ export type MessageTool = MessageBase & {
 };
 
 export interface ChatStreamTextHandler {
-    send: (text: string, sendType?: 'chat' | 'telegraph') => Promise<any>;
+    sender?: MessageSender;
+    send: (text: string) => Promise<any>;
     end?: (text: string) => Promise<any>;
 }
 
@@ -76,7 +78,7 @@ export interface ImageResult extends UnionData {
     caption?: string;
 }
 
-export type AudioAgentRequest = (audio: Blob, context: AgentUserConfig) => Promise<UnionData>;
+export type AudioAgentRequest = (audio: Blob, context: AgentUserConfig) => Promise<string>;
 
 export interface AudioAgent {
     name: string | string[];

@@ -88,7 +88,6 @@ async function handleMessage(token: string, message: Telegram.Message, isForward
                 break;
             }
         }
-        log.info(`[MESSAGE HANDLER] handle message end, to handle exit handlers`);
 
         for (const handler of exitHanders) {
             const result = await handler.handle(message, context);

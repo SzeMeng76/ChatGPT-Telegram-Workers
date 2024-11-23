@@ -137,7 +137,9 @@ export class InitUserConfig implements MessageHandler<WorkerContextBase> {
 export class StoreHistory implements MessageHandler<WorkerContext> {
     handle = async (message: Telegram.Message, context: WorkerContext): Promise<Response | null> => {
         const historyDisable = ENV.AUTO_TRIM_HISTORY && ENV.MAX_HISTORY_LENGTH <= 0;
-        if (!historyDisable) {
+        const isAsr = context.USER_CONFIG.TEXT_HANDLE_TYPE === 'asr';
+        const isTrans = context.USER_CONFIG.AUDIO_HANDLE_TYPE === 'trans';
+        if (!historyDisable && !isAsr && !isTrans) {
             const historyKey = context.SHARE_CONTEXT.chatHistoryKey;
             const history = context.MIDDEL_CONTEXT.history;
             const userMessage = history.findLast(h => h.role === 'user');
@@ -145,6 +147,7 @@ export class StoreHistory implements MessageHandler<WorkerContext> {
                 userMessage.content = userMessage.content.map(c => c.type === 'text' ? c.text : `[${c.type}]`).join('\n');
             }
             await ENV.DATABASE.put(historyKey, JSON.stringify(history)).catch(console.error);
+            log.info(`[STORE HISTORY] DONE`);
         }
         return null;
     };
@@ -437,9 +440,10 @@ export class IntelligentModelProcess implements MessageHandler<WorkerContext> {
             return null;
         }
         const regex = /^\s*\/\/(c|v)\s*(\S+)/;
-        const text = (message.text || message.caption || '').trim().match(regex);
-        if (text && text[1] && text[2]) {
+        const text = new RegExp(regex).exec((message.text || message.caption || '').trim());
+        if (text?.[1] && text[2]) {
             const rerank = new Rerank();
+            const sendTipPromise = this.sendTip(context, message);
             try {
                 const similarityModel = (await rerank.rank(context.USER_CONFIG, [text[2], ...context.USER_CONFIG.RERANK_MODELS], 1))[0].name;
                 const mode = text[1];
@@ -449,11 +453,30 @@ export class IntelligentModelProcess implements MessageHandler<WorkerContext> {
                 } else if (message.caption) {
                     message.caption = textReplace + message.caption.slice(text[0].length).trim();
                 }
+                this.deleteTip(context, (await sendTipPromise).result);
             } catch (error) {
                 log.error(`[INTELLIGENT MODEL PROCESS] Rerank error: ${error}`);
                 return null;
             }
         }
         return null;
+    };
+
+    sendTip = (context: WorkerContext, message: Telegram.Message) => {
+        const sendeParams: Telegram.SendMessageParams = {
+            chat_id: message.chat.id,
+            text: 'Searching for similarity result',
+            message_thread_id: message.is_topic_message && message.message_thread_id ? message.message_thread_id : undefined,
+        };
+        return createTelegramBotAPI(context.SHARE_CONTEXT.botToken).sendMessageWithReturns(sendeParams);
+    };
+
+    deleteTip = (context: WorkerContext, message: Telegram.Message) => {
+        const delParams: Telegram.DeleteMessageParams = {
+            message_id: message.message_id,
+            chat_id: message.chat.id,
+        };
+        log.info('delete similarity tip.');
+        return createTelegramBotAPI(context.SHARE_CONTEXT.botToken).deleteMessage(delParams);
     };
 }

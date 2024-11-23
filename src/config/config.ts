@@ -167,8 +167,6 @@ export class EnvironmentConfig {
     STORE_MEDIA_MESSAGE: boolean = false;
     // If true, will store text chunk when message separated to multiple chunks
     STORE_TEXT_CHUNK_MESSAGE: boolean = false;
-    // Audio handle type, 'transcribe' or 'chat'
-    AUDIO_HANDLE_TYPE = 'transcribe';
 }
 
 // -- 通用配置 --
@@ -197,6 +195,7 @@ export class OpenAIConfig {
     OPENAI_VISION_MODEL = 'gpt-4o-mini';
     // OpenAI TTS Model
     OPENAI_TTS_MODEL = 'tts-1';
+    OPENAI_TTS_VOICE = 'alloy';
     /**
      * OpenAI need transform model
      * @deprecated
@@ -381,4 +380,16 @@ export class ExtraUserConfig {
     RERANK_MODELS: string[] = ['gpt-4o-mini', 'gpt-4o-2024-05-13', 'gpt-4o-2024-08-06', 'chatgpt-4o-latest', 'o1-mini', 'o1-preview', 'claude-3-5-sonnet-20240620', 'claude-3-5-sonnet-20241012', 'gemini-1.5-flash-002', 'gemini-1.5-pro-002', 'gemini-1.5-flash-latest', 'gemini-1.5-pro-latest', 'gemini-exp-1114', 'grok-beta', 'grok-vision-beta', 'claude-3-5-haiku-20241012'];
     // Whether to enable intelligent model processing
     ENABLE_INTELLIGENT_MODEL = false;
+    // text handle type, to asr or or just 'text' to chat with llm
+    TEXT_HANDLE_TYPE = 'text';
+    // Text output type, 'audio' or 'text'
+    TEXT_OUTPUT = 'text';
+    // Audio handle type, 'trans' or just 'audio' to chat with llm
+    AUDIO_HANDLE_TYPE = 'trans';
+    // Audio output type, 'audio' or 'text'
+    AUDIO_OUTPUT = 'text';
+    // Audio contains text
+    AUDIO_CONTAINS_TEXT = true;
+    // Audio text format
+    AUDIO_TEXT_FORMAT: undefined | 'spoiler' | 'bold' | 'italic' | 'underline' | 'strikethrough' | 'code' | 'pre' = undefined;
 }
