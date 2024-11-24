@@ -141,7 +141,7 @@ export class StoreHistory implements MessageHandler<WorkerContext> {
         const historyDisable = ENV.AUTO_TRIM_HISTORY && ENV.MAX_HISTORY_LENGTH <= 0;
         const isAsr = context.USER_CONFIG.TEXT_HANDLE_TYPE === 'asr';
         const isTrans = context.USER_CONFIG.AUDIO_HANDLE_TYPE === 'trans';
-        if (!historyDisable && !isAsr && !isTrans) {
+        if (!historyDisable && (!isAsr || !isTrans)) {
             const historyKey = context.SHARE_CONTEXT.chatHistoryKey;
             const history = context.MIDDLE_CONTEXT.history;
             const userMessage = history.findLast(h => h.role === 'user');
