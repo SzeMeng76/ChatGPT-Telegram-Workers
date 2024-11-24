@@ -55,6 +55,10 @@ export class MessageSender {
         this.sendRichText = this.sendRichText.bind(this);
         this.sendPlainText = this.sendPlainText.bind(this);
         this.sendPhoto = this.sendPhoto.bind(this);
+        this.sendMediaGroup = this.sendMediaGroup.bind(this);
+        this.sendDocument = this.sendDocument.bind(this);
+        this.sendVoice = this.sendVoice.bind(this);
+        this.editMessageMedia = this.editMessageMedia.bind(this);
     }
 
     static from(token: string, message: Telegram.Message): MessageSender {
@@ -223,10 +227,11 @@ export class MessageSender {
                 allow_sending_without_reply: this.context.allow_sending_without_reply || undefined,
             };
         }
-        return this.api.sendDocument(params);
+        const resp = this.api.sendDocument(params);
+        return checkIsNeedTagIds(this.context, resp, 'chat');
     }
 
-    async editMessageMedia(media: Telegram.InputMedia, parse_mode?: Telegram.ParseMode, file?: File | Blob): Promise<Response> {
+    editMessageMedia(media: Telegram.InputMedia, parse_mode?: Telegram.ParseMode, file?: File | Blob): Promise<Response> {
         if (!this.context) {
             throw new Error('Message context not set');
         }
@@ -244,6 +249,32 @@ export class MessageSender {
         };
 
         const resp = this.api.request('editMessageMedia', { ...params, file });
+        return checkIsNeedTagIds(this.context, resp, 'chat');
+    }
+
+    sendVoice(voice: Blob, caption?: string | undefined): Promise<Response> {
+        const params: Telegram.SendVoiceParams = {
+            chat_id: this.context.chat_id,
+            voice,
+            caption,
+        };
+        if (caption) {
+            if (['spoiler', 'bold', 'italic', 'underline', 'strikethrough', 'code', 'pre'].includes(ENV.AUDIO_TEXT_FORMAT || '')) {
+                params.caption_entities = [{
+                    type: ENV.AUDIO_TEXT_FORMAT as Telegram.MessageEntityType,
+                    offset: 0,
+                    length: caption!.length,
+                }];
+            }
+        }
+        if (this.context.reply_to_message_id) {
+            params.reply_parameters = {
+                message_id: this.context.reply_to_message_id,
+                chat_id: this.context.chat_id,
+                allow_sending_without_reply: this.context.allow_sending_without_reply || undefined,
+            };
+        }
+        const resp = this.api.sendVoice(params);
         return checkIsNeedTagIds(this.context, resp, 'chat');
     }
 }

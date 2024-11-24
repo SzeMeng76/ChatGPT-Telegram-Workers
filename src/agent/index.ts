@@ -113,8 +113,13 @@ export function customInfo(config: AgentUserConfig): string {
         MAX_RETRIES: config.MAX_RETRIES,
         SEND_IMAGE_AS_FILE: ENV.SEND_IMAGE_AS_FILE,
         SUPPORT_PROMPT_ROLE: Object.keys(config.PROMPT).join('|'),
-        DISABLE_WEB_PREVIEW: ENV.DISABLE_WEB_PREVIEW,
+        // DISABLE_WEB_PREVIEW: ENV.DISABLE_WEB_PREVIEW,
         VERTEX_SEARCH_GROUNDING: config.VERTEX_SEARCH_GROUNDING,
+        TEXT_OUTPUT: config.TEXT_OUTPUT,
+        TEXT_HANDLE_TYPE: config.TEXT_HANDLE_TYPE,
+        AUDIO_OUTPUT: config.AUDIO_OUTPUT,
+        AUDIO_HANDLE_TYPE: config.AUDIO_HANDLE_TYPE,
+        AUDIO_TEXT_FORMAT: ENV.AUDIO_TEXT_FORMAT,
     };
     return JSON.stringify(other_info, null, 2);
 }

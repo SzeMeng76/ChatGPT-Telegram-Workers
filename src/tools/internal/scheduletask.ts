@@ -90,7 +90,7 @@ function checkBotIsVaild(bot_name: string, botNames: string[], botTokens: string
     }
     const bot_token = botTokens[bot_index];
     if (!bot_token) {
-        console.error(`Cant find bot ${bot_name} - position ${bot_index + 1}'s token\nAll token list: ${botTokens}`);
+        console.error(`Cant find bot ${bot_name} - position ${bot_index + 1}'s token`);
         return null;
     }
     return bot_token;

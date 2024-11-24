@@ -77,7 +77,9 @@ export class WhiteListFilter implements MessageHandler<WorkerContextBase> {
         if (message.chat.type === 'private') {
             // 白名单判断
             if (!ENV.CHAT_WHITE_LIST.includes(`${message.chat.id}`)) {
-                return sender.sendPlainText(text);
+                // return sender.sendPlainText(text);
+                log.error(`[WHITE LIST] ${message.chat.id} not in white list`);
+                return new Response('success', { status: 200 });
             }
             return null;
         }
@@ -182,7 +184,6 @@ export class TagNeedDelete implements MessageHandler<WorkerContext> {
 
         await ENV.DATABASE.put(scheduleDeteleKey, JSON.stringify(scheduledData));
         log.info(`[TAG MESSAGE] Record chat ${chatId}, message ids: ${[...(tagMessageIds.get(message) || [])]}`);
-
         return null;
     };
 }

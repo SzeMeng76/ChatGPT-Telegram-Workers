@@ -167,6 +167,8 @@ export class EnvironmentConfig {
     STORE_MEDIA_MESSAGE: boolean = false;
     // If true, will store text chunk when message separated to multiple chunks
     STORE_TEXT_CHUNK_MESSAGE: boolean = false;
+    // Audio text format
+    AUDIO_TEXT_FORMAT: undefined | 'spoiler' | 'bold' | 'italic' | 'underline' | 'strikethrough' | 'code' | 'pre' = undefined;
 }
 
 // -- 通用配置 --
@@ -333,7 +335,7 @@ export class ExtraUserConfig {
     ENABLE_SHOWTOKEN = false;
     // Function to use, currently has duckduckgo and jina_reader
     // '["duckduckgo", "jina_reader"]'
-    USE_TOOLS: string[] = ['duckduckgo', 'jina_reader'];
+    USE_TOOLS: string[] = [];
     JINA_API_KEY: string[] = [];
     // if starts with '{agent}:' perfix, the specified agent corresponds to the chat model,
     // otherwise use the current agent and the specified model.
@@ -390,6 +392,4 @@ export class ExtraUserConfig {
     AUDIO_OUTPUT = 'text';
     // Audio contains text
     AUDIO_CONTAINS_TEXT = true;
-    // Audio text format
-    AUDIO_TEXT_FORMAT: undefined | 'spoiler' | 'bold' | 'italic' | 'underline' | 'strikethrough' | 'code' | 'pre' = undefined;
 }

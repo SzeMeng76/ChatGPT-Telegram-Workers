@@ -20,10 +20,10 @@ import { escape } from '../utils/md2tgmd';
 import { MessageSender, sendAction, TelegraphSender } from '../utils/send';
 import { waitUntil } from '../utils/utils';
 
-async function messageInitialize(sender: MessageSender, context?: WorkerContext): Promise<ChatStreamTextHandler> {
+async function messageInitialize(sender: MessageSender, context?: WorkerContext, message?: Telegram.Message): Promise<ChatStreamTextHandler> {
     setTimeout(() => sendAction(sender.api.token, sender.context.chat_id, 'typing'), 0);
     log.info(`send init message`);
-    const streamSender = OnStreamHander(sender, context);
+    const streamSender = OnStreamHander(sender, context, message?.text || message?.caption || '');
     streamSender.send('...');
     return streamSender;
 }
@@ -37,7 +37,7 @@ export async function chatWithLLM(
     isMiddle?: boolean,
 ): Promise<Response | string> {
     const agent = loadChatLLM(context.USER_CONFIG);
-    const streamSender = sender ?? OnStreamHander(MessageSender.from(context.SHARE_CONTEXT.botToken, message), context);
+    const streamSender = sender ?? OnStreamHander(MessageSender.from(context.SHARE_CONTEXT.botToken, message), context, message?.text || message?.caption || '');
     if (!agent) {
         return streamSender.end?.('LLM is not enabled');
     }
@@ -314,7 +314,7 @@ async function workflow(
     }
     const handler = workflowHandlers(handlerKey);
     const sender = MessageSender.from(context.SHARE_CONTEXT.botToken, message);
-    const streamSender = await messageInitialize(sender, context);
+    const streamSender = await messageInitialize(sender, context, message);
     return handler(message, params, context, streamSender, handlerKey);
 }
 
@@ -327,6 +327,7 @@ async function handleText(
 ): Promise<Response | string> {
     switch (handleKey) {
         case 'asr:audio':
+        case 'asr:text':
         case 'text:audio':
             return handleTextToAudio(message, params, context, streamSender, handleKey);
         default:
@@ -412,21 +413,7 @@ async function handleTextToAudio(
     //     media: 'attach://file',
     // };
     sendAction(context.SHARE_CONTEXT.botToken, sender.context.chat_id, 'upload_voice');
-    const voiceParams: Telegram.SendVoiceParams = {
-        chat_id: sender.context.chat_id,
-        voice: audio,
-    };
-    if (context.USER_CONFIG.AUDIO_CONTAINS_TEXT) {
-        voiceParams.caption = text;
-        if (['spoiler', 'bold', 'italic', 'underline', 'strikethrough', 'code', 'pre'].includes(context.USER_CONFIG.AUDIO_TEXT_FORMAT || '')) {
-            voiceParams.caption_entities = [{
-                type: context.USER_CONFIG.AUDIO_TEXT_FORMAT as Telegram.MessageEntityType,
-                offset: 0,
-                length: text.length,
-            }];
-        }
-    }
-    const resp = await sender.api.sendVoice(voiceParams);
+    const resp = await sender.sendVoice(audio, context.USER_CONFIG.AUDIO_CONTAINS_TEXT ? text : undefined);
     if (resp.ok) {
         return sender.api.deleteMessage({ chat_id: sender.context.chat_id, message_id: sender.context.message_id! });
     }

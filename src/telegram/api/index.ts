@@ -41,7 +41,7 @@ class APIClientBase {
                 formData.append(key, value, 'blob');
             } else if (typeof value === 'string') {
                 formData.append(key, value);
-            } else {
+            } else if (value) {
                 formData.append(key, JSON.stringify(value));
             }
         }

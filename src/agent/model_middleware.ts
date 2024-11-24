@@ -25,7 +25,6 @@ export function AIMiddleware({ config, tools, activeTools, onStream, toolChoice,
             // await warpModel(model, config, activeTools, (params.mode as any).toolChoice, chatModel);
             recordModelLog(config, model, activeTools, (params.mode as any).toolChoice);
             const result = await doGenerate();
-            log.info(`generated text: ${result.text}`);
             return result;
         },
 
@@ -66,8 +65,8 @@ export function AIMiddleware({ config, tools, activeTools, onStream, toolChoice,
             const { text, toolResults, finishReason, usage, request, response } = data;
             const logs = getLogSingleton(config);
             log.info('llm request end');
-            log.info('step text:', text);
-            log.info('step raw request:', request);
+            log.debug('step text:', text);
+            log.debug('step raw request:', request);
             // log.debug('step raw response:', response);
 
             const time = ((Date.now() - startTime!) / 1e3).toFixed(1);

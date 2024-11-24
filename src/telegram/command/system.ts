@@ -476,7 +476,7 @@ export class SetCommandHandler implements CommandHandler {
         context: WorkerContext,
         sender: MessageSender,
     ): Promise<string | Response> {
-        let key = keys[flag] || (Object.values(keys).includes(flag.slice(1)) ? flag.slice(1) : null);
+        let key = keys[flag] || (Object.keys(context.USER_CONFIG).includes(flag.slice(1)) ? flag.slice(1) : null);
         let mappedValue = values[value] ?? value;
 
         if (!key) {
