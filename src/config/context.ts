@@ -110,7 +110,7 @@ export class MiddleContext {
 
 export class WorkerContextBase {
     SHARE_CONTEXT: ShareContext;
-    MIDDEL_CONTEXT: MiddleContext = new MiddleContext();
+    MIDDLE_CONTEXT: MiddleContext = new MiddleContext();
 
     constructor(token: string, message: Telegram.Message) {
         this.SHARE_CONTEXT = new ShareContext(token, message);
@@ -121,12 +121,12 @@ export class WorkerContext implements WorkerContextBase {
     // 用户配置
     USER_CONFIG: AgentUserConfig;
     SHARE_CONTEXT: ShareContext;
-    MIDDEL_CONTEXT: MiddleContext;
+    MIDDLE_CONTEXT: MiddleContext;
 
-    constructor(USER_CONFIG: AgentUserConfig, SHARE_CONTEXT: ShareContext, MIDDEL_CONTEXT: MiddleContext) {
+    constructor(USER_CONFIG: AgentUserConfig, SHARE_CONTEXT: ShareContext, MIDDLE_CONTEXT: MiddleContext) {
         this.USER_CONFIG = USER_CONFIG;
         this.SHARE_CONTEXT = SHARE_CONTEXT;
-        this.MIDDEL_CONTEXT = MIDDEL_CONTEXT;
+        this.MIDDLE_CONTEXT = MIDDLE_CONTEXT;
     }
 
     static async from(SHARE_CONTEXT: ShareContext, MIDDLE_CONTEXT: MiddleContext): Promise<WorkerContext> {
@@ -191,13 +191,13 @@ export class ChosenInlineContext {
 export class ChosenInlineWorkerContext {
     USER_CONFIG: AgentUserConfig;
     botToken: string;
-    MIDDEL_CONTEXT: Record<string, any>;
+    MIDDLE_CONTEXT: Record<string, any>;
     SHARE_CONTEXT: Record<string, any>;
     constructor(chosenInline: Telegram.ChosenInlineResult, token: string, USER_CONFIG: AgentUserConfig) {
         this.USER_CONFIG = USER_CONFIG;
         this.botToken = token;
         // 模拟私聊消息
-        this.MIDDEL_CONTEXT = {
+        this.MIDDLE_CONTEXT = {
             originalMessageInfo: { type: 'text' },
         };
         this.SHARE_CONTEXT = {

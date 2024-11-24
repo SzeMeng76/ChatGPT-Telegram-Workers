@@ -531,9 +531,6 @@ export class SetCommandHandler implements CommandHandler {
     }
 
     private async RelaxAuthCheck(message: Telegram.Message, context: WorkerContext, keys: string[], needUpdate: boolean) {
-        if (!this.relaxAuth && ENV.RELAX_AUTH_KEYS.length === 0) {
-            return;
-        }
         if (needUpdate || (keys.length > 0 && keys.some(key => !ENV.RELAX_AUTH_KEYS.includes(key)))) {
             await authChecker(this, message, context);
         }
@@ -745,8 +742,8 @@ export class KlingAICommandHandler implements CommandHandler {
             inputs: [] as any[],
         };
 
-        if (context.MIDDEL_CONTEXT.originalMessageInfo?.type === 'image' && context.MIDDEL_CONTEXT.originalMessageInfo.id?.[0]) {
-            const img_id = context.MIDDEL_CONTEXT.originalMessageInfo.id?.[0];
+        if (context.MIDDLE_CONTEXT.originalMessageInfo?.type === 'image' && context.MIDDLE_CONTEXT.originalMessageInfo.id?.[0]) {
+            const img_id = context.MIDDLE_CONTEXT.originalMessageInfo.id?.[0];
             const img_url = await this.getFileUrl(img_id, context, headers);
             log.info(`Uploaded image url: ${img_url}`);
             body.inputs.push({ name: 'input', url: img_url, inputType: 'URL' });

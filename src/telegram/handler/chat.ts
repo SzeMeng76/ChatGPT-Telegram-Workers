@@ -79,7 +79,7 @@ export function findPhotoFileID(photos: Telegram.PhotoSize[], offset: number): s
 export class ChatHandler implements MessageHandler<WorkerContext> {
     handle = async (message: Telegram.Message, context: WorkerContext): Promise<Response | null> => {
         try {
-            log.info(`message type: ${context.MIDDEL_CONTEXT.originalMessageInfo.type}`);
+            log.info(`message type: ${context.MIDDLE_CONTEXT.originalMessageInfo.type}`);
             await this.initializeHistory(context);
 
             // 处理原始消息
@@ -89,7 +89,7 @@ export class ChatHandler implements MessageHandler<WorkerContext> {
             return null;
         } catch (e) {
             console.error('Error:', e);
-            const sender = context.MIDDEL_CONTEXT.sender ?? MessageSender.from(context.SHARE_CONTEXT.botToken, message);
+            const sender = context.MIDDLE_CONTEXT.sender ?? MessageSender.from(context.SHARE_CONTEXT.botToken, message);
             const filtered = (e as Error).message.replace(context.SHARE_CONTEXT.botToken, '[REDACTED]');
             return sender.sendRichText(`<pre>Error: ${filtered.substring(0, 4000)}</pre>`, 'HTML');
         }
@@ -101,14 +101,14 @@ export class ChatHandler implements MessageHandler<WorkerContext> {
         if (!historyKey) {
             throw new Error('History key not found');
         }
-        context.MIDDEL_CONTEXT.history = await loadHistory(historyKey);
+        context.MIDDLE_CONTEXT.history = await loadHistory(historyKey);
     }
 
     private async processOriginalMessage(
         message: Telegram.Message,
         context: WorkerContext,
     ): Promise<LLMChatRequestParams> {
-        const { type, id } = context.MIDDEL_CONTEXT.originalMessageInfo;
+        const { type, id } = context.MIDDLE_CONTEXT.originalMessageInfo;
         const params: LLMChatRequestParams = {
             role: 'user',
             content: message.text || message.caption || '',
@@ -283,11 +283,13 @@ function workflowHandlers(type: string): WorkflowHandler {
         case 'asr:audio':
         case 'image:text':
         case 'photo:text':
+        case 'text:chat':
             return handleText;
         case 'text:image':
             return handleTextToImage;
         case 'audio:text':
         case 'audio:audio':
+        case 'audio:chat':
         case 'trans:text':
         case 'trans:audio':
             return handleAudio;
@@ -301,7 +303,7 @@ async function workflow(
     message: Telegram.Message,
     params: LLMChatRequestParams,
 ): Promise<Response | Blob | string> {
-    const msgType = context.MIDDEL_CONTEXT.originalMessageInfo.type;
+    const msgType = context.MIDDLE_CONTEXT.originalMessageInfo.type;
     let handlerKey = `${msgType}:`;
     if (msgType === 'text') {
         handlerKey = `${context.USER_CONFIG.TEXT_HANDLE_TYPE}:${context.USER_CONFIG.TEXT_OUTPUT}`;
@@ -363,7 +365,7 @@ async function handleAudio(
     const url = (params.content as FilePart[]).at(-1)?.data as string;
     const audio = await fetch(url).then(b => b.blob());
     const text = await transcription(audio, context.USER_CONFIG);
-    context.MIDDEL_CONTEXT.history.push({ role: 'user', content: text });
+    context.MIDDLE_CONTEXT.history.push({ role: 'user', content: text });
     const sender = streamSender.sender!;
     if (handleKey === 'audio:text' || !ENV.HIDE_MIDDLE_MESSAGE) {
         await sender.sendRichText(`${getLog(context.USER_CONFIG, false, false)}\n> \n${text}`);
@@ -457,9 +459,9 @@ export async function sendImages(img: ImageResult, SEND_IMAGE_AS_FILE: boolean, 
 }
 
 function injectHistory(context: WorkerContext, result: UnionData, nextType: string = 'text') {
-    if (context.MIDDEL_CONTEXT.history.at(-1)?.role === 'user' || nextType !== 'text')
+    if (context.MIDDLE_CONTEXT.history.at(-1)?.role === 'user' || nextType !== 'text')
         return;
-    context.MIDDEL_CONTEXT.history.push({ role: 'user', content: result.text || '', ...(result.url && result.url.length > 0 && { images: result.url }) });
+    context.MIDDLE_CONTEXT.history.push({ role: 'user', content: result.text || '', ...(result.url && result.url.length > 0 && { images: result.url }) });
 }
 
 function transcription(audio: Blob, config: AgentUserConfig) {

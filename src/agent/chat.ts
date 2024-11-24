@@ -41,7 +41,7 @@ export async function loadHistory(key: string): Promise<HistoryItem[]> {
 }
 
 export async function requestCompletionsFromLLM(params: LLMChatRequestParams | null, context: WorkerContext, agent: ChatAgent, modifier: HistoryModifier | null, onStream: ChatStreamTextHandler | null): Promise<{ messages: ResponseMessage[]; content: string }> {
-    let history = context.MIDDEL_CONTEXT.history;
+    let history = context.MIDDLE_CONTEXT.history;
     const historyDisable = ENV.AUTO_TRIM_HISTORY && ENV.MAX_HISTORY_LENGTH <= 0;
     // const historyKey = context.SHARE_CONTEXT.chatHistoryKey;
     if (modifier) {

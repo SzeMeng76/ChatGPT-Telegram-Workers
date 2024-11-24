@@ -108,7 +108,7 @@ export class MessageFilter implements MessageHandler<WorkerContextBase> {
         if (!supportMessageType.includes(messageInfo.type)) {
             throw new Error('Not supported message type');
         };
-        context.MIDDEL_CONTEXT.originalMessageInfo = messageInfo;
+        context.MIDDLE_CONTEXT.originalMessageInfo = messageInfo;
         if (ENV.IGNORE_TEXT_PERFIX && (message.text || message.caption || '').startsWith(ENV.IGNORE_TEXT_PERFIX)) {
             log.info(`[IGNORE MESSAGE] Ignore message`);
             return new Response('success', { status: 200 });
@@ -129,7 +129,7 @@ export class CommandHandler implements MessageHandler<WorkerContext> {
 
 export class InitUserConfig implements MessageHandler<WorkerContextBase> {
     handle = async (message: Telegram.Message, context: WorkerContextBase): Promise<Response | null> => {
-        Object.assign(context, { USER_CONFIG: (await WorkerContext.from(context.SHARE_CONTEXT, context.MIDDEL_CONTEXT)).USER_CONFIG });
+        Object.assign(context, { USER_CONFIG: (await WorkerContext.from(context.SHARE_CONTEXT, context.MIDDLE_CONTEXT)).USER_CONFIG });
         return null;
     };
 }
@@ -141,7 +141,7 @@ export class StoreHistory implements MessageHandler<WorkerContext> {
         const isTrans = context.USER_CONFIG.AUDIO_HANDLE_TYPE === 'trans';
         if (!historyDisable && !isAsr && !isTrans) {
             const historyKey = context.SHARE_CONTEXT.chatHistoryKey;
-            const history = context.MIDDEL_CONTEXT.history;
+            const history = context.MIDDLE_CONTEXT.history;
             const userMessage = history.findLast(h => h.role === 'user');
             if (ENV.HISTORY_IMAGE_PLACEHOLDER && Array.isArray(userMessage?.content) && userMessage.content.length > 0) {
                 userMessage.content = userMessage.content.map(c => c.type === 'text' ? c.text : `[${c.type}]`).join('\n');
