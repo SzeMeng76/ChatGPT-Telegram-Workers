@@ -129,10 +129,13 @@ export class ChatHandler implements MessageHandler<WorkerContext> {
                     });
                 }
                 if (type === 'image' || type === 'photo') {
+                    const isUrl = ENV.TELEGRAM_IMAGE_TRANSFER_MODE === 'url';
                     for (const url of urls) {
+                        const { data, format } = isUrl ? { data: url, format: 'image/jpeg' } : await imageToBase64String(url);
                         params.content.push({
                             type: 'image',
-                            image: ENV.TELEGRAM_IMAGE_TRANSFER_MODE === 'url' ? url : renderBase64DataURI(await imageToBase64String(url)),
+                            image: data,
+                            mimeType: format,
                         });
                     }
                 } else if (type === 'audio' || type === 'voice') {

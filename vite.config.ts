@@ -62,7 +62,7 @@ export default defineConfig({
     build: {
         target: 'es2022',
         rollupOptions: {
-            external: ['ws', '@ai-sdk/google-vertex'],
+            external: ['ws', '@ai-sdk/google-vertex', 'node:buffer'],
         },
         lib: {
             entry: path.resolve(__dirname, entry),
