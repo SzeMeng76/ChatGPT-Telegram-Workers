@@ -251,6 +251,9 @@ export class HandlerCallbackQuery implements CallbackQueryHandler<CallbackQueryC
     }
 
     private async checkWhiteList(message: Telegram.Message, context: CallbackQueryContext, api: TelegramBotAPI) {
+        if (ENV.CHAT_WHITE_LIST.includes(`${message.from?.id}`)) {
+            return null;
+        }
         const roleList = COMMAND_AUTH_CHECKER.shareModeGroup(message.chat.type);
         if (roleList) {
             // 获取身份并判断

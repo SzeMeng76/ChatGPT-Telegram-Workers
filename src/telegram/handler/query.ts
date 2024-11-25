@@ -40,7 +40,7 @@ export class AnswerChatInlineQuery implements answerInlineQuery {
             return OnStream.end?.(answer);
         } catch (e) {
             const filtered = (e as Error).message.replace(context.botToken, '[REDACTED]');
-            return OnStream.end?.(`Error: ${filtered.substring(0, 4000)}`);
+            return OnStream.end?.(`Error: ${filtered.substring(0, 2000)}`);
         }
     };
 

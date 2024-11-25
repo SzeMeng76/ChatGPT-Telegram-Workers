@@ -1,7 +1,7 @@
 # 这里的 name 改成你自己的workers 的名字
 name = 'chatgpt-telegram-workers'
-compatibility_date = '2023-10-07'
-main = './dist/index.js'
+compatibility_date = '2024-09-23'
+main = './src/index.ts'
 workers_dev = true
 compatibility_flags = [ "nodejs_compat" ]
 
@@ -89,7 +89,7 @@ GROUP_CHAT_BOT_ENABLE = 'true'
 
 ## -- 通用配置 --
 ##
-## AI提供商: auto, openai, azure, workers, gemini, mistral, cohere, anthropic
+## AI提供商: auto, openai, azure, workers, gemini, mistral, cohere, anthropic, xai
 AI_PROVIDER = 'auto'
 ## AI图片提供商: auto, openai, azure, workers
 AI_IMAGE_PROVIDER = 'auto'

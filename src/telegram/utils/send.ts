@@ -258,14 +258,12 @@ export class MessageSender {
             voice,
             caption,
         };
-        if (caption) {
-            if (['spoiler', 'bold', 'italic', 'underline', 'strikethrough', 'code', 'pre'].includes(ENV.AUDIO_TEXT_FORMAT || '')) {
-                params.caption_entities = [{
-                    type: ENV.AUDIO_TEXT_FORMAT as Telegram.MessageEntityType,
-                    offset: 0,
-                    length: caption!.length,
-                }];
-            }
+        if (caption && ['spoiler', 'bold', 'italic', 'underline', 'strikethrough', 'code', 'pre'].includes(ENV.AUDIO_TEXT_FORMAT || '')) {
+            params.caption_entities = [{
+                type: ENV.AUDIO_TEXT_FORMAT as Telegram.MessageEntityType,
+                offset: 0,
+                length: caption.length,
+            }];
         }
         if (this.context.reply_to_message_id) {
             params.reply_parameters = {

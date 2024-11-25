@@ -476,7 +476,11 @@ export class SetCommandHandler implements CommandHandler {
         context: WorkerContext,
         sender: MessageSender,
     ): Promise<string | Response> {
-        let key = keys[flag] || (Object.keys(context.USER_CONFIG).includes(flag.slice(1)) ? flag.slice(1) : null);
+        let key = keys[flag]
+            || (Object.values(keys).includes(flag.slice(1))
+                || Object.keys(context.USER_CONFIG).includes(flag.slice(1))
+                ? flag.slice(1)
+                : null);
         let mappedValue = values[value] ?? value;
 
         if (!key) {
@@ -521,10 +525,12 @@ export class SetCommandHandler implements CommandHandler {
         if (typeof context.USER_CONFIG[key] === 'boolean') {
             mappedValue = typeof mappedValue === 'boolean' ? mappedValue : mappedValue === 'true';
         }
-
-        context.USER_CONFIG[key] = mappedValue;
-        if (!context.USER_CONFIG.DEFINE_KEYS.includes(key)) {
+        // 如果设置的值为空，则使用默认值
+        context.USER_CONFIG[key] = mappedValue || ENV.USER_CONFIG[key];
+        if (!context.USER_CONFIG.DEFINE_KEYS.includes(key) && mappedValue) {
             context.USER_CONFIG.DEFINE_KEYS.push(key);
+        } else if (!mappedValue) {
+            context.USER_CONFIG.DEFINE_KEYS = context.USER_CONFIG.DEFINE_KEYS.filter(k => k !== key);
         }
         log.info(`/set ${key} ${(JSON.stringify(mappedValue) || value).substring(0, 100)}...`);
         return key;
@@ -665,7 +671,7 @@ export class InlineCommandHandler implements CommandHandler {
                 label: 'Tools',
                 data: 'INLINE_FUNCTION_TOOLS',
                 config_key: 'USE_TOOLS',
-                available_values: [...new Set([...Object.keys(tools), ...Object.keys(ENV.PLUGINS_FUNCTION)])],
+                available_values: Object.keys({ ...ENV.PLUGINS_FUNCTION, ...tools }),
             },
         };
     };

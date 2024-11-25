@@ -14,7 +14,7 @@ import { ENV } from '../../config/env';
 import { clearLog, getLog, logSingleton } from '../../log/logDecortor';
 import { log } from '../../log/logger';
 import { sendToolResult } from '../../tools';
-import { imageToBase64String, renderBase64DataURI } from '../../utils/image';
+import { imageToBase64String } from '../../utils/image';
 import { createTelegramBotAPI } from '../api';
 import { escape } from '../utils/md2tgmd';
 import { MessageSender, sendAction, TelegraphSender } from '../utils/send';
@@ -88,10 +88,10 @@ export class ChatHandler implements MessageHandler<WorkerContext> {
             await workflow(context, message, params);
             return null;
         } catch (e) {
-            console.error('Error:', e);
+            log.error((e as Error).stack);
             const sender = context.MIDDLE_CONTEXT.sender ?? MessageSender.from(context.SHARE_CONTEXT.botToken, message);
             const filtered = (e as Error).message.replace(context.SHARE_CONTEXT.botToken, '[REDACTED]');
-            return sender.sendRichText(`<pre>Error: ${filtered.substring(0, 4000)}</pre>`, 'HTML');
+            return sender.sendRichText(`<pre>Error: ${filtered.substring(0, 2000)}</pre>`, 'HTML');
         }
     };
 
@@ -204,13 +204,13 @@ export function OnStreamHander(sender: MessageSender | ChosenInlineSender, conte
             }
 
             if (!resp.ok) {
-                log.error(`send message failed: ${resp.status} ${resp.statusText}`);
+                log.error(`send message failed: ${resp.status} ${await resp.json().then(j => j.description)}`);
                 sentError = true;
                 log.error(`send message failed: ${escape(data.split('\n'))}`);
                 return sentPromise = sender.sendPlainText(text);
             }
         } catch (e) {
-            console.error(e);
+            log.error((e as Error).stack);
         }
     };
 
@@ -235,6 +235,7 @@ export function OnStreamHander(sender: MessageSender | ChosenInlineSender, conte
             }
             if (sentError || !finalResp.ok) {
                 (sender as MessageSender).context.sentMessageIds.clear();
+                log.error(`send message failed: ${finalResp.status} ${await finalResp.json().then(j => j.description)}`);
                 return sendTelegraph(context!, sender, question || 'Redo Question', text, true);
             }
             return finalResp;
@@ -385,10 +386,8 @@ async function handleAudio(
     if (isMiddle) {
         const voice = await asr(resp as string, context.USER_CONFIG);
         ENV.HIDE_MIDDLE_MESSAGE && sender.api.deleteMessage({ chat_id: sender.context.chat_id, message_id: sender.context.message_id! });
-        return sender.api.sendVoice({
-            chat_id: sender.context.chat_id,
-            voice,
-        });
+        sendAction(context.SHARE_CONTEXT.botToken, sender.context.chat_id, 'upload_voice');
+        return sender.sendVoice(voice);
     }
     return resp;
 }
@@ -407,22 +406,14 @@ async function handleTextToAudio(
         text = await chatWithLLM(message, params, context, null, streamSender, true) as string;
         !ENV.HIDE_MIDDLE_MESSAGE && streamSender.send('Chat with LLM done');
     }
-    const agent = new ASR();
-    const audio = await agent.hander(text, context.USER_CONFIG);
-    // const sendPromise = sender.sendPlainText('Audio generation in progress.');
-    // sender.update({ message_id: await sendPromise.then(r => r.json()).then(r => r.result.message_id) });
-    // const mediaParams: Telegram.InputMediaAudio = {
-    //     type: 'audio',
-    //     media: 'attach://file',
-    // };
+    const audio = await asr(text, context.USER_CONFIG);
     sendAction(context.SHARE_CONTEXT.botToken, sender.context.chat_id, 'upload_voice');
     const resp = await sender.sendVoice(audio, context.USER_CONFIG.AUDIO_CONTAINS_TEXT ? text : undefined);
     if (resp.ok) {
         return sender.api.deleteMessage({ chat_id: sender.context.chat_id, message_id: sender.context.message_id! });
     }
-    log.error(`Failed to send voice message: ${resp.status} ${await resp.text()}`);
-    throw new Error(`Failed to send voice message: ${resp.status} ${resp.statusText}`);
-    // return sender.editMessageMedia(mediaParams, undefined, audio);
+    // log.error(`Failed to send voice message: ${resp.status} ${await resp.text()}`);
+    throw new Error(`Failed to send voice message: ${resp.status} ${await resp.json().then(j => j.description)}`);
 }
 
 export async function sendImages(img: ImageResult, SEND_IMAGE_AS_FILE: boolean, sender: MessageSender, config: AgentUserConfig) {
