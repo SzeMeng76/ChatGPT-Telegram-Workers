@@ -7,7 +7,7 @@ FROM node:alpine as PROD
 WORKDIR /app
 COPY index.js package.json /app/
 RUN npm install --only=production --omit=dev && \
-apk add --no-cache sqlite && \
+apk add --no-cache sqlite ffmpeg && \
 npm cache clean --force
 EXPOSE 8787
 CMD ["npm", "run", "start"]
