@@ -1,0 +1,42 @@
+{
+    "schema": {
+        "name": "app_iap",
+        "description": "Search for an app in App Store and retrieve its IAP information.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "app_name": {
+                    "type": "string",
+                    "description": "The name of the app to search for in App Store",
+                    "examples": ["WeChat", "YouTube"]
+                },
+                "country": {
+                    "type": "string",
+                    "description": "The country code for App Store search",
+                    "default": "us",
+                    "examples": ["us", "cn", "jp"]
+                }
+            },
+            "required": ["app_name", "country"],
+            "additionalProperties": false
+        }
+    },
+    "payload": {
+        "url": "https://itunes.apple.com/search?entity=software&limit=1&term={{app_name}}&country={{country}}&fields=trackId,trackCensoredName",
+        "method": "GET",
+        "headers": {
+            "Accept": "application/json"
+        }
+    },
+    "webcrawler": {
+        "template": "https://apps.apple.com/cn/app/{{results[0].trackCensoredName}}/id{{results[0].trackId}}",
+        "patterns": [
+            {
+                "pattern": "<li class=\\\"list-with-numbers__item\\\">([\\s\\S]+?)<\\/li>",
+                "group": 1,
+                "cleanPattern": "<[^>]*>?"
+            }
+        ]
+    }
+
+}

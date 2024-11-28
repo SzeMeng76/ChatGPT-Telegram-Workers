@@ -1,4 +1,5 @@
 /* eslint-disable unused-imports/no-unused-vars */
+/* eslint-disable no-eval */
 import type { ToolCallPart, ToolResultPart } from 'ai';
 import type { ResponseMessage } from '../agent/types';
 import type { AgentUserConfig } from '../config/env';
@@ -8,9 +9,12 @@ import type { FuncTool, ToolResult } from './types';
 import { jsonSchema, tool } from 'ai';
 import { ENV } from '../config/env';
 import { log } from '../log/logger';
+import { evaluateExpression, INTERPOLATE_VARIABLE_REGEXP } from '../plugins/interpolate';
 import { sendImages } from '../telegram/handler/chat';
+import { isCfWorker } from '../telegram/utils/utils';
 import externalTools from './external';
 import internalTools from './internal';
+import processHtmlText from './internal/webclean';
 
 export const tools = {
     ...externalTools,
@@ -48,17 +52,40 @@ export function executeTool(toolName: string) {
         if (!result.ok) {
             throw new Error(`Tool call error: ${result.statusText}}`);
         }
-        if (await result.headers.get('content-type')?.includes('json')) {
+        const contentType = await result.headers.get('content-type');
+        if (contentType?.includes('json')) {
             result = await result.json();
         } else {
-            result = await result.text();
+            try {
+                result = await result.json();
+            } catch (e) {
+                result = await result.text();
+            }
         }
-        /*
-        if (tools[toolName].handler) {
-            const f = eval(tools[toolName].handler);
-            result = f(result);
-        }
-        */
+
+        const middleHandler = async (data: any) => {
+            if (tools[toolName].handler && !isCfWorker) {
+                const f = eval(tools[toolName].handler);
+                data = f(data);
+            }
+
+            if (tools[toolName].webcrawler) {
+                let url = data;
+                if (tools[toolName].webcrawler.template) {
+                    url = tools[toolName].webcrawler.template.replace(INTERPOLATE_VARIABLE_REGEXP, (_, expr) => evaluateExpression(expr, data));
+                }
+                if (!url) {
+                    throw new Error('Invalid webcrawler template');
+                }
+
+                const result = await fetch(url).then(r => r.text());
+                data = processHtmlText(result, tools[toolName].webcrawler.patterns || []);
+            }
+            return data;
+        };
+
+        result = await middleHandler(result);
+
         if (tools[toolName].next_tool) {
             const next_tool_alias = tools[toolName].next_tool;
             return executeTool(next_tool_alias)(result, options);

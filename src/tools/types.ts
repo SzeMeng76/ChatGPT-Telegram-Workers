@@ -1,4 +1,5 @@
 import type { AgentUserConfig } from '../config/env';
+import type { PatternInfo } from './internal/webclean';
 
 export interface SchemaData<T extends Record<string, any>> {
     name: string;
@@ -26,6 +27,7 @@ export interface SchemaData<T extends Record<string, any>> {
  * @handler tool handler, default is content => content
  * @payload tool payload, default is {}
  * @buildin is internal tool, default: false
+ * @webcrawler support input template(same as plugin input template but only support variable interpolation not support loop and condition) and patterns
  */
 
 export interface FuncTool {
@@ -43,7 +45,10 @@ export interface FuncTool {
     buildin?: boolean;
     result_type?: 'text' | 'image' | 'audio' | 'file';
     next_tool?: string;
-
+    webcrawler?: {
+        template?: string;
+        patterns?: PatternInfo[];
+    };
 }
 
 export interface ToolResult {

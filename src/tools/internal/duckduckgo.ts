@@ -45,7 +45,7 @@ async function regularSearch(path: string, signal?: AbortSignal) {
         });
 }
 
-async function search(query: string, max_length = 8, signal?: AbortSignal): Promise<{ result: string }> {
+async function search(query: string, max_length = 6, signal?: AbortSignal): Promise<{ result: string }> {
     const { path } = await getJS(query, signal);
     if (!path)
         throw new Error('Failed to get JS URL');

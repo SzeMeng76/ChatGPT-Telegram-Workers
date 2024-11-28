@@ -121,11 +121,6 @@ class Environment extends EnvironmentConfig {
             }
         }
 
-        // 兼容旧版 JINA_API_KEY
-        if (source.JINA_API_KEY) {
-            this.PLUGINS_ENV.JINA_API_KEY = source.JINA_API_KEY;
-        }
-
         // 读取外部插件
         for (const key of Object.keys(source)) {
             if (key.startsWith('PLUGIN_FUNCTION_')) {
@@ -221,6 +216,11 @@ class Environment extends EnvironmentConfig {
             this.USER_CONFIG.AZURE_RESOURCE_NAME = url.hostname.split('.').at(0) || null;
             this.USER_CONFIG.AZURE_IMAGE_MODEL = url.pathname.split('/').at(3) || null;
             this.USER_CONFIG.AZURE_API_VERSION = url.searchParams.get('api-version') || '2024-06-01';
+        }
+
+        // 兼容旧版 JINA_API_KEY
+        if (source.JINA_API_KEY) {
+            this.PLUGINS_ENV.JINA_API_KEY = source.JINA_API_KEY.split(',');
         }
     }
 }
