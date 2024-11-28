@@ -29,7 +29,7 @@
         }
     },
     "webcrawler": {
-        "template": "https://apps.apple.com/cn/app/{{results[0].trackCensoredName}}/id{{results[0].trackId}}",
+        "template": "{{results[0].trackViewUrl}}",
         "patterns": [
             {
                 "pattern": "<li class=\\\"list-with-numbers__item\\\">([\\s\\S]+?)<\\/li>",

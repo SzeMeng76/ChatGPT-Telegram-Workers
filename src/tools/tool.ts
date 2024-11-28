@@ -77,6 +77,7 @@ export function executeTool(toolName: string) {
                 if (!url) {
                     throw new Error('Invalid webcrawler template');
                 }
+                log.info(`webcrawler url: ${url}`);
 
                 const result = await fetch(url).then(r => r.text());
                 data = processHtmlText(result, tools[toolName].webcrawler.patterns || []);
