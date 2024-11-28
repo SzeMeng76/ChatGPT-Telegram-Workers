@@ -52,15 +52,10 @@ export function executeTool(toolName: string) {
         if (!result.ok) {
             throw new Error(`Tool call error: ${result.statusText}}`);
         }
-        const contentType = await result.headers.get('content-type');
-        if (contentType?.includes('json')) {
-            result = await result.json();
-        } else {
-            try {
-                result = await result.json();
-            } catch (e) {
-                result = await result.text();
-            }
+        try {
+            result = await result.clone().json();
+        } catch (e) {
+            result = await result.text();
         }
 
         const middleHandler = async (data: any) => {
