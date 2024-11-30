@@ -187,7 +187,6 @@ export async function requestChatCompletionsV2(params: { model: LanguageModelV1;
     try {
         const middleware = AIMiddleware({
             config: params.context,
-            tools: params.tools || {},
             activeTools: params.activeTools || [],
             onStream,
             toolChoice: params.toolChoice || [],

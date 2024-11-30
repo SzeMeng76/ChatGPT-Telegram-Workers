@@ -1,42 +1,46 @@
 {
     "schema": {
         "name": "app_iap",
-        "description": "Search for an app in App Store and retrieve its IAP information.",
+        "description": "Retrive detailed in-app purchase information based on country code, app id.",
         "parameters": {
             "type": "object",
             "properties": {
-                "app_name": {
-                    "type": "string",
-                    "description": "The name of the app to search for in App Store",
-                    "examples": ["WeChat", "YouTube"]
-                },
                 "country": {
                     "type": "string",
                     "description": "The country code for App Store search",
                     "default": "us",
-                    "examples": ["us", "cn", "jp"]
+                    "examples": [
+                        "us",
+                        "cn",
+                        "tr",
+                        "ng"
+                    ]
+                },
+                "trackId": {
+                    "type": "string",
+                    "description": "The trackId to be queried",
+                    "examples": ["363590051"]
                 }
             },
-            "required": ["app_name", "country"],
+            "required": [
+                "country",
+                "trackId"
+            ],
             "additionalProperties": false
         }
     },
     "payload": {
-        "url": "https://itunes.apple.com/search?entity=software&limit=1&term={{app_name}}&country={{country}}&fields=trackId,trackCensoredName",
-        "method": "GET",
-        "headers": {
-            "Accept": "application/json"
-        }
+        "url": "https://apps.apple.com/{{country}}/app/id{{trackId}}"
     },
-    "webcrawler": {
-        "template": "{{results[0].trackViewUrl}}",
+    "handler": {
+        "type": "webclean",
         "patterns": [
             {
                 "pattern": "<li class=\\\"list-with-numbers__item\\\">([\\s\\S]+?)<\\/li>",
                 "group": 1,
-                "cleanPattern": "<[^>]*>?"
+                "clean": ["<[^>]*>?", ""]
             }
         ]
-    }
-
+    },
+    "prompt": "Please provide the detailed in-app purchase information for the app in the specified country. The default regions that users want to follow include Turkey and Nigeria, two low-cost areas, unless the user explicitly does not need to query these two regions."
 }

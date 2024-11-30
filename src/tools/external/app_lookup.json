@@ -1,0 +1,57 @@
+{
+    "schema": {
+        "name": "app_lookup",
+        "description": "Retrive five sets of related app id and app name through region code and keywords. The app id is consistent across different countries. Only one piece of data is valid.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "app_name": {
+                    "type": "string",
+                    "description": "The name of the app to search for in App Store",
+                    "examples": [
+                        "WeChat",
+                        "YouTube"
+                    ]
+                },
+                "country": {
+                    "type": "string",
+                    "description": "The country code for App Store search",
+                    "default": "us",
+                    "examples": [
+                        "us",
+                        "cn",
+                        "jp"
+                    ]
+                },
+                "entity": {
+                    "type": "string",
+                    "description": "Types of search software",
+                    "default": "software",
+                    "enum": [
+                        "software",
+                        "iPadSoftware",
+                        "macSoftware"
+                    ]
+                }
+            },
+            "required": [
+                "app_name",
+                "country",
+                "entity"
+            ],
+            "additionalProperties": false
+        }
+    },
+    "payload": {
+        "url": "https://itunes.apple.com/search?entity={{entity}}&limit=3&term={{app_name}}&country={{country}}&fields=trackId,trackCensoredName",
+        "method": "GET",
+        "headers": {
+            "Accept": "application/json"
+        }
+    },
+    "handler": {
+        "type": "template",
+        "data": "{{#each i in results}}{\"trackId\":{{i.trackId}},\"trackName\":\"{{i.trackName}}\",\"primaryGenreName\":{{i.primaryGenreName}}}{{/each}}"
+    },
+    "prompt": "This tool should only be called once, and the app ID is the same in different regions. You should select the most relevant one."
+}

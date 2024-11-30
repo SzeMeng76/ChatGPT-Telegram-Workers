@@ -4,22 +4,23 @@ import type { ToolCallPart, ToolResultPart } from 'ai';
 import type { ResponseMessage } from '../agent/types';
 import type { AgentUserConfig } from '../config/env';
 import type { MessageSender } from '../telegram/utils/send';
-
 import type { FuncTool, ToolResult } from './types';
+
 import { jsonSchema, tool } from 'ai';
 import { ENV } from '../config/env';
 import { log } from '../log/logger';
-import { evaluateExpression, INTERPOLATE_VARIABLE_REGEXP } from '../plugins/interpolate';
+import { interpolate } from '../plugins/interpolate';
 import { sendImages } from '../telegram/handler/chat';
 import { isCfWorker } from '../telegram/utils/utils';
 import externalTools from './external';
 import internalTools from './internal';
-import processHtmlText from './internal/webclean';
+import { processHtmlText, webCrawler } from './internal/web';
 
 export const tools = {
     ...externalTools,
     ...internalTools,
-} as Record<string, FuncTool>;
+} as unknown as Record<string, FuncTool>;
+
 export function executeTool(toolName: string) {
     return async (args: any, options: Record<string, any> & { signal?: AbortSignal }): Promise<{ result: any; time: string }> => {
         const { signal } = options;
@@ -43,14 +44,14 @@ export function executeTool(toolName: string) {
         const startTime = Date.now();
         log.info(`tool request start, url: ${parsedPayload.url}`);
         let result: any = await fetch(parsedPayload.url, {
-            method: parsedPayload.method,
-            headers: parsedPayload.headers,
-            body: JSON.stringify(parsedPayload.body),
+            method: parsedPayload.method || 'GET',
+            headers: parsedPayload.headers || {},
+            body: parsedPayload.body ? JSON.stringify(parsedPayload.body) : undefined,
             signal,
         });
         log.info(`tool request end`);
         if (!result.ok) {
-            throw new Error(`Tool call error: ${result.statusText}}`);
+            return { result: `Tool call error: ${result.statusText}`, time: ((Date.now() - startTime) / 1e3).toFixed(1) };
         }
         try {
             result = await result.clone().json();
@@ -59,33 +60,37 @@ export function executeTool(toolName: string) {
         }
 
         const middleHandler = async (data: any) => {
-            if (tools[toolName].handler && !isCfWorker) {
-                const f = eval(tools[toolName].handler);
-                data = f(data);
+            let result = data;
+            const handler = tools[toolName].handler;
+            switch (handler?.type) {
+                case 'function':
+                    if (!isCfWorker && handler.data) {
+                        const f = eval(handler.data);
+                        result = f(data);
+                    }
+                    break;
+                case 'template':
+                    result = interpolate(handler.data, result);
+                    if (handler.patterns) {
+                        result = processHtmlText(handler.patterns, result);
+                    }
+                    break;
+                case 'webclean':
+                    result = processHtmlText(handler.patterns || [], result);
+                    break;
             }
-
             if (tools[toolName].webcrawler) {
-                let url = data;
-                if (tools[toolName].webcrawler.template) {
-                    url = tools[toolName].webcrawler.template.replace(INTERPOLATE_VARIABLE_REGEXP, (_, expr) => evaluateExpression(expr, data));
-                }
-                if (!url) {
-                    throw new Error('Invalid webcrawler template');
-                }
-                log.info(`webcrawler url: ${url}`);
-
-                const result = await fetch(url).then(r => r.text());
-                data = processHtmlText(result, tools[toolName].webcrawler.patterns || []);
+                result = await webCrawler(tools[toolName].webcrawler, data);
             }
-            return data;
+            return result;
         };
 
         result = await middleHandler(result);
 
-        if (tools[toolName].next_tool) {
-            const next_tool_alias = tools[toolName].next_tool;
-            return executeTool(next_tool_alias)(result, options);
-        }
+        // if (tools[toolName].next_tool) {
+        //     const next_tool_alias = tools[toolName].next_tool;
+        //     return executeTool(next_tool_alias)(result, options);
+        // }
         return { result, time: ((Date.now() - startTime) / 1e3).toFixed(1) };
     };
 }

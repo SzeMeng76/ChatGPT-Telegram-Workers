@@ -1,16 +1,21 @@
 import type { ReadableStream as WebReadableStream } from 'node:stream/web';
 import { Readable } from 'node:stream';
-import { Base64Encode } from 'base64-stream';
-import ffmpeg from 'fluent-ffmpeg';
+// import { Base64Encode } from 'base64-stream';
+// import ffmpeg from 'fluent-ffmpeg';
 
 interface AudioConverter {
     convert: (target?: 'base64' | 'blob') => Promise<string | Blob>;
 }
 
 export abstract class BaseConverter implements AudioConverter {
-    protected command: ffmpeg.FfmpegCommand;
+    protected command: any;
     constructor() {
-        this.command = ffmpeg();
+        this.command = null;
+    }
+
+    async init() {
+        const ffmpeg = await import('fluent-ffmpeg');
+        this.command = ffmpeg.default();
     }
 
     abstract convert(target?: 'base64' | 'blob'): Promise<string | Blob>;
@@ -40,7 +45,9 @@ class OggToMp3Converter extends BaseConverter {
     }
 
     async convert(): Promise<string | Blob> {
+        await this.init();
         const input = await this.prepareInput();
+        const { Base64Encode } = await import('base64-stream');
         return new Promise((resolve, reject) => {
             let base64Data = '';
             this.command
@@ -51,14 +58,14 @@ class OggToMp3Converter extends BaseConverter {
                 // .audioChannels(1)
                 // .audioFrequency(16000)
                 .format('mp3')
-                .on('error', err => reject(err))
+                .on('error', (err: Error) => reject(err))
                 .pipe()
                 .pipe(new Base64Encode())
                 .on('data', (chunk: Buffer) => {
                     base64Data += chunk.toString();
                 })
                 .on('end', () => resolve(this.target === 'base64' ? base64Data : new Blob([Buffer.from(base64Data, 'base64')], { type: 'audio/mp3' })))
-                .on('error', err => reject(err));
+                .on('error', (err: Error) => reject(err));
         });
     }
 }
@@ -69,6 +76,7 @@ class Mp3ToOggConverter extends BaseConverter {
     }
 
     async convert(): Promise<string | Blob> {
+        await this.init();
         return new Promise((resolve, reject) => {
             // 创建输入流
             const inputStream = typeof this.data === 'string' ? Readable.from(Buffer.from(this.data, 'base64')) : this.data;
@@ -83,7 +91,7 @@ class Mp3ToOggConverter extends BaseConverter {
                 // .audioChannels(1)
                 // .audioFrequency(16000)
                 .format('ogg')
-                .on('error', err => reject(err))
+                .on('error', (err: Error) => reject(err))
                 .pipe()
                 .on('data', (chunk: Buffer) => {
                     chunks.push(chunk);
@@ -93,7 +101,7 @@ class Mp3ToOggConverter extends BaseConverter {
                     const blob = new Blob([buffer], { type: 'audio/ogg' });
                     resolve(this.target === 'base64' ? buffer.toString('base64') : blob);
                 })
-                .on('error', err => reject(err));
+                .on('error', (err: Error) => reject(err));
         });
     }
 }

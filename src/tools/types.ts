@@ -1,5 +1,4 @@
 import type { AgentUserConfig } from '../config/env';
-import type { PatternInfo } from './internal/webclean';
 
 export interface SchemaData<T extends Record<string, any>> {
     name: string;
@@ -13,6 +12,22 @@ export interface SchemaData<T extends Record<string, any>> {
     };
 }
 
+export type ToolHandler =
+    | {
+        type: 'function';
+        data?: string;
+        patterns?: PatternInfo[];
+    }
+    | {
+        type: 'template';
+        data: string;
+        patterns?: PatternInfo[];
+    }
+    | {
+        type: 'webclean';
+        patterns?: PatternInfo[];
+    };
+
 /**
  * Function ToolType
  * @schema tool json schema
@@ -21,12 +36,12 @@ export interface SchemaData<T extends Record<string, any>> {
  * @extra_params tool extra params
  * @type options: search, web_crawler, command, llm, workflow
  * @required tool required env variables
- * @not_send_to_ai not send tool output to ai, default: fasle
- * - @is_stream is tool output stream, default: false
+ * @not_send_to_ai options: not send tool output to ai, default: fasle
+ * @is_stream options: is tool output stream, default: false
  * @scope tool scope, options: private, supergroup, group
- * @handler tool handler, default is content => content
  * @payload tool payload, default is {}
  * @buildin is internal tool, default: false
+ * @handler type options: HandlerType
  * @webcrawler support input template(same as plugin input template but only support variable interpolation not support loop and condition) and patterns
  */
 
@@ -40,15 +55,22 @@ export interface FuncTool {
     not_send_to_ai?: boolean;
     // is_stream?: boolean;
     scope?: 'private' | 'supergroup' | 'group';
-    handler?: string;
     payload?: Record<string, any>;
     buildin?: boolean;
     result_type?: 'text' | 'image' | 'audio' | 'file';
-    next_tool?: string;
+    // next_tool?: string;
+    handler?: ToolHandler;
     webcrawler?: {
-        template?: string;
+        url: string;
         patterns?: PatternInfo[];
     };
+}
+
+type cleanPattern = string;
+export interface PatternInfo {
+    pattern: string;
+    group?: number;
+    clean?: [cleanPattern, string];
 }
 
 export interface ToolResult {

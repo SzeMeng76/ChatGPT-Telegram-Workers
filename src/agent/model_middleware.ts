@@ -11,10 +11,11 @@ import type { ChatStreamTextHandler } from './types';
 import { createLlmModel } from '.';
 import { getLogSingleton } from '../log/logDecortor';
 import { log } from '../log/logger';
+import { tools } from '../tools';
 
 type Writeable<T> = { -readonly [P in keyof T]: T[P] };
 
-export function AIMiddleware({ config, tools, activeTools, onStream, toolChoice, messageReferencer, chatModel }: { config: AgentUserConfig; tools: Record<string, any>; activeTools: string[]; onStream: ChatStreamTextHandler | null; toolChoice: ToolChoice[] | []; messageReferencer: string[]; chatModel: string }): LanguageModelV1Middleware & { onChunk: (data: any) => void; onStepFinish: (data: StepResult<any>, context: AgentUserConfig) => void } {
+export function AIMiddleware({ config, activeTools, onStream, toolChoice, messageReferencer, chatModel }: { config: AgentUserConfig; activeTools: string[]; onStream: ChatStreamTextHandler | null; toolChoice: ToolChoice[] | []; messageReferencer: string[]; chatModel: string }): LanguageModelV1Middleware & { onChunk: (data: any) => void; onStepFinish: (data: StepResult<any>, context: AgentUserConfig) => void } {
     let startTime: number | undefined;
     let sendToolCall = false;
     let step = 0;
@@ -55,7 +56,7 @@ export function AIMiddleware({ config, tools, activeTools, onStream, toolChoice,
 
         onChunk: (data: any) => {
             const { chunk } = data;
-            log.debug(`chunk: ${JSON.stringify(chunk)}`);
+            // log.debug(`chunk: ${JSON.stringify(chunk)}`);
             if (chunk.type === 'tool-call' && !sendToolCall) {
                 onStream?.send(`${messageReferencer.join('')}...\n` + `tool call will start: ${chunk.toolName}`);
                 sendToolCall = true;
@@ -124,7 +125,7 @@ function warpMessages(params: LanguageModelV1CallOptions, tools: Record<string, 
     if (activeTools.length > 0) {
         if (messages[0].role === 'system') {
             messages[0].content = `${rawSystemPrompt}\n\nYou can consider using the following tools:\n##TOOLS${activeTools.map(name =>
-                `\n\n### ${name}\n- desc: ${tools[name].description} \n${tools[name].prompt || ''}`,
+                `\n\n### ${name}\n- desc: ${tools[name]?.schema?.description || ''} \n${tools[name]?.prompt || ''}`,
             ).join('')}`;
         }
     } else {

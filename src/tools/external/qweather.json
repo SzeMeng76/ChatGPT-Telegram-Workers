@@ -8,21 +8,34 @@
                 "location": {
                     "type": "string",
                     "description": "The location ID or coordinates (longitude,latitude) for which to retrieve the current weather. This ID is typically obtained from a city lookup API. For example, location=101010100 or location=116.41,39.92",
-                    "examples": ["101010100", "116.41,39.92"]
+                    "examples": [
+                        "101010100",
+                        "116.41,39.92"
+                    ]
                 },
                 "lang": {
                     "type": "string",
                     "description": "Language setting for the response. Based on the language used by the user. Default is zh-hans",
-                    "examples": ["zh-hans", "zh-hant", "en", "de"]
+                    "examples": [
+                        "zh-hans",
+                        "zh-hant",
+                        "en",
+                        "de"
+                    ]
                 },
                 "unit": {
                     "type": "string",
                     "description": "Unit of measurement for the response data. Options include unit=m (metric units, default) and unit=i (imperial units). Default is m",
-                    "enum": ["m", "i"],
+                    "enum": [
+                        "m",
+                        "i"
+                    ],
                     "default": "m"
                 }
             },
-            "required": ["location"],
+            "required": [
+                "location"
+            ],
             "additionalProperties": false
         }
     },
@@ -34,5 +47,7 @@
         }
     },
     "type": "weather",
-    "required": ["QWEATHER_TOKEN"]
+    "required": [
+        "QWEATHER_TOKEN"
+    ]
 }
