@@ -1,6 +1,6 @@
 /* eslint-disable no-case-declarations */
 import type { CoreMessage, CoreUserMessage, LanguageModelV1 } from 'ai';
-import type { AudioAgent, ChatAgent, ImageAgent } from './types';
+import type { ASRAgent, ChatAgent, ImageAgent, TTSAgent } from './types';
 import { createAnthropic } from '@ai-sdk/anthropic';
 import { createCohere } from '@ai-sdk/cohere';
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
@@ -15,8 +15,8 @@ import { AzureChatAI, AzureImageAI } from './azure';
 import { Cohere } from './cohere';
 import { Google } from './google';
 import { Mistral } from './mistralai';
-import { Dalle, OpenAI, Transcription } from './openai';
-import { OpenAILike, OpenAILikeImage } from './openailike';
+import { Dalle, OpenAI, OpenAIASR, OpenAITTS } from './openai';
+import { OpenAILike, OpenAILikeASR, OpenAILikeImage, OpenAILikeTTS } from './openailike';
 import { Vertex } from './vertex';
 import { WorkersChat, WorkersImage } from './workersai';
 import { XAI } from './xai';
@@ -73,20 +73,28 @@ export function loadImageGen(context: AgentUserConfig): ImageAgent | null {
     return null;
 }
 
-const AUDIO_AGENTS: AudioAgent[] = [
-    // 当前仅实现OpenAI音频处理
-    new Transcription(),
+const ASR_AGENTS: ASRAgent[] = [
+    new OpenAIASR(),
+    new OpenAILikeASR(),
 ];
 
-export function loadAudioLLM(context: AgentUserConfig) {
-    for (const llm of AUDIO_AGENTS) {
-        if (llm.name === context.AI_PROVIDER) {
+export function loadASRLLM(context: AgentUserConfig) {
+    for (const llm of ASR_AGENTS) {
+        if (llm.name === context.AI_ASR_PROVIDER) {
             return llm;
         }
     }
-    // 找不到指定的AI，使用第一个可用的AI
-    for (const llm of AUDIO_AGENTS) {
-        if (llm.enable(context)) {
+    return null;
+}
+
+const TTS_AGENTS: TTSAgent[] = [
+    new OpenAITTS(),
+    new OpenAILikeTTS(),
+];
+
+export function loadTTSLLM(context: AgentUserConfig) {
+    for (const llm of TTS_AGENTS) {
+        if (llm.name === context.AI_TTS_PROVIDER) {
             return llm;
         }
     }
@@ -228,8 +236,8 @@ export async function createLlmModel(model: string, context: AgentUserConfig) {
         default:
             return createOpenAI({
                 name: 'olike',
-                baseURL: context.OPENAILIKE_API_BASE || undefined,
-                apiKey: context.OPENAILIKE_API_KEY || undefined,
+                baseURL: context.OAILIKE_API_BASE || undefined,
+                apiKey: context.OAILIKE_API_KEY || undefined,
             }).languageModel(model_id, undefined);
     }
     // if (model.includes(':')) {

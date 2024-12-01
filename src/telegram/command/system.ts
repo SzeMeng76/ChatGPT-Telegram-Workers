@@ -8,7 +8,7 @@ import type { AgentUserConfig } from '../../config/env';
 import type { MessageSender } from '../utils/send';
 import type { CommandHandler, InlineItem, ScopeType } from './types';
 import { authChecker } from '.';
-import { CHAT_AGENTS, customInfo, IMAGE_AGENTS, loadChatLLM, loadImageGen } from '../../agent';
+import { CHAT_AGENTS, customInfo, IMAGE_AGENTS, loadASRLLM, loadChatLLM, loadImageGen, loadTTSLLM } from '../../agent';
 import { ENV, ENV_KEY_MAPPER } from '../../config/env';
 import { ConfigMerger } from '../../config/merger';
 import { getLogSingleton } from '../../log/logDecortor';
@@ -282,13 +282,16 @@ export class SystemCommandHandler implements CommandHandler {
         // const sender = MessageSender.from(context.SHARE_CONTEXT.botToken, message);
         const chatAgent = loadChatLLM(context.USER_CONFIG);
         const imageAgent = loadImageGen(context.USER_CONFIG);
+        const asrAgent = loadASRLLM(context.USER_CONFIG);
+        const ttsAgent = loadTTSLLM(context.USER_CONFIG);
         const agent = {
             AI_PROVIDER: chatAgent?.name,
             [chatAgent?.modelKey || 'AI_PROVIDER_NOT_FOUND']: chatAgent?.model(context.USER_CONFIG),
             TOOL_MODEL: context.USER_CONFIG.TOOL_MODEL || 'same as chat model',
             AI_IMAGE_PROVIDER: imageAgent?.name,
             [imageAgent?.modelKey || 'AI_IMAGE_PROVIDER_NOT_FOUND']: imageAgent?.model(context.USER_CONFIG),
-            STT_MODEL: context.USER_CONFIG.OPENAI_STT_MODEL,
+            [asrAgent?.modelKey || 'AI_ASR_PROVIDER_NOT_FOUND']: asrAgent?.model(context.USER_CONFIG),
+            [ttsAgent?.modelKey || 'AI_TTS_PROVIDER_NOT_FOUND']: ttsAgent?.model(context.USER_CONFIG),
             VISION_MODEL: context.USER_CONFIG.OPENAI_VISION_MODEL,
             IMAGE_MODEL: context.USER_CONFIG.IMAGE_MODEL,
         };
@@ -403,11 +406,14 @@ export class SetCommandHandler implements CommandHandler {
                     context.SHARE_CONTEXT.configStoreKey,
                     JSON.stringify(ConfigMerger.trim(context.USER_CONFIG, ENV.LOCK_USER_CONFIG_KEYS)),
                 );
-                msg += 'Update user config successful';
+                msg += `${updatedKeys
+                    .filter(key => key.endsWith('_MODEL') || key.endsWith('_PROVIDER'))
+                    .map(key => `${key}: ${context.USER_CONFIG[key]}`)
+                    .join('\n')}\n${updatedKeys.filter(key => !key.endsWith('_MODEL') && !key.endsWith('_PROVIDER')).join('\n')}`;
             }
 
             if (msg) {
-                await sender.sendPlainText(msg);
+                await sender.sendRichText(`<pre><code class="language-update">${msg}</code></pre>`, 'HTML', 'tip');
             }
 
             if (remainingText) {
@@ -498,6 +504,7 @@ export class SetCommandHandler implements CommandHandler {
             case 'CHAT_MODEL':
             case 'VISION_MODEL':
             case 'STT_MODEL':
+            case 'TTS_MODEL':
                 key = context.USER_CONFIG.AI_PROVIDER
                     ? `${context.USER_CONFIG.AI_PROVIDER.toUpperCase()}_${key}`
                     : key;

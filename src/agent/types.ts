@@ -78,13 +78,22 @@ export interface ImageResult extends UnionData {
     caption?: string;
 }
 
-export type AudioAgentRequest = (audio: Blob, context: AgentUserConfig) => Promise<string>;
+export type ASRAgentRequest = (audio: Blob, context: AgentUserConfig) => Promise<string>;
 
-export interface AudioAgent {
+export interface ASRAgent {
     name: string | string[];
     modelKey: string;
     enable: (context: AgentUserConfig) => boolean;
-    request: AudioAgentRequest;
+    request: ASRAgentRequest;
+    model: (ctx: AgentUserConfig) => string;
+}
+export type TTSAgentRequest = (text: string, context: AgentUserConfig) => Promise<Blob>;
+
+export interface TTSAgent {
+    name: string;
+    modelKey: string;
+    enable: (context: AgentUserConfig) => boolean;
+    request: TTSAgentRequest;
     model: (ctx: AgentUserConfig) => string;
 }
 

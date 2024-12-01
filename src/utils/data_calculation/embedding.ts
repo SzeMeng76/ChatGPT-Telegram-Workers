@@ -2,6 +2,7 @@ import type { AgentUserConfig } from '../../config/env';
 import { createOpenAI } from '@ai-sdk/openai';
 import { embedMany } from 'ai';
 import { OpenAIBase } from '../../agent/openai';
+import { OpenAILikeBase } from '../../agent/openailike';
 
 export class OpenaiEmbedding extends OpenAIBase {
     readonly request = async (context: AgentUserConfig, data: string[]) => {
@@ -43,5 +44,18 @@ export class JinaEmbedding {
             },
             body: JSON.stringify(body),
         }).then(res => res.json()).then(res => res.data.map((item: any) => ({ embed: item.embedding, value: data[item.index] })));
+    };
+}
+
+export class OpenAILikeEmbedding extends OpenAILikeBase {
+    readonly request = async (context: AgentUserConfig, data: string[]) => {
+        const { embeddings, values } = await embedMany({
+            model: createOpenAI({
+                baseURL: context.OAILIKE_API_BASE,
+                apiKey: context.OAILIKE_API_KEY || undefined,
+            }).embedding(context.OAILIKE_EMBEDDING_MODEL),
+            values: data,
+        });
+        return values.map((value, i) => ({ embed: embeddings[i], value }));
     };
 }

@@ -221,15 +221,31 @@ export class IntelligentModelProcess implements MessageHandler<WorkerContext> {
         if (!context.USER_CONFIG.ENABLE_INTELLIGENT_MODEL) {
             return null;
         }
-        const regex = /^\s*\/\/(c|v)\s*(\S+)/;
+        const regex = /^\s*\/\/([cvt])\s*(\S+)/;
         const text = new RegExp(regex).exec((message.text || message.caption || '').trim());
         if (text?.[1] && text[2]) {
             const rerank = new Rerank();
             const sendTipPromise = this.sendTip(context, message);
             try {
-                const similarityModel = (await rerank.rank(context.USER_CONFIG, [text[2], ...context.USER_CONFIG.RERANK_MODELS], 1))[0].name;
+                const similarityModel = (await rerank.rank(context.USER_CONFIG, [text[2], ...context.USER_CONFIG.RERANK_MODELS], 1))[0].value;
+                if (!similarityModel) {
+                    return this.editTip(context, (await sendTipPromise).result, 'No similarity model found');
+                }
+                log.info(`[INTELLIGENT MODEL] find similarity model: ${similarityModel}`);
                 const mode = text[1];
-                const textReplace = `/set ${mode === 'c' ? '-CHAT_MODEL' : `-VISION_MODEL`} ${similarityModel} `;
+                let textReplace = `/set `;
+                switch (mode) {
+                    case 'c':
+                        textReplace += `-CHAT_MODEL`;
+                        break;
+                    case 'v':
+                        textReplace += `-VISION_MODEL`;
+                        break;
+                    case 't':
+                        textReplace += `-TOOL_MODEL`;
+                        break;
+                }
+                textReplace += ` ${similarityModel}`;
                 if (message.text) {
                     message.text = textReplace + message.text.slice(text[0].length).trim();
                 } else if (message.caption) {
@@ -237,18 +253,23 @@ export class IntelligentModelProcess implements MessageHandler<WorkerContext> {
                 }
                 this.deleteTip(context, (await sendTipPromise).result);
             } catch (error) {
-                log.error(`[INTELLIGENT MODEL PROCESS] Rerank error: ${error}`);
-                return null;
+                return this.editTip(context, (await sendTipPromise).result, (error as Error).message);
             }
         }
         return null;
     };
 
     sendTip = (context: WorkerContext, message: Telegram.Message) => {
+        const tip = 'Searching for similarity result...';
         const sendeParams: Telegram.SendMessageParams = {
             chat_id: message.chat.id,
-            text: 'Searching for similarity result',
+            text: tip,
             message_thread_id: message.is_topic_message && message.message_thread_id ? message.message_thread_id : undefined,
+            entities: [{
+                type: 'italic',
+                offset: 0,
+                length: tip.length,
+            }],
         };
         return createTelegramBotAPI(context.SHARE_CONTEXT.botToken).sendMessageWithReturns(sendeParams);
     };
@@ -260,5 +281,19 @@ export class IntelligentModelProcess implements MessageHandler<WorkerContext> {
         };
         log.info('delete similarity tip.');
         return createTelegramBotAPI(context.SHARE_CONTEXT.botToken).deleteMessage(delParams);
+    };
+
+    editTip = async (context: WorkerContext, message: Telegram.Message, tip: string) => {
+        const editParams: Telegram.EditMessageTextParams = {
+            chat_id: message.chat.id,
+            message_id: message.message_id,
+            text: tip,
+            entities: [{
+                type: 'pre',
+                offset: 0,
+                length: tip.length,
+            }],
+        };
+        return createTelegramBotAPI(context.SHARE_CONTEXT.botToken).editMessageText(editParams);
     };
 }

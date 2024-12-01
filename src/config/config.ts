@@ -42,7 +42,7 @@ export class EnvironmentConfig {
         'AZURE_COMPLETIONS_API',
         'AZURE_DALLE_API',
         'GOOGLEAI_STUDIO_API_BASE',
-        'OPENAILIKE_API_BASE',
+        'OAILIKE_API_BASE',
         'XAI_API_BASE',
     ];
 
@@ -177,6 +177,10 @@ export class AgentShareConfig {
     AI_PROVIDER = 'openai';
     // AI图片提供商: openai, azure, workers
     AI_IMAGE_PROVIDER = 'openai';
+    // AI音频提供商: openai, olike
+    AI_ASR_PROVIDER = 'openai';
+    // AI TTS 提供商: openai, olike
+    AI_TTS_PROVIDER = 'openai';
     // 全局默认初始化消息
     SYSTEM_INIT_MESSAGE: string | null = null;
 }
@@ -283,18 +287,30 @@ export class AnthropicConfig {
 }
 
 export class OpenAILikeConfig {
-    // OpenAILike api key
-    OPENAILIKE_API_KEY: string | null = null;
-    // OpenAILike api base
-    OPENAILIKE_API_BASE: string | null = null;
-    // OpenAILike api model
-    OPENAILIKE_CHAT_MODEL = '';
-    // OpenAILike image model
-    OPENAILIKE_IMAGE_MODEL = '';
-    // OpenAILike image size
-    OPENAILIKE_IMAGE_SIZE = '';
-    // OpenAILike extra params
-    OPENAILIKE_EXTRA_PARAMS: Record<string, any> = {};
+    // olike api key
+    OAILIKE_API_KEY: string | null = null;
+    // olike api base
+    OAILIKE_API_BASE = 'https://api.siliconflow.cn/v1';
+    // olike api model
+    OAILIKE_CHAT_MODEL = '';
+    // olike image model
+    OAILIKE_IMAGE_MODEL = '';
+    // olike image size
+    OAILIKE_IMAGE_SIZE = '';
+    // olike extra params
+    OAILIKE_EXTRA_PARAMS: Record<string, any> = {};
+    // olike embedding model
+    OAILIKE_EMBEDDING_MODEL = 'BAAI/bge-m3';
+    // olike rerank model
+    OAILIKE_RERANK_MODEL = 'BAAI/bge-reranker-v2-m3';
+    // olike rerank type, v1 means use embedding model, v2 means use rerank model to rerank
+    OAILIKE_RERANK_TYPE = 'v2';
+    // olike asr model
+    OLIKE_STT_MODEL = 'FunAudioLLM/SenseVoiceSmall';
+    // olike tts model
+    OAILIKE_TTS_MODEL = 'fishaudio/fish-speech-1.4';
+    // olike tts voice
+    OAILIKE_TTS_VOICE = 'fishaudio/fish-speech-1.4:alex';
 }
 
 export class VertexConfig {
@@ -325,7 +341,7 @@ export class DefineKeys {
 }
 
 export class ExtraUserConfig {
-    MAPPING_KEY = '-p:SYSTEM_INIT_MESSAGE|-n:MAX_HISTORY_LENGTH|-a:AI_PROVIDER|-ai:AI_IMAGE_PROVIDER|-m:CHAT_MODEL|-md:CURRENT_MODE|-v:OPENAI_VISION_MODEL|-t:OPENAI_TTS_MODEL|-ex:OPENAI_API_EXTRA_PARAMS|-mk:MAPPING_KEY|-mv:MAPPING_VALUE|-asap:FUNCTION_REPLY_ASAP|-tm:TOOL_MODEL|-tool:USE_TOOLS|-oli:IMAGE_MODEL|-th:TEXT_HANDLE_TYPE|-to:TEXT_OUTPUT|-ah:AUDIO_HANDLE_TYPE|-ao:AUDIO_OUTPUT|-act:AUDIO_CONTAINS_TEXT';
+    MAPPING_KEY = '-p:SYSTEM_INIT_MESSAGE|-n:MAX_HISTORY_LENGTH|-a:AI_PROVIDER|-ai:AI_IMAGE_PROVIDER|-m:CHAT_MODEL|-md:CURRENT_MODE|-v:OPENAI_VISION_MODEL|-t:OPENAI_TTS_MODEL|-ex:OPENAI_API_EXTRA_PARAMS|-mk:MAPPING_KEY|-mv:MAPPING_VALUE|-asap:FUNCTION_REPLY_ASAP|-tm:TOOL_MODEL|-tool:USE_TOOLS|-oli:IMAGE_MODEL|-th:TEXT_HANDLE_TYPE|-to:TEXT_OUTPUT|-ah:AUDIO_HANDLE_TYPE|-ao:AUDIO_OUTPUT|-act:AUDIO_CONTAINS_TEXT|-as:AI_ASR_PROVIDER|-at:AI_TTS_PROVIDER';
     // /set command mapping value, separated by |, : separates multiple relationships
     MAPPING_VALUE = '';
     // MAPPING_VALUE = "cson:claude-3-5-sonnet-20240620|haiku:claude-3-haiku-20240307|g4m:gpt-4o-mini|g4:gpt-4o|rp+:command-r-plus";
@@ -374,22 +390,22 @@ export class ExtraUserConfig {
     MAX_STEPS = 3;
     // chat agent max retries
     MAX_RETRIES = 0;
-    // Rerank Agent, jina or openai(calculate the cosine similarity using embedding models to get the result)
-    RERANK_AGENT = 'jina';
+    // Rerank Agent, jina or openai or olike (calculate the cosine similarity using embedding models to get the result)
+    RERANK_AGENT = 'olike';
     // Jina Rerank Model
     JINA_RERANK_MODEL = 'jina-colbert-v2';
     // Rerank Models
     RERANK_MODELS: string[] = ['gpt-4o-mini', 'gpt-4o-2024-05-13', 'gpt-4o-2024-08-06', 'chatgpt-4o-latest', 'o1-mini', 'o1-preview', 'claude-3-5-sonnet-20240620', 'claude-3-5-sonnet-20241012', 'gemini-1.5-flash-002', 'gemini-1.5-pro-002', 'gemini-1.5-flash-latest', 'gemini-1.5-pro-latest', 'gemini-exp-1114', 'grok-beta', 'grok-vision-beta', 'claude-3-5-haiku-20241012'];
     // Whether to enable intelligent model processing
     ENABLE_INTELLIGENT_MODEL = false;
-    // text handle type, to asr or 'text' to chat with llm, or 'chat' by using audio-preview (default: text)
-    TEXT_HANDLE_TYPE = 'chat';
+    // text handle type, to 'tts' or 'text' to chat with llm, or 'chat' by using audio-preview (default: text)
+    TEXT_HANDLE_TYPE: 'tts' | 'text' | 'chat' = 'text';
     // Text output type, 'audio' or 'text' (default: text)
-    TEXT_OUTPUT = 'text';
-    // Audio handle type, 'trans' or 'audio' to chat with llm, or 'chat' by using audio-preview (default: trans)
-    AUDIO_HANDLE_TYPE = 'chat';
+    TEXT_OUTPUT: 'audio' | 'text' = 'text';
+    // Audio handle type, 'stt' or 'audio' to chat with llm, or 'chat' by using audio-preview (default: stt)
+    AUDIO_HANDLE_TYPE: 'stt' | 'audio' | 'chat' = 'stt';
     // Audio output type, 'audio' or 'text' (default: text)
-    AUDIO_OUTPUT = 'text';
+    AUDIO_OUTPUT: 'audio' | 'text' = 'text';
     // Audio contains text
     AUDIO_CONTAINS_TEXT = true;
 }

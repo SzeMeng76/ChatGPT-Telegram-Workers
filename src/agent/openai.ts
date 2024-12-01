@@ -1,5 +1,5 @@
 import type { CoreMessage, CoreUserMessage } from 'ai';
-import type { AudioAgent, ChatAgent, ChatStreamTextHandler, ImageAgent, ImageResult, LLMChatParams, LLMChatRequestParams, ResponseMessage } from './types';
+import type { ASRAgent, ChatAgent, ChatStreamTextHandler, ImageAgent, ImageResult, LLMChatParams, LLMChatRequestParams, ResponseMessage, TTSAgent } from './types';
 import { createOpenAI } from '@ai-sdk/openai';
 import { warpLLMParams } from '.';
 import { type AgentUserConfig, ENV } from '../config/env';
@@ -10,6 +10,10 @@ import { requestChatCompletionsV2 } from './request';
 
 export class OpenAIBase {
     readonly name = 'openai';
+    readonly enable = (context: AgentUserConfig): boolean => {
+        return context.OPENAI_API_KEY.length > 0;
+    };
+
     apikey = (context: AgentUserConfig): string => {
         const length = context.OPENAI_API_KEY.length;
         return context.OPENAI_API_KEY[Math.floor(Math.random() * length)];
@@ -19,10 +23,6 @@ export class OpenAIBase {
 export class OpenAI extends OpenAIBase implements ChatAgent {
     readonly modelKey = 'OPENAI_CHAT_MODEL';
     static readonly transformModelPerfix = 'TRANSFROM-';
-
-    readonly enable = (context: AgentUserConfig): boolean => {
-        return context.OPENAI_API_KEY.length > 0;
-    };
 
     readonly model = (ctx: AgentUserConfig, params?: LLMChatRequestParams): string => {
         const msgType = Array.isArray(params?.content) ? params.content.at(-1)?.type : 'text';
@@ -99,10 +99,6 @@ export class OpenAI extends OpenAIBase implements ChatAgent {
 export class Dalle extends OpenAIBase implements ImageAgent {
     readonly modelKey = 'DALL_E_MODEL';
 
-    enable = (context: AgentUserConfig): boolean => {
-        return context.OPENAI_API_KEY.length > 0;
-    };
-
     model = (ctx: AgentUserConfig): string => {
         return ctx.DALL_E_MODEL;
     };
@@ -143,12 +139,8 @@ export class Dalle extends OpenAIBase implements ImageAgent {
     };
 }
 
-export class Transcription extends OpenAIBase implements AudioAgent {
+export class OpenAIASR extends OpenAIBase implements ASRAgent {
     readonly modelKey = 'OPENAI_STT_MODEL';
-
-    enable = (context: AgentUserConfig): boolean => {
-        return context.OPENAI_API_KEY.length > 0;
-    };
 
     model = (ctx: AgentUserConfig): string => {
         return ctx.OPENAI_STT_MODEL;
@@ -163,7 +155,7 @@ export class Transcription extends OpenAIBase implements AudioAgent {
         };
         const formData = new FormData();
         formData.append('file', audio, 'audio.ogg');
-        formData.append('model', this.model(context));
+        formData.append('model', context.OPENAI_STT_MODEL);
         if (context.OPENAI_STT_EXTRA_PARAMS) {
             Object.entries(context.OPENAI_STT_EXTRA_PARAMS as string).forEach(([k, v]) => {
                 formData.append(k, v);
@@ -189,9 +181,14 @@ export class Transcription extends OpenAIBase implements AudioAgent {
     };
 }
 
-export class ASR extends OpenAIBase {
+export class OpenAITTS extends OpenAIBase implements TTSAgent {
     readonly modelKey = 'OPENAI_TTS_MODEL';
-    hander = (text: string, context: AgentUserConfig): Promise<Blob> => {
+
+    model = (ctx: AgentUserConfig): string => {
+        return ctx.OPENAI_TTS_MODEL;
+    };
+
+    request = (text: string, context: AgentUserConfig): Promise<Blob> => {
         const url = `${context.OPENAI_API_BASE}/audio/speech`;
         const headers = {
             'Authorization': `Bearer ${this.apikey(context)}`,

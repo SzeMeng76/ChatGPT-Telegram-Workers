@@ -8,9 +8,8 @@ import type { AgentUserConfig } from '../../config/env';
 import type { ChosenInlineSender } from '../utils/send';
 import type { UnionData } from '../utils/utils';
 import type { MessageHandler } from './types';
-import { loadAudioLLM, loadChatLLM, loadImageGen } from '../../agent';
+import { loadASRLLM, loadChatLLM, loadImageGen, loadTTSLLM } from '../../agent';
 import { loadHistory, requestCompletionsFromLLM } from '../../agent/chat';
-import { ASR } from '../../agent/openai';
 import { ENV } from '../../config/env';
 import { clearLog, getLog, logSingleton } from '../../log/logDecortor';
 import { log } from '../../log/logger';
@@ -294,20 +293,19 @@ function workflowHandlers(type: string): WorkflowHandler {
     switch (type) {
         case 'text:text':
         case 'text:audio':
-        case 'asr:text':
-        case 'asr:audio':
+        case 'tts:text':
+        case 'tts:audio':
         case 'image:text':
         case 'photo:text':
-        case 'text:chat':
         case 'chat:text':
         case 'chat:audio':
             return handleText;
         case 'text:image':
             return handleTextToImage;
-        case 'audio:text':
         case 'audio:audio':
-        case 'trans:text':
-        case 'trans:audio':
+        case 'audio:text':
+        case 'stt:text':
+        case 'stt:audio':
             return handleAudio;
         default:
             throw new Error(`Unsupported message type: ${type}`);
@@ -328,6 +326,11 @@ async function workflow(
     } else {
         handlerKey += 'text';
     }
+    if ((!['audio', 'stt', 'chat'].includes(context.USER_CONFIG.AUDIO_HANDLE_TYPE)) && ['audio', 'voice'].includes(msgType)) {
+        handlerKey = 'stt:text';
+    } else if ((!['tts', 'text', 'chat'].includes(context.USER_CONFIG.TEXT_HANDLE_TYPE)) && msgType === 'text') {
+        handlerKey = 'text:text';
+    }
     const handler = workflowHandlers(handlerKey);
     const sender = MessageSender.from(context.SHARE_CONTEXT.botToken, message);
     const streamSender = await messageInitialize(sender, context, message);
@@ -342,8 +345,8 @@ async function handleText(
     handleKey: string,
 ): Promise<Response | string> {
     switch (handleKey) {
-        case 'asr:audio':
-        case 'asr:text':
+        case 'tts:audio':
+        case 'tts:text':
         case 'text:audio':
             return handleTextToAudio(message, params, context, streamSender, handleKey);
         default:
@@ -381,13 +384,13 @@ async function handleAudio(
 ): Promise<Response | string> {
     const url = (params.content as FilePart[]).at(-1)?.data as string;
     const audio = await fetch(url).then(b => b.blob());
-    const text = await transcription(audio, context.USER_CONFIG);
+    const text = await asr(audio, context.USER_CONFIG);
     context.MIDDLE_CONTEXT.history.push({ role: 'user', content: text });
     const sender = streamSender.sender!;
     if (handleKey === 'audio:text' || !ENV.HIDE_MIDDLE_MESSAGE) {
         await sender.sendRichText(`${getLog(context.USER_CONFIG, false, false)}\n> \n${text}`);
     }
-    if (handleKey === 'trans:text') {
+    if (handleKey === 'stt:text') {
         return new Response('audio handle done');
     }
     clearLog(context.USER_CONFIG);
@@ -396,7 +399,7 @@ async function handleAudio(
     const otherText = (params.content as TextPart[]).filter(c => c.type === 'text').map(c => c.text).join('\n').trim();
     const resp = await chatWithLLM(message, { role: 'user', content: `[AUDIO TRANSCRIPTION]: ${text}\n${otherText}` }, context, null, streamSender, isMiddle);
     if (isMiddle) {
-        const voice = await asr(resp as string, context.USER_CONFIG);
+        const voice = await tts(resp as unknown as string, context.USER_CONFIG);
         ENV.HIDE_MIDDLE_MESSAGE && sender.api.deleteMessage({ chat_id: sender.context.chat_id, message_id: sender.context.message_id! });
         sendAction(context.SHARE_CONTEXT.botToken, sender.context.chat_id, 'upload_voice');
         return sender.sendVoice(voice);
@@ -418,7 +421,7 @@ async function handleTextToAudio(
         text = await chatWithLLM(message, params, context, null, streamSender, true) as string;
         !ENV.HIDE_MIDDLE_MESSAGE && streamSender.send('Chat with LLM done');
     }
-    const audio = await asr(text, context.USER_CONFIG);
+    const audio = await tts(text, context.USER_CONFIG);
     sendAction(context.SHARE_CONTEXT.botToken, sender.context.chat_id, 'upload_voice');
     const resp = await sender.sendVoice(audio, context.USER_CONFIG.AUDIO_CONTAINS_TEXT ? text : undefined);
     if (resp.ok) {
@@ -457,15 +460,21 @@ function injectHistory(context: WorkerContext, result: UnionData, nextType: stri
     context.MIDDLE_CONTEXT.history.push({ role: 'user', content: result.text || '', ...(result.url && result.url.length > 0 && { images: result.url }) });
 }
 
-function transcription(audio: Blob, config: AgentUserConfig) {
-    const agent = loadAudioLLM(config);
+function tts(text: string, config: AgentUserConfig) {
+    const agent = loadTTSLLM(config);
     if (!agent) {
-        throw new Error('Audio agent not found');
+        throw new Error('TTS agent not found');
     }
-    return agent.request(audio, config);
+    return agent.request(text, config);
 }
 
-function asr(text: string, config: AgentUserConfig) {
-    const agent = new ASR();
-    return agent.hander(text, config);
+async function asr(audio: Blob, config: AgentUserConfig) {
+    const agent = loadASRLLM(config);
+    if (!agent) {
+        throw new Error('ASR agent not found');
+    }
+    if (agent.name === 'olike') {
+        audio = await new OggToMp3Converter(audio, 'blob').convert() as Blob;
+    }
+    return agent.request(audio, config);
 }
