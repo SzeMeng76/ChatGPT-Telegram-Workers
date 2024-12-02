@@ -755,7 +755,7 @@ export class KlingAICommandHandler implements CommandHandler {
             inputs: [] as any[],
         };
 
-        if (context.MIDDLE_CONTEXT.originalMessageInfo?.type === 'image' && context.MIDDLE_CONTEXT.originalMessageInfo.id?.[0]) {
+        if (['image', 'photo'].includes(context.MIDDLE_CONTEXT.originalMessageInfo?.type) && context.MIDDLE_CONTEXT.originalMessageInfo.id?.[0]) {
             const img_id = context.MIDDLE_CONTEXT.originalMessageInfo.id?.[0];
             const img_url = await this.getFileUrl(img_id, context, headers);
             log.info(`Uploaded image url: ${img_url}`);
@@ -784,7 +784,7 @@ export class KlingAICommandHandler implements CommandHandler {
             const resp = await fetch(`https://klingai.com/api/task/status?taskId=${taskId}`, {
                 headers,
             }).then(res => res.json());
-            if (resp.data?.status === 99) {
+            if (resp.data?.status === 5 || resp.data?.status === 99) {
                 const pics = resp.data.works.map(({ resource }: { resource: { resource: string } }) => ({
                     type: 'photo',
                     media: resource.resource,
@@ -793,7 +793,8 @@ export class KlingAICommandHandler implements CommandHandler {
                     log.info(`KlingAI image urls: ${pics.map((i: { media: any }) => i.media).join(', ')}`);
                     return sender.sendMediaGroup(pics);
                 }
-                console.error(JSON.stringify(resp.data, null, 2));
+            } else if (resp.data?.status !== 10) {
+                console.error(resp.data.message || JSON.stringify(resp.data));
                 throw new Error(`KlingAI Task failed, see logs for more details`);
             }
             if (Date.now() - startTime > MAX_WAIT_TIME) {
