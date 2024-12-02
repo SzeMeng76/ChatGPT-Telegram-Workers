@@ -55,7 +55,7 @@ export class AnswerChatInlineQuery implements answerInlineQuery {
             return OnStream.end?.(answer);
         } catch (e) {
             const filtered = (e as Error).message.replace(context.botToken, '[REDACTED]');
-            return OnStream.end?.(`Error: ${filtered.substring(0, 2000)}`);
+            return OnStream.sender!.sendRichText(`<pre><code class="language-error">${filtered.substring(0, 2048)}</code></pre>`, 'HTML', 'tip');
         }
     };
 
@@ -173,6 +173,7 @@ export class HandlerCallbackQuery implements CallbackQueryHandler<CallbackQueryC
         if (context.data === 'CLOSE') {
             return this.closeInlineKeyboard(api, message);
         }
+
         const queryHandler = new InlineCommandHandler();
         const defaultInlineKeys = queryHandler.defaultInlineKeys(context.USER_CONFIG);
 

@@ -1,5 +1,6 @@
+import type { CoreUserMessage } from 'ai';
 import type { AgentUserConfig } from '../config/env';
-import type { ASRAgent, ChatAgent, ChatStreamTextHandler, ImageAgent, ImageResult, LLMChatParams, ResponseMessage } from './types';
+import type { ASRAgent, ChatAgent, ChatStreamTextHandler, ImageAgent, ImageResult, LLMChatParams, LLMChatRequestParams, ResponseMessage } from './types';
 import { createOpenAI } from '@ai-sdk/openai';
 import { Log } from '../log/logDecortor';
 import { log } from '../log/logger';
@@ -21,8 +22,15 @@ export class OpenAILike extends OpenAILikeBase implements ChatAgent {
         return !!context.OAILIKE_API_KEY;
     };
 
-    readonly model = (ctx: AgentUserConfig): string => {
-        return ctx.OAILIKE_CHAT_MODEL;
+    readonly model = (ctx: AgentUserConfig, params?: LLMChatRequestParams): string => {
+        const msgType = Array.isArray(params?.content) ? params.content.at(-1)?.type : 'text';
+        switch (msgType) {
+            case 'image':
+                return ctx.OAILIKE_VISION_MODEL;
+            case 'file':
+            default:
+                return ctx.OAILIKE_CHAT_MODEL;
+        }
     };
 
     readonly request = async (params: LLMChatParams, context: AgentUserConfig, onStream: ChatStreamTextHandler | null): Promise<{ messages: ResponseMessage[]; content: string }> => {
@@ -31,7 +39,8 @@ export class OpenAILike extends OpenAILikeBase implements ChatAgent {
             baseURL: context.OAILIKE_API_BASE || undefined,
             apiKey: context.OAILIKE_API_KEY || undefined,
         });
-        const languageModelV1 = provider.languageModel(this.model(context), undefined);
+        const userMessage = params.messages.at(-1) as CoreUserMessage;
+        const languageModelV1 = provider.languageModel(this.model(context, userMessage), undefined);
         return requestChatCompletionsV2({
             model: languageModelV1,
             messages: params.messages,
@@ -76,10 +85,10 @@ export class OpenAILikeImage extends OpenAILikeBase implements ImageAgent {
 }
 
 export class OpenAILikeASR extends OpenAILikeBase implements ASRAgent {
-    readonly modelKey = 'OLIKE_STT_MODEL';
+    readonly modelKey = 'OAILIKE_STT_MODEL';
 
     model = (ctx: AgentUserConfig): string => {
-        return ctx.OLIKE_STT_MODEL;
+        return ctx.OAILIKE_STT_MODEL;
     };
 
     @Log
@@ -91,7 +100,7 @@ export class OpenAILikeASR extends OpenAILikeBase implements ASRAgent {
         };
         const formData = new FormData();
         formData.append('file', audio, 'audio.mp3');
-        formData.append('model', context.OLIKE_STT_MODEL);
+        formData.append('model', context.OAILIKE_STT_MODEL);
         if (context.OAILIKE_STT_EXTRA_PARAMS) {
             Object.entries(context.OAILIKE_STT_EXTRA_PARAMS as string).forEach(([k, v]) => {
                 formData.append(k, v);

@@ -1,8 +1,8 @@
-import type { CoreMessage, CoreUserMessage } from 'ai';
+import type { CoreUserMessage } from 'ai';
+import type { AgentUserConfig } from '../config/env';
 import type { ASRAgent, ChatAgent, ChatStreamTextHandler, ImageAgent, ImageResult, LLMChatParams, LLMChatRequestParams, ResponseMessage, TTSAgent } from './types';
 import { createOpenAI } from '@ai-sdk/openai';
 import { warpLLMParams } from '.';
-import { type AgentUserConfig, ENV } from '../config/env';
 import { Log } from '../log/logDecortor';
 import { log } from '../log/logger';
 import { requestText2Image } from './chat';
@@ -43,57 +43,69 @@ export class OpenAI extends OpenAIBase implements ChatAgent {
             baseURL: context.OPENAI_API_BASE,
             apiKey: this.apikey(context),
             compatibility: 'strict',
-            // fetch: this.fetch,
+            // fetch: this.fetch(context),
         });
 
         const languageModelV1 = provider.languageModel(originalModel, undefined);
-        const { messages, onStream: newOnStream } = this.extraHandle(originalModel, params.messages, context, onStream);
+        const newOnStream = this.streamHandle(originalModel, context, onStream);
 
         return requestChatCompletionsV2(await warpLLMParams({
             model: languageModelV1,
-            messages,
+            messages: params.messages,
         }, context), newOnStream);
     };
 
-    readonly extraHandle = (model: string, messages: CoreMessage[], context: AgentUserConfig, onStream: ChatStreamTextHandler | null): any => {
-        if (Object.keys(ENV.DROPS_OPENAI_PARAMS).length > 0) {
-            for (const [models, params] of Object.entries(ENV.DROPS_OPENAI_PARAMS)) {
-                if (models.split(',').includes(model)) {
+    readonly streamHandle = (model: string, context: AgentUserConfig, onStream: ChatStreamTextHandler | null): any => {
+        if (Object.keys(context.DROPS_OPENAI_PARAMS).length > 0) {
+            for (const [model_perfix, params] of Object.entries(context.DROPS_OPENAI_PARAMS)) {
+                if (model_perfix.split(',').some(p => model.startsWith(p))) {
                     params.includes('stream') && (onStream = null);
                     break;
                 }
             }
         }
+        return onStream;
+    };
+
+    readonly paramsHandle = (model: string, body: any, context: AgentUserConfig): any => {
+        if (Object.keys(context.DROPS_OPENAI_PARAMS).length > 0) {
+            for (const [model_perfix, params] of Object.entries(context.DROPS_OPENAI_PARAMS)) {
+                if (model_perfix.split(',').some(p => model.startsWith(p))) {
+                    params.split(',').forEach(p => delete body[p]);
+                    break;
+                }
+            }
+        }
         // cover message role
-        if (ENV.COVER_MESSAGE_ROLE) {
-            for (const [models, roles] of Object.entries(ENV.COVER_MESSAGE_ROLE)) {
+        if (context.COVER_MESSAGE_ROLE) {
+            for (const [models, roles] of Object.entries(context.COVER_MESSAGE_ROLE)) {
                 const [oldRole, newRole] = roles.split(':');
-                if (models.split(',').includes(model)) {
-                    messages = messages.map((m: any) => {
+                if (models.split(',').some(p => model.startsWith(p))) {
+                    body.messages = body.messages.map((m: any) => {
                         m.role = m.role === oldRole ? newRole : m.role;
                         return m;
                     });
                 }
             }
         }
-
-        return { messages, onStream };
     };
 
-    readonly fetch = async (url: RequestInfo | URL, options?: RequestInit): Promise<Response> => {
-        const body = JSON.parse(options?.body as string);
-        // if (body?.model.startsWith(OpenAI.transformModelPerfix)) {
-        //     body.model = body.model.slice(OpenAI.transformModelPerfix.length);
-        // }
-        if (body.model === 'gpt-4o-audio-preview') {
-            body.modalities = ['text', 'audio'];
-            body.audio = { voice: 'alloy', format: 'opus' };
-        }
-        return fetch(url, {
-            ...options,
-            body: JSON.stringify(body),
-        });
-    };
+    readonly fetch = (context: AgentUserConfig) =>
+        async (url: RequestInfo | URL, options?: RequestInit): Promise<Response> => {
+            const body = JSON.parse(options?.body as string);
+            // if (body?.model.startsWith(OpenAI.transformModelPerfix)) {
+            //     body.model = body.model.slice(OpenAI.transformModelPerfix.length);
+            // }
+            // if (body.model === 'gpt-4o-audio-preview') {
+            //     body.modalities = ['text', 'audio'];
+            //     body.audio = { voice: 'alloy', format: 'opus' };
+            // }
+            this.paramsHandle(body.model, body, context);
+            return fetch(url, {
+                ...options,
+                body: JSON.stringify(body),
+            });
+        };
 }
 
 export class Dalle extends OpenAIBase implements ImageAgent {

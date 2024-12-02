@@ -121,12 +121,6 @@ export class EnvironmentConfig {
     ALL_COMPLETE_API_TIMEOUT = 180;
     // Function call timeout
     FUNC_TIMEOUT = 15;
-    // Drop openai params, the key is the model name, separated by commas, and the value is the parameters to be dropped, separated by commas.
-    // DROPS_OPENAI_PARAMS = { 'o1-mini,o1-preview': 'max_tokens,temperature,stream' };
-    DROPS_OPENAI_PARAMS: Record<string, string> = {};
-    // Cover message rol, the key is the model name, separated by commas, and the value is overridden_role:new_role.
-    // COVER_MESSAGE_ROLE = { 'o1-mini,o1-preview': 'system:user' };
-    COVER_MESSAGE_ROLE: Record<string, string> = {};
     // Send pictures via files format
     SEND_IMAGE_AS_FILE: boolean = false;
     // Perplexity cookie
@@ -253,7 +247,9 @@ export class GeminiConfig {
     // Google Gemini API: Cloudflare AI gateway: https://gateway.ai.cloudflare.com/v1/{account_id}/{gateway_name}/google-ai-studio/v1/models
     GOOGLE_API_BASE = 'https://generativelanguage.googleapis.com/v1beta';
     // Google Gemini Model
-    GOOGLE_CHAT_MODEL = 'gemini-1.5-flash-002';
+    GOOGLE_CHAT_MODEL = 'gemini-1.5-flash';
+    // Google Gemini Vision Model
+    GOOGLE_VISION_MODEL = 'gemini-1.5-flash';
 }
 
 // -- Mistral 配置 --
@@ -284,6 +280,8 @@ export class AnthropicConfig {
     ANTHROPIC_API_BASE = 'https://api.anthropic.com/v1';
     // Anthropic api model
     ANTHROPIC_CHAT_MODEL = 'claude-3-haiku-20240307';
+    // Anthropic vision model
+    ANTHROPIC_VISION_MODEL = 'claude-3-haiku-20240307';
 }
 
 export class OpenAILikeConfig {
@@ -295,6 +293,8 @@ export class OpenAILikeConfig {
     OAILIKE_CHAT_MODEL = '';
     // oailike image model
     OAILIKE_IMAGE_MODEL = '';
+    // oailike vision model
+    OAILIKE_VISION_MODEL = '';
     // oailike image size
     OAILIKE_IMAGE_SIZE = '';
     // oailike extra params
@@ -306,7 +306,7 @@ export class OpenAILikeConfig {
     // oailike rerank type, v1 means use embedding model, v2 means use rerank model to rerank
     OAILIKE_RERANK_TYPE = 'v2';
     // oailike asr model
-    OLIKE_STT_MODEL = 'FunAudioLLM/SenseVoiceSmall';
+    OAILIKE_STT_MODEL = 'FunAudioLLM/SenseVoiceSmall';
     // oailike tts model
     OAILIKE_TTS_MODEL = 'fishaudio/fish-speech-1.4';
     // oailike tts voice
@@ -322,6 +322,8 @@ export class VertexConfig {
 
     // Vertex Model
     VERTEX_CHAT_MODEL = 'gemini-1.5-flash-002';
+    // Vertex Vision Model
+    VERTEX_VISION_MODEL = 'gemini-1.5-flash-002';
     // when use search grounding, do not use other tools at the same time, otherwise errors occur.
     VERTEX_SEARCH_GROUNDING = false;
 }
@@ -341,7 +343,7 @@ export class DefineKeys {
 }
 
 export class ExtraUserConfig {
-    MAPPING_KEY = '-p:SYSTEM_INIT_MESSAGE|-n:MAX_HISTORY_LENGTH|-a:AI_PROVIDER|-ai:AI_IMAGE_PROVIDER|-m:CHAT_MODEL|-md:CURRENT_MODE|-v:OPENAI_VISION_MODEL|-t:OPENAI_TTS_MODEL|-ex:OPENAI_API_EXTRA_PARAMS|-mk:MAPPING_KEY|-mv:MAPPING_VALUE|-asap:FUNCTION_REPLY_ASAP|-tm:TOOL_MODEL|-tool:USE_TOOLS|-oli:IMAGE_MODEL|-th:TEXT_HANDLE_TYPE|-to:TEXT_OUTPUT|-ah:AUDIO_HANDLE_TYPE|-ao:AUDIO_OUTPUT|-act:AUDIO_CONTAINS_TEXT|-as:AI_ASR_PROVIDER|-at:AI_TTS_PROVIDER';
+    MAPPING_KEY = '-p:SYSTEM_INIT_MESSAGE|-n:MAX_HISTORY_LENGTH|-a:AI_PROVIDER|-ai:AI_IMAGE_PROVIDER|-m:CHAT_MODEL|-md:CURRENT_MODE|-v:VISION_MODEL|-t:OPENAI_TTS_MODEL|-ex:OPENAI_API_EXTRA_PARAMS|-mk:MAPPING_KEY|-mv:MAPPING_VALUE|-asap:FUNCTION_REPLY_ASAP|-tm:TOOL_MODEL|-tool:USE_TOOLS|-oli:IMAGE_MODEL|-th:TEXT_HANDLE_TYPE|-to:TEXT_OUTPUT|-ah:AUDIO_HANDLE_TYPE|-ao:AUDIO_OUTPUT|-act:AUDIO_CONTAINS_TEXT|-as:AI_ASR_PROVIDER|-at:AI_TTS_PROVIDER';
     // /set command mapping value, separated by |, : separates multiple relationships
     MAPPING_VALUE = '';
     // MAPPING_VALUE = "cson:claude-3-5-sonnet-20240620|haiku:claude-3-haiku-20240307|g4m:gpt-4o-mini|g4:gpt-4o|rp+:command-r-plus";
@@ -379,7 +381,7 @@ export class ExtraUserConfig {
     KLINGAI_IMAGE_RATIO = '1:1';
 
     // chat agent temperature
-    CHAT_TEMPERATURE = 1;
+    CHAT_TEMPERATURE = 0.5;
     // function call temperature
     FUNCTION_CALL_TEMPERATURE = 0.1;
     // chat agent max tokens
@@ -408,4 +410,10 @@ export class ExtraUserConfig {
     AUDIO_OUTPUT: 'audio' | 'text' = 'text';
     // Audio contains text
     AUDIO_CONTAINS_TEXT = true;
+    // Drop openai params, the key is the model name, separated by commas, and the value is the parameters to be dropped, separated by commas.
+    // example: DROPS_OPENAI_PARAMS = { 'o1-mini,o1-preview': 'max_tokens,temperature,stream' };
+    DROPS_OPENAI_PARAMS: Record<string, string> = {};
+    // Cover message role, the key is the model name, separated by commas, and the value is overridden_role:new_role.
+    // example: COVER_MESSAGE_ROLE = { 'o1-mini,o1-preview': 'system:user' };
+    COVER_MESSAGE_ROLE: Record<string, string> = {};
 }

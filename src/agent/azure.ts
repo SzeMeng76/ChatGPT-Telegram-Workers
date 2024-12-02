@@ -1,5 +1,6 @@
+import type { CoreUserMessage } from 'ai';
 import type { AgentUserConfig } from '../config/env';
-import type { ChatAgent, ChatStreamTextHandler, ImageAgent, ImageResult, LLMChatParams, ResponseMessage } from './types';
+import type { ChatAgent, ChatStreamTextHandler, ImageAgent, ImageResult, LLMChatParams, LLMChatRequestParams, ResponseMessage } from './types';
 import { createAzure } from '@ai-sdk/azure';
 import { warpLLMParams } from '.';
 import { requestText2Image } from './chat';
@@ -14,8 +15,15 @@ export class AzureChatAI implements ChatAgent {
         return !!(context.AZURE_API_KEY && context.AZURE_RESOURCE_NAME && context.AZURE_CHAT_MODEL);
     };
 
-    readonly model = (ctx: AgentUserConfig) => {
-        return ctx.AZURE_CHAT_MODEL || '';
+    readonly model = (ctx: AgentUserConfig, params?: LLMChatRequestParams): string => {
+        const msgType = Array.isArray(params?.content) ? params.content.at(-1)?.type : 'text';
+        switch (msgType) {
+            case 'image':
+                return ctx.AZURE_VISION_MODEL;
+            case 'file':
+            default:
+                return ctx.AZURE_CHAT_MODEL;
+        }
     };
 
     readonly request = async (params: LLMChatParams, context: AgentUserConfig, onStream: ChatStreamTextHandler | null): Promise<{ messages: ResponseMessage[]; content: string }> => {
@@ -23,7 +31,8 @@ export class AzureChatAI implements ChatAgent {
             resourceName: context.AZURE_RESOURCE_NAME || undefined,
             apiKey: context.AZURE_API_KEY || undefined,
         });
-        const languageModelV1 = provider.languageModel(context.AZURE_CHAT_MODEL || '', undefined);
+        const userMessage = params.messages.at(-1) as CoreUserMessage;
+        const languageModelV1 = provider.languageModel(this.model(context, userMessage), undefined);
         return requestChatCompletionsV2(await warpLLMParams({
             model: languageModelV1,
             messages: params.messages,

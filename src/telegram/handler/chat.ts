@@ -61,13 +61,13 @@ export async function chatWithLLM(
         }
         return streamSender.end?.(answer.content);
     } catch (e) {
-        let errMsg = `Error: `;
+        let errMsg = '';
         if ((e as Error).name === 'AbortError') {
             errMsg += 'Chat with LLM timeout';
         } else {
             errMsg += (e as Error).message.slice(0, 2048);
         }
-        return streamSender.end?.(`\`\`\`\n${errMsg.replace(context.SHARE_CONTEXT.botToken, '[REDACTED]')}\n\`\`\``);
+        return streamSender.sender!.sendRichText(`<pre><code class="language-error">${errMsg.replace(context.SHARE_CONTEXT.botToken, '[REDACTED]')}</code></pre>`, 'HTML', 'tip');
     }
 }
 
@@ -92,7 +92,7 @@ export class ChatHandler implements MessageHandler<WorkerContext> {
             log.error((e as Error).stack);
             const sender = context.MIDDLE_CONTEXT.sender ?? MessageSender.from(context.SHARE_CONTEXT.botToken, message);
             const filtered = (e as Error).message.replace(context.SHARE_CONTEXT.botToken, '[REDACTED]');
-            return sender.sendRichText(`<pre>Error: ${filtered.substring(0, 2000)}</pre>`, 'HTML');
+            return sender.sendRichText(`<pre><code class="language-error">${filtered.substring(0, 2048)}</code></pre>`, 'HTML', 'tip');
         }
     };
 
