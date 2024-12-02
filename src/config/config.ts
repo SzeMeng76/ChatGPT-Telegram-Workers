@@ -177,9 +177,9 @@ export class AgentShareConfig {
     AI_PROVIDER = 'openai';
     // AI图片提供商: openai, azure, workers
     AI_IMAGE_PROVIDER = 'openai';
-    // AI音频提供商: openai, olike
+    // AI ASR 提供商: openai, oailike
     AI_ASR_PROVIDER = 'openai';
-    // AI TTS 提供商: openai, olike
+    // AI TTS 提供商: openai, oailike
     AI_TTS_PROVIDER = 'openai';
     // 全局默认初始化消息
     SYSTEM_INIT_MESSAGE: string | null = null;
@@ -287,29 +287,29 @@ export class AnthropicConfig {
 }
 
 export class OpenAILikeConfig {
-    // olike api key
+    // oailike api key
     OAILIKE_API_KEY: string | null = null;
-    // olike api base
+    // oailike api base
     OAILIKE_API_BASE = 'https://api.siliconflow.cn/v1';
-    // olike api model
+    // oailike api model
     OAILIKE_CHAT_MODEL = '';
-    // olike image model
+    // oailike image model
     OAILIKE_IMAGE_MODEL = '';
-    // olike image size
+    // oailike image size
     OAILIKE_IMAGE_SIZE = '';
-    // olike extra params
+    // oailike extra params
     OAILIKE_EXTRA_PARAMS: Record<string, any> = {};
-    // olike embedding model
+    // oailike embedding model
     OAILIKE_EMBEDDING_MODEL = 'BAAI/bge-m3';
-    // olike rerank model
+    // oailike rerank model
     OAILIKE_RERANK_MODEL = 'BAAI/bge-reranker-v2-m3';
-    // olike rerank type, v1 means use embedding model, v2 means use rerank model to rerank
+    // oailike rerank type, v1 means use embedding model, v2 means use rerank model to rerank
     OAILIKE_RERANK_TYPE = 'v2';
-    // olike asr model
+    // oailike asr model
     OLIKE_STT_MODEL = 'FunAudioLLM/SenseVoiceSmall';
-    // olike tts model
+    // oailike tts model
     OAILIKE_TTS_MODEL = 'fishaudio/fish-speech-1.4';
-    // olike tts voice
+    // oailike tts voice
     OAILIKE_TTS_VOICE = 'fishaudio/fish-speech-1.4:alex';
 }
 
@@ -390,8 +390,8 @@ export class ExtraUserConfig {
     MAX_STEPS = 3;
     // chat agent max retries
     MAX_RETRIES = 0;
-    // Rerank Agent, jina or openai or olike (calculate the cosine similarity using embedding models to get the result)
-    RERANK_AGENT = 'olike';
+    // Rerank Agent, jina or openai or oailike (calculate the cosine similarity using embedding models to get the result)
+    RERANK_AGENT = 'oailike';
     // Jina Rerank Model
     JINA_RERANK_MODEL = 'jina-colbert-v2';
     // Rerank Models

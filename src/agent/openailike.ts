@@ -7,7 +7,7 @@ import { requestText2Image } from './chat';
 import { requestChatCompletionsV2 } from './request';
 
 export class OpenAILikeBase {
-    readonly name = 'olike';
+    readonly name = 'oailike';
 
     readonly enable = (context: AgentUserConfig): boolean => {
         return !!context.OAILIKE_API_KEY;
@@ -27,7 +27,7 @@ export class OpenAILike extends OpenAILikeBase implements ChatAgent {
 
     readonly request = async (params: LLMChatParams, context: AgentUserConfig, onStream: ChatStreamTextHandler | null): Promise<{ messages: ResponseMessage[]; content: string }> => {
         const provider = createOpenAI({
-            name: 'openaiLike',
+            name: 'oailike',
             baseURL: context.OAILIKE_API_BASE || undefined,
             apiKey: context.OAILIKE_API_KEY || undefined,
         });

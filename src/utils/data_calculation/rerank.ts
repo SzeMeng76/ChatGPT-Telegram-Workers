@@ -14,8 +14,8 @@ export class Rerank {
                 return this.jina(context, data, topN);
             case 'openai':
                 return this.openai(context, data, topN);
-            case 'olike':
-                return context.OAILIKE_RERANK_TYPE === 'v1' ? this.olikeV1(context, data, topN) : this.olikeV2(context, data, topN);
+            case 'oailike':
+                return context.OAILIKE_RERANK_TYPE === 'v1' ? this.oailikeV1(context, data, topN) : this.oailikeV2(context, data, topN);
             default:
                 throw new Error('Invalid RERANK_AGENT');
         }
@@ -51,7 +51,7 @@ export class Rerank {
             .slice(0, topN);
     };
 
-    readonly olikeV1 = async (context: AgentUserConfig, data: string[], topN: number): Promise<RerankResult[]> => {
+    readonly oailikeV1 = async (context: AgentUserConfig, data: string[], topN: number): Promise<RerankResult[]> => {
         const embeddings = await new OpenAILikeEmbedding().request(context, data);
         const inputEmbeddings = embeddings[0].embed;
         return embeddings.slice(1)
@@ -60,7 +60,7 @@ export class Rerank {
             .slice(0, topN);
     };
 
-    readonly olikeV2 = async (context: AgentUserConfig, data: string[], topN: number): Promise<RerankResult[]> => {
+    readonly oailikeV2 = async (context: AgentUserConfig, data: string[], topN: number): Promise<RerankResult[]> => {
         const url = `${context.OAILIKE_API_BASE}/rerank`;
         const result = await fetch(url, {
             method: 'POST',

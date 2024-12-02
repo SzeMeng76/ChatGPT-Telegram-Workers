@@ -473,7 +473,7 @@ async function asr(audio: Blob, config: AgentUserConfig) {
     if (!agent) {
         throw new Error('ASR agent not found');
     }
-    if (agent.name === 'olike') {
+    if (agent.name === 'oailike') {
         audio = await new OggToMp3Converter(audio, 'blob').convert() as Blob;
     }
     return agent.request(audio, config);

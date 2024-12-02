@@ -247,9 +247,9 @@ export class IntelligentModelProcess implements MessageHandler<WorkerContext> {
                 }
                 textReplace += ` ${similarityModel}`;
                 if (message.text) {
-                    message.text = textReplace + message.text.slice(text[0].length).trim();
+                    message.text = textReplace + message.text.slice(text[0].length);
                 } else if (message.caption) {
-                    message.caption = textReplace + message.caption.slice(text[0].length).trim();
+                    message.caption = textReplace + message.caption.slice(text[0].length);
                 }
                 this.deleteTip(context, (await sendTipPromise).result);
             } catch (error) {
