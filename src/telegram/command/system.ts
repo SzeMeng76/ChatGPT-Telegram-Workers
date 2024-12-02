@@ -719,7 +719,11 @@ export class KlingAICommandHandler implements CommandHandler {
         if (subcommand.trim() === '') {
             return sender.sendPlainText('Please input your prompt');
         }
-        return this.generate(message, subcommand, context, sender);
+        try {
+            return await this.generate(message, subcommand, context, sender);
+        } catch (e) {
+            return sender.sendRichText(`<pre><code class="language-error">${(e as Error).message}</code></pre>`, 'HTML', 'tip');
+        }
     };
 
     generate = async (message: Telegram.Message, subcommand: string, context: WorkerContext, sender: MessageSender) => {
@@ -771,7 +775,7 @@ export class KlingAICommandHandler implements CommandHandler {
         const taskId = resp.data?.task?.id;
         if (!taskId) {
             console.error(JSON.stringify(resp));
-            throw new Error(resp.message || 'Failed to get task id, see logs for more details');
+            throw new Error(resp.data?.message || 'Failed to get task id, see logs for more details');
         }
         sender.sendRichText('`Please wait a moment...`', 'MarkdownV2', 'tip');
         return this.handleTask(taskId, headers, sender);
