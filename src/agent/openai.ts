@@ -43,7 +43,7 @@ export class OpenAI extends OpenAIBase implements ChatAgent {
             baseURL: context.OPENAI_API_BASE,
             apiKey: this.apikey(context),
             compatibility: 'strict',
-            // fetch: this.fetch(context),
+            fetch: this.fetch(context),
         });
 
         const languageModelV1 = provider.languageModel(originalModel, undefined);
