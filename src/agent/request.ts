@@ -184,51 +184,46 @@ export async function streamHandler(stream: AsyncIterable<any>, contentExtractor
 
 export async function requestChatCompletionsV2(params: { model: LanguageModelV1; toolModel?: LanguageModelV1; prompt?: string; messages: CoreMessage[]; tools?: any; activeTools?: string[]; toolChoice?: ToolChoice[] | undefined; context: AgentUserConfig }, onStream: ChatStreamTextHandler | null, onResult: OnResult | null = null): Promise<{ messages: ResponseMessage[]; content: string }> {
     const messageReferencer = [] as string[];
-    try {
-        const middleware = AIMiddleware({
-            config: params.context,
-            activeTools: params.activeTools || [],
-            onStream,
-            toolChoice: params.toolChoice || [],
-            chatModel: params.model.modelId,
-            messageReferencer,
+    const middleware = AIMiddleware({
+        config: params.context,
+        activeTools: params.activeTools || [],
+        onStream,
+        toolChoice: params.toolChoice || [],
+        chatModel: params.model.modelId,
+        messageReferencer,
+    });
+    const hander_params = {
+        model: wrapLanguageModel({
+            model: params.activeTools?.length ? await createLlmModel(params.context.TOOL_MODEL, params.context) : params.model,
+            middleware,
+        }),
+        messages: params.messages,
+        maxSteps: params.context.MAX_STEPS,
+        maxRetries: params.context.MAX_RETRIES,
+        temperature: (params.activeTools?.length || 0) > 0 ? params.context.FUNCTION_CALL_TEMPERATURE : params.context.CHAT_TEMPERATURE,
+        tools: params.tools,
+        activeTools: params.activeTools,
+        onStepFinish: middleware.onStepFinish as (data: StepResult<any>) => void,
+    };
+    if (onStream !== null /* && params.model.modelId !== 'gpt-4o-audio-preview' */) {
+        const stream = streamText({
+            ...hander_params,
+            onChunk: middleware.onChunk as (data: any) => void,
         });
-        const hander_params = {
-            model: wrapLanguageModel({
-                model: params.activeTools?.length ? await createLlmModel(params.context.TOOL_MODEL, params.context) : params.model,
-                middleware,
-            }),
-            messages: params.messages,
-            maxSteps: params.context.MAX_STEPS,
-            maxRetries: params.context.MAX_RETRIES,
-            temperature: (params.activeTools?.length || 0) > 0 ? params.context.FUNCTION_CALL_TEMPERATURE : params.context.CHAT_TEMPERATURE,
-            tools: params.tools,
-            activeTools: params.activeTools,
-            onStepFinish: middleware.onStepFinish as (data: StepResult<any>) => void,
+        const contentFull = await streamHandler(stream.textStream, t => t, onStream, messageReferencer);
+        onResult?.(contentFull);
+        await manualRequestTool((await stream.response).messages, params.context);
+        return {
+            messages: (await stream.response).messages,
+            content: contentFull,
         };
-        if (onStream !== null /* && params.model.modelId !== 'gpt-4o-audio-preview' */) {
-            const stream = streamText({
-                ...hander_params,
-                onChunk: middleware.onChunk as (data: any) => void,
-            });
-            const contentFull = await streamHandler(stream.textStream, t => t, onStream, messageReferencer);
-            onResult?.(contentFull);
-            await manualRequestTool((await stream.response).messages, params.context);
-            return {
-                messages: (await stream.response).messages,
-                content: contentFull,
-            };
-        } else {
-            const result = await generateText(hander_params);
-            onResult?.(result.text);
-            await manualRequestTool(result.response.messages, params.context);
-            return {
-                messages: result.response.messages,
-                content: result.text,
-            };
-        }
-    } catch (error) {
-        log.error((error as Error).message, (error as Error).stack);
-        throw error;
+    } else {
+        const result = await generateText(hander_params);
+        onResult?.(result.text);
+        await manualRequestTool(result.response.messages, params.context);
+        return {
+            messages: result.response.messages,
+            content: result.text,
+        };
     }
 }

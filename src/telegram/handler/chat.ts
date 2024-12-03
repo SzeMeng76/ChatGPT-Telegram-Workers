@@ -1,5 +1,4 @@
 /* eslint-disable unused-imports/no-unused-vars */
-import type { FilePart, TextPart, ToolResultPart } from 'ai';
 import type { ReadableStream as WebReadableStream } from 'node:stream/web';
 import type * as Telegram from 'telegram-bot-api-types';
 import type { ChatStreamTextHandler, HistoryModifier, ImageResult, LLMChatRequestParams } from '../../agent/types';
@@ -8,6 +7,7 @@ import type { AgentUserConfig } from '../../config/env';
 import type { ChosenInlineSender } from '../utils/send';
 import type { UnionData } from '../utils/utils';
 import type { MessageHandler } from './types';
+import { APICallError, type FilePart, type TextPart, type ToolResultPart } from 'ai';
 import { loadASRLLM, loadChatLLM, loadImageGen, loadTTSLLM } from '../../agent';
 import { loadHistory, requestCompletionsFromLLM } from '../../agent/chat';
 import { ENV } from '../../config/env';
@@ -61,13 +61,32 @@ export async function chatWithLLM(
         }
         return streamSender.end?.(answer.content);
     } catch (e) {
+        log.error((e as Error).message, (e as Error).stack);
         let errMsg = '';
         if ((e as Error).name === 'AbortError') {
             errMsg += 'Chat with LLM timeout';
         } else {
-            errMsg += (e as Error).message.slice(0, 2048);
+            errMsg += (e as Error).message;
+            if (e instanceof APICallError && e.responseBody) {
+                log.error(`error detail: ${e.responseBody}`);
+                errMsg += `\n\n${e.responseBody}`;
+            }
         }
-        return streamSender.sender!.sendRichText(`<pre><code class="language-error">${errMsg.replace(context.SHARE_CONTEXT.botToken, '[REDACTED]')}</code></pre>`, 'HTML', 'tip');
+        // 错误信息可能是一个网页 导致html包裹出错
+        // return streamSender.sender!.sendRichText(`<pre><code class="language-error">${errMsg.replace(context.SHARE_CONTEXT.botToken, '[REDACTED]')}</code></pre>`, 'HTML', 'tip');
+        const api = createTelegramBotAPI(context.SHARE_CONTEXT.botToken);
+        errMsg = errMsg.replace(context.SHARE_CONTEXT.botToken, '[REDACTED]').slice(0, 1024);
+        return api.editMessageText({
+            chat_id: streamSender.sender!.context.chat_id,
+            message_id: streamSender.sender!.context.message_id!,
+            text: errMsg,
+            entities: [{
+                type: 'pre',
+                offset: 0,
+                length: errMsg.length,
+                language: 'Error',
+            }],
+        });
     }
 }
 

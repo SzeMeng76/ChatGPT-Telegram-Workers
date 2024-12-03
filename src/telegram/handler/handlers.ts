@@ -253,7 +253,7 @@ export class IntelligentModelProcess implements MessageHandler<WorkerContext> {
                 }
                 this.deleteTip(context, (await sendTipPromise).result);
             } catch (error) {
-                return this.editTip(context, (await sendTipPromise).result, (error as Error).message);
+                return this.editTip(context, (await sendTipPromise).result, (error as Error).message, 'Error');
             }
         }
         return null;
@@ -283,7 +283,7 @@ export class IntelligentModelProcess implements MessageHandler<WorkerContext> {
         return createTelegramBotAPI(context.SHARE_CONTEXT.botToken).deleteMessage(delParams);
     };
 
-    editTip = async (context: WorkerContext, message: Telegram.Message, tip: string) => {
+    editTip = async (context: WorkerContext, message: Telegram.Message, tip: string, type = 'Tip') => {
         const editParams: Telegram.EditMessageTextParams = {
             chat_id: message.chat.id,
             message_id: message.message_id,
@@ -292,6 +292,7 @@ export class IntelligentModelProcess implements MessageHandler<WorkerContext> {
                 type: 'pre',
                 offset: 0,
                 length: tip.length,
+                language: type,
             }],
         };
         return createTelegramBotAPI(context.SHARE_CONTEXT.botToken).editMessageText(editParams);

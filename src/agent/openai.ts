@@ -181,12 +181,9 @@ export class OpenAIASR extends OpenAIBase implements ASRAgent {
             redirect: 'follow',
         }).then(res => res.json());
 
-        if (resp.error?.message) {
-            throw new Error(resp.error.message);
-        }
-        if (resp.text === undefined) {
+        if (!resp.text) {
             console.error(resp);
-            throw new Error(resp);
+            throw new Error(JSON.stringify(resp));
         }
         log.info(`Transcription: ${resp.text}`);
         return resp.text;
