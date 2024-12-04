@@ -46,7 +46,7 @@ export type MessageTool = MessageBase & {
 export interface ChatStreamTextHandler {
     sender?: MessageSender;
     send: (text: string) => Promise<any>;
-    end?: (text: string) => Promise<any>;
+    end?: (text: string, needLog?: boolean) => Promise<any>;
 }
 
 export type ImageAgentRequest = (prompt: string, context: AgentUserConfig) => Promise<ImageResult>;

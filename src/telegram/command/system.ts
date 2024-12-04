@@ -384,7 +384,7 @@ export class SetCommandHandler implements CommandHandler {
 
             const { keys, values } = this.parseMappings(context);
             const { flags, remainingText } = this.tokenizeSubcommand(subcommand);
-            const needUpdate = remainingText.trim() === '';
+            const needUpdate = remainingText === '';
             let msg = '';
             const updatedKeys: string[] = [];
 
@@ -412,16 +412,11 @@ export class SetCommandHandler implements CommandHandler {
                     .join('\n')}\n${updatedKeys.filter(key => !key.endsWith('_MODEL') && !key.endsWith('_PROVIDER')).join('\n')}`;
             }
 
-            if (msg) {
-                await sender.sendRichText(`<pre><code class="language-update">${msg}</code></pre>`, 'HTML', 'tip');
-            }
-
             if (remainingText) {
                 message.text = remainingText;
                 return null;
             }
-
-            return new Response('success');
+            return sender.sendRichText(`<pre><code class="language-Update">${msg}</code></pre>`, 'HTML', 'tip');
         } catch (e) {
             log.error(`/set error: ${(e as Error).message}`);
             return sender.sendPlainText(`ERROR: ${(e as Error).message}`);
