@@ -113,7 +113,7 @@ export function AIMiddleware({ config, activeTools, onStream, toolChoice, messag
 }
 
 function warpMessages(params: LanguageModelV1CallOptions, tools: Record<string, any>, activeTools: string[], rawSystemPrompt: string | undefined) {
-    const { prompt: messages, mode } = params;
+    let { prompt: messages, mode } = params;
     const trimMessages = (messages: LanguageModelV1Prompt) => {
         if (messages.at(-1)?.role === 'tool') {
             const content = messages.at(-1)!.content;
@@ -133,11 +133,15 @@ function warpMessages(params: LanguageModelV1CallOptions, tools: Record<string, 
                     newMessages.push(message);
                 }
                 activeTools.length = 0;
-                params.prompt = newMessages;
+                messages = newMessages;
+            } else if (activeTools.length === 0) {
+                messages = messages.filter(message => ['user', 'system'].includes(message.role)
+                    || (message.role === 'assistant' && message.content[0].type !== 'tool-call'));
             }
         }
+        return messages;
     };
-    trimMessages(messages);
+    messages = trimMessages(messages);
     if (activeTools.length > 0) {
         if (messages[0].role === 'system') {
             messages[0].content = `${rawSystemPrompt}\n\nYou can consider using the following tools:\n##TOOLS${activeTools.map(name =>
@@ -148,6 +152,7 @@ function warpMessages(params: LanguageModelV1CallOptions, tools: Record<string, 
         (mode as any).tools = undefined;
         messages[0].role === 'system' && (messages[0].content = rawSystemPrompt ?? '');
     }
+    params.prompt = messages;
 }
 
 async function warpModel(model: LanguageModelV1, config: AgentUserConfig, activeTools: string[], toolChoice: ToolChoice, chatModel: string) {
