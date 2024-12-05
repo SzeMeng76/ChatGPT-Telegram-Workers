@@ -59,7 +59,7 @@ export class OpenAI extends OpenAIBase implements ChatAgent {
         if (Object.keys(context.DROPS_OPENAI_PARAMS).length > 0) {
             for (const [model_perfix, params] of Object.entries(context.DROPS_OPENAI_PARAMS)) {
                 if (model_perfix.split(',').some(p => model.startsWith(p))) {
-                    params.includes('stream') && (onStream = null);
+                    params.split(',').includes('stream') && (onStream = null);
                     break;
                 }
             }

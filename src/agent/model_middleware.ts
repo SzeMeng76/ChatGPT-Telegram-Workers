@@ -3,6 +3,7 @@ import type {
     LanguageModelV1,
     LanguageModelV1CallOptions,
     Experimental_LanguageModelV1Middleware as LanguageModelV1Middleware,
+    LanguageModelV1Prompt,
     StepResult,
 } from 'ai';
 import type { ToolChoice } from '.';
@@ -113,15 +114,30 @@ export function AIMiddleware({ config, activeTools, onStream, toolChoice, messag
 
 function warpMessages(params: LanguageModelV1CallOptions, tools: Record<string, any>, activeTools: string[], rawSystemPrompt: string | undefined) {
     const { prompt: messages, mode } = params;
-
-    if (messages.at(-1)?.role === 'tool') {
-        const content = messages.at(-1)!.content;
-        if (Array.isArray(content) && content.length > 0) {
-            content.forEach((i: any) => {
-                delete i.result.time;
-            });
+    const trimMessages = (messages: LanguageModelV1Prompt) => {
+        if (messages.at(-1)?.role === 'tool') {
+            const content = messages.at(-1)!.content;
+            if (Array.isArray(content) && content.length > 0) {
+                content.forEach((i: any) => {
+                    delete i.result.time;
+                });
+            }
+        } else if (messages.at(-1)?.role === 'user') {
+            const content = messages.at(-1)!.content;
+            if (Array.isArray(content) && content.some(i => i.type === 'image')) {
+                const newMessages: LanguageModelV1Prompt = [];
+                for (const message of messages) {
+                    if (message.role === 'tool' || (message.role === 'assistant' && message.content.some(i => i.type === 'tool-call'))) {
+                        continue;
+                    }
+                    newMessages.push(message);
+                }
+                activeTools.length = 0;
+                params.prompt = newMessages;
+            }
         }
-    }
+    };
+    trimMessages(messages);
     if (activeTools.length > 0) {
         if (messages[0].role === 'system') {
             messages[0].content = `${rawSystemPrompt}\n\nYou can consider using the following tools:\n##TOOLS${activeTools.map(name =>
