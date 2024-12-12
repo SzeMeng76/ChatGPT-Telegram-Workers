@@ -93,6 +93,7 @@ export class GroupMention implements MessageHandler {
         const substituteMention = SubstituteWords(message);
         // 非群组消息不作判断，交给下一个中间件处理
         if (!isTelegramChatTypeGroup(message.chat.type)) {
+            this.mergeMessage(false, message);
             return this.furtherChecker(message, context);
         }
 
@@ -141,11 +142,8 @@ export class GroupMention implements MessageHandler {
             log.error('Not mention');
             return new Response('Not mention');
         }
-        // 开启引用消息，并且不是回复bot，则将引用消息和当前消息合并
-        if (ENV.EXTRA_MESSAGE_CONTEXT && !replyMe && message.reply_to_message?.text) {
-            message.text = `${message.text || message.caption || ''}\n> ${message.reply_to_message.text}`;
-        }
 
+        this.mergeMessage(replyMe, message);
         return null;
     };
 
@@ -160,6 +158,15 @@ export class GroupMention implements MessageHandler {
             return forwardCheckResult;
         }
         return null;
+    };
+
+    mergeMessage = async (replyMe: boolean, message: Telegram.Message) => {
+        // 开启引用消息，并且不是回复bot，则将引用消息和当前消息合并
+        if (ENV.EXTRA_MESSAGE_CONTEXT && !replyMe && message.reply_to_message) {
+            const replyText = message.reply_to_message.text || message.reply_to_message.caption || '';
+            const currentText = message.text || message.caption || '';
+            message.text = `${currentText}\n${replyText ? `> ${replyText}` : ''}`;
+        }
     };
 }
 
@@ -205,12 +212,19 @@ class Lock {
     lockKey = '';
     quireLock = async () => {
         let retry = 0;
+        // 移除异常情况下未释放的锁
+        // const lock = await ENV.DATABASE.get(this.lockKey);
+        // if (lock && lock.expiration < Math.floor(Date.now() / 1000)) {
+        //     await ENV.DATABASE.delete(this.lockKey);
+        // }
         while (retry < 5) {
-            await new Promise(resolve => setTimeout(resolve, 200 * retry));
-            const lock = await ENV.DATABASE.put(this.lockKey, '1', { expiration: Date.now() + 5000, condition: 'NX' });
+            await new Promise(resolve => setTimeout(resolve, 100 * retry));
+            const lock = await ENV.DATABASE.put(this.lockKey, '1', { expirationTtl: 5, condition: 'NX' });
             if (lock === true || lock === undefined) {
+                log.info(`Lock success, key: ${this.lockKey}, retry: ${retry}`);
                 return;
             }
+            log.info(`Lock failed, key: ${this.lockKey}, retry: ${retry}`);
             retry++;
         }
         throw new Error('Lock failed');
@@ -260,7 +274,7 @@ class HandleChunkMessage extends Lock {
             message_id: message.message_id,
             text: message.text,
         });
-        return ENV.DATABASE.put(chunkMessageKey, JSON.stringify(data), { expirationTtl: 5000 });
+        return ENV.DATABASE.put(chunkMessageKey, JSON.stringify(data), { expirationTtl: 5 });
     }
 }
 
@@ -288,13 +302,13 @@ class HandleMediaGroupMessage extends Lock {
         this.lockKey = `${storeMediaMessageKey}:lock`;
         await this.quireLock();
         const data: Record<string, string[]> = JSON.parse(await ENV.DATABASE.get(storeMediaMessageKey) || '{}');
+        console.debug(`current data length: ${data?.[msgInfo.media_group_id!]?.length ?? 0}`);
         if (!data[msgInfo.media_group_id!]) {
             data[msgInfo.media_group_id!] = [];
         }
         const needStoreIds = msgInfo.id?.filter((id: string) => !data[msgInfo.media_group_id!].includes(id)) || [];
         if (needStoreIds.length === 0) {
             await this.releaseLock();
-            log.info('no need store');
             return new Response('no need store');
         }
         data[msgInfo.media_group_id!].push(...needStoreIds);

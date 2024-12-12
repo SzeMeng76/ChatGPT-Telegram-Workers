@@ -406,10 +406,11 @@ export class SetCommandHandler implements CommandHandler {
                     context.SHARE_CONTEXT.configStoreKey,
                     JSON.stringify(ConfigMerger.trim(context.USER_CONFIG, ENV.LOCK_USER_CONFIG_KEYS)),
                 );
+                const suffixWhiteList = ['_PROVIDER', '_MODEL', '_MODELS', '_TOOLS', '_TYPE', '_OUTPUT', '_AGENT', '_TEMPERATURE', 'MAPPING_KEY', 'MAPPING_VALUE'];
                 msg += `${updatedKeys
-                    .filter(key => key.endsWith('_MODEL') || key.endsWith('_PROVIDER'))
+                    .filter(key => suffixWhiteList.some(suffix => key.endsWith(suffix)))
                     .map(key => `${key}: ${context.USER_CONFIG[key]}`)
-                    .join('\n')}\n${updatedKeys.filter(key => !key.endsWith('_MODEL') && !key.endsWith('_PROVIDER')).join('\n')}`;
+                    .join('\n')}\n${updatedKeys.filter(key => !suffixWhiteList.some(suffix => key.endsWith(suffix))).join('\n')}`;
             }
 
             if (remainingText) {
@@ -449,7 +450,7 @@ export class SetCommandHandler implements CommandHandler {
     }
 
     private tokenizeSubcommand(subcommand: string): { flags: { flag: string; value: string }[]; remainingText: string } {
-        const regex = /^\s*(-\w+)\s+(".*?"|'.*?'|\S+|$)/;
+        const regex = /^\s*(-\w+)\s+("[^"]*"|'[^']*'|\S+|$)/;
         const flags: { flag: string; value: string }[] = [];
         let text = subcommand;
         let match: RegExpExecArray | null;
@@ -504,11 +505,6 @@ export class SetCommandHandler implements CommandHandler {
                     ? `${context.USER_CONFIG.AI_PROVIDER.toUpperCase()}_${key}`
                     : key;
                 break;
-            // case 'CURRENT_MODE':
-            //     if (!Object.keys(context.USER_CONFIG.MODES).includes(value)) {
-            //         return sender.sendPlainText(`mode ${value} not found. Support modes: ${Object.keys(context.USER_CONFIG.MODES).join(', ')}`);
-            //     }
-            //     break;
             case 'USE_TOOLS':
                 if (value === 'on') {
                     mappedValue = Object.keys(tools);
@@ -524,11 +520,8 @@ export class SetCommandHandler implements CommandHandler {
             return sender.sendPlainText(`Key ${key} not found`);
         }
 
-        if (typeof context.USER_CONFIG[key] === 'boolean') {
-            mappedValue = typeof mappedValue === 'boolean' ? mappedValue : mappedValue === 'true';
-        }
-        // 如果设置的值为空，则使用默认值
-        context.USER_CONFIG[key] = mappedValue || ENV.USER_CONFIG[key];
+        // 设置的值为空，则使用默认值
+        ConfigMerger.merge(context.USER_CONFIG, { [key]: mappedValue || ENV.USER_CONFIG[key] });
         if (!context.USER_CONFIG.DEFINE_KEYS.includes(key) && mappedValue) {
             context.USER_CONFIG.DEFINE_KEYS.push(key);
         } else if (!mappedValue) {

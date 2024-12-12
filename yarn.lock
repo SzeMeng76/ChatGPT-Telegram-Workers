@@ -2,106 +2,109 @@
 # yarn lockfile v1
 
 
-"@ai-sdk/anthropic@^1.0.2":
-  version "1.0.2"
-  resolved "https://registry.npmjs.org/@ai-sdk/anthropic/-/anthropic-1.0.2.tgz"
-  integrity sha512-f3Z356AgUe6vcaUJuVY1+UWdUdhx/JzIADaQgybHSBRQ+OXOYs7AveKist01I6fBXGl3DPPbJJr/i0P888Izfg==
-  dependencies:
-    "@ai-sdk/provider" "1.0.1"
-    "@ai-sdk/provider-utils" "2.0.2"
-
-"@ai-sdk/azure@^1.0.7":
-  version "1.0.7"
-  resolved "https://registry.yarnpkg.com/@ai-sdk/azure/-/azure-1.0.7.tgz#f9abc8baef93b5710b7a84281c2daf75e296c7c4"
-  integrity sha512-nLOilokE63tM+tLZrPSWBbPxjeXmPk+vwGkQG26zPb/iKF5nOIc7d5FVtlUUfFUH//FU4fy7V+BDiGzgFAOMlw==
-  dependencies:
-    "@ai-sdk/openai" "1.0.5"
-    "@ai-sdk/provider" "1.0.1"
-    "@ai-sdk/provider-utils" "2.0.2"
-
-"@ai-sdk/cohere@^1.0.3":
-  version "1.0.3"
-  resolved "https://registry.npmjs.org/@ai-sdk/cohere/-/cohere-1.0.3.tgz"
-  integrity sha512-SDjPinUcGzTNiSMN+9zs1fuAcP8rU1/+CmDWAGu7eMhwVGDurgiOqscC0Oqs/aLsodLt/sFeOvyqj86DAknpbg==
-  dependencies:
-    "@ai-sdk/provider" "1.0.1"
-    "@ai-sdk/provider-utils" "2.0.2"
-
-"@ai-sdk/google-vertex@^1.0.4":
-  version "1.0.4"
-  resolved "https://registry.yarnpkg.com/@ai-sdk/google-vertex/-/google-vertex-1.0.4.tgz#169a249e5b70146d86369bc145ec0aadd01c0492"
-  integrity sha512-6d00zh5NT63kgUGDc89l6/Hwyfbq0vLZOlbQ2SlTh6TBx067sNlGCy1wq8Vjfle5KQpC6TAIQkHnCTHn6Zu1FQ==
-  dependencies:
-    "@ai-sdk/provider" "1.0.1"
-    "@ai-sdk/provider-utils" "2.0.2"
-
-"@ai-sdk/google@^1.0.4":
-  version "1.0.4"
-  resolved "https://registry.yarnpkg.com/@ai-sdk/google/-/google-1.0.4.tgz#4ae718cca322c9dc116b315a326be34dd40454f3"
-  integrity sha512-jUFhQjE7nfldU2umQjnDR/M8XlBupQquRkc2S7CwxcEEXVRg5vELYrLrD6xy387PKj7C8+Jg7sJCa3VjxCJ9Ig==
-  dependencies:
-    "@ai-sdk/provider" "1.0.1"
-    "@ai-sdk/provider-utils" "2.0.2"
-
-"@ai-sdk/mistral@^1.0.3":
-  version "1.0.3"
-  resolved "https://registry.npmjs.org/@ai-sdk/mistral/-/mistral-1.0.3.tgz"
-  integrity sha512-CzwYougArZ0STfVXfg//+BUzW1HHD38slNQYkLMxPjlMVLvNw0H5EqM7Gbk40z5bNibe3o6SWGr0GTX1rUnVxA==
-  dependencies:
-    "@ai-sdk/provider" "1.0.1"
-    "@ai-sdk/provider-utils" "2.0.2"
-
-"@ai-sdk/openai@1.0.5", "@ai-sdk/openai@^1.0.5":
+"@ai-sdk/anthropic@1.0.5", "@ai-sdk/anthropic@^1.0.5":
   version "1.0.5"
-  resolved "https://registry.yarnpkg.com/@ai-sdk/openai/-/openai-1.0.5.tgz#cafc58f91f585597b855aa65aae743fee2e6c280"
-  integrity sha512-JDCPBJQx9o3LgboBPaA55v+9EZ7Vm/ozy0+J5DIr2jJF8WETjeCnigdxixyzEy/Od4wX871jOTSuGffwNIi0kA==
+  resolved "https://registry.yarnpkg.com/@ai-sdk/anthropic/-/anthropic-1.0.5.tgz#c349c7d1c15957e55bab82f55a2a2c066246b576"
+  integrity sha512-qNEB7AYz6W0HTHbhJk/brhGZtjivcRdberD1fn3aCdvzlQ321q1EOTc2k7TvfE+PmNCZbp/uutBbWPGHHODKpw==
   dependencies:
-    "@ai-sdk/provider" "1.0.1"
-    "@ai-sdk/provider-utils" "2.0.2"
+    "@ai-sdk/provider" "1.0.2"
+    "@ai-sdk/provider-utils" "2.0.4"
 
-"@ai-sdk/provider-utils@2.0.2":
-  version "2.0.2"
-  resolved "https://registry.npmjs.org/@ai-sdk/provider-utils/-/provider-utils-2.0.2.tgz"
-  integrity sha512-IAvhKhdlXqiSmvx/D4uNlFYCl8dWT+M9K+IuEcSgnE2Aj27GWu8sDIpAf4r4Voc+wOUkOECVKQhFo8g9pozdjA==
+"@ai-sdk/azure@^1.0.10":
+  version "1.0.10"
+  resolved "https://registry.yarnpkg.com/@ai-sdk/azure/-/azure-1.0.10.tgz#0cc298ef94ed4adcea5424fc502cb35676a697cb"
+  integrity sha512-drbmzYS0iPRU/I3xnzphxNsYvSMjYhoq8gK34zShjeJGpPbewZPsXbPrncX6gdrkD4JR021yCahPc9E6RpXr5Q==
   dependencies:
-    "@ai-sdk/provider" "1.0.1"
+    "@ai-sdk/openai" "1.0.8"
+    "@ai-sdk/provider" "1.0.2"
+    "@ai-sdk/provider-utils" "2.0.4"
+
+"@ai-sdk/cohere@^1.0.5":
+  version "1.0.5"
+  resolved "https://registry.yarnpkg.com/@ai-sdk/cohere/-/cohere-1.0.5.tgz#ca9fbc3dd5b6356f6f6e84171cf06e5030ba9de9"
+  integrity sha512-q6hoZRN5dtpEIbckrscxaG0RDH0VoKn87ylWmdi6rTTPbSn1Varw3m3w1EgHqOZJmevAFs59Mqn76lOXbgq9GQ==
+  dependencies:
+    "@ai-sdk/provider" "1.0.2"
+    "@ai-sdk/provider-utils" "2.0.4"
+
+"@ai-sdk/google-vertex@^2.0.7":
+  version "2.0.7"
+  resolved "https://registry.yarnpkg.com/@ai-sdk/google-vertex/-/google-vertex-2.0.7.tgz#8b637499393bd7df04361e17931431e2be52b2f4"
+  integrity sha512-cl+AS1A7TiuWogBz21AvbDhgxG7J41Bnba/ss17zThCyxEoEvgl2gfD26d9aB1xDXnmZkpT7YOhwTqCq/rhkCQ==
+  dependencies:
+    "@ai-sdk/anthropic" "1.0.5"
+    "@ai-sdk/google" "1.0.9"
+    "@ai-sdk/provider" "1.0.2"
+    "@ai-sdk/provider-utils" "2.0.4"
+    google-auth-library "^9.15.0"
+
+"@ai-sdk/google@1.0.9", "@ai-sdk/google@^1.0.9":
+  version "1.0.9"
+  resolved "https://registry.yarnpkg.com/@ai-sdk/google/-/google-1.0.9.tgz#ea0b17b125e4d7162c44108ec4a8d7d6af63d904"
+  integrity sha512-fIwKAhMiYCrWDQG3SMUkld3RPKq1yr1yrjFAtjf8Vzp0nKq+DdVtfmnUFFSOawn+rzJLGfhPc42H8ShFX89djQ==
+  dependencies:
+    "@ai-sdk/provider" "1.0.2"
+    "@ai-sdk/provider-utils" "2.0.4"
+
+"@ai-sdk/mistral@^1.0.5":
+  version "1.0.5"
+  resolved "https://registry.yarnpkg.com/@ai-sdk/mistral/-/mistral-1.0.5.tgz#913c6cd239f109a45d0f79616f4fcca1e26c6243"
+  integrity sha512-CwjmLuLUQVgK6hxsO0Bs4e/azNruDL2SS9+vmJqTO77KgQUe9m7skW5GRTryEVgE/m6pozxau5Q+W9Zk1t7AIQ==
+  dependencies:
+    "@ai-sdk/provider" "1.0.2"
+    "@ai-sdk/provider-utils" "2.0.4"
+
+"@ai-sdk/openai@1.0.8", "@ai-sdk/openai@^1.0.8":
+  version "1.0.8"
+  resolved "https://registry.yarnpkg.com/@ai-sdk/openai/-/openai-1.0.8.tgz#d00d0fcadae8b4523fe7053bd57696d4bc402b47"
+  integrity sha512-wcTHM9qgRWGYVO3WxPSTN/RwnZ9R5/17xyo61iUCCSCZaAuJyh6fKddO0/oamwDp3BG7g+4wbfAyuTo32H+fHw==
+  dependencies:
+    "@ai-sdk/provider" "1.0.2"
+    "@ai-sdk/provider-utils" "2.0.4"
+
+"@ai-sdk/provider-utils@2.0.4":
+  version "2.0.4"
+  resolved "https://registry.yarnpkg.com/@ai-sdk/provider-utils/-/provider-utils-2.0.4.tgz#e76ab8b592fb656013ada954cbbc81f41e3003a9"
+  integrity sha512-GMhcQCZbwM6RoZCri0MWeEWXRt/T+uCxsmHEsTwNvEH3GDjNzchfX25C8ftry2MeEOOn6KfqCLSKomcgK6RoOg==
+  dependencies:
+    "@ai-sdk/provider" "1.0.2"
     eventsource-parser "^3.0.0"
-    nanoid "^3.3.7"
+    nanoid "^3.3.8"
     secure-json-parse "^2.7.0"
 
-"@ai-sdk/provider@1.0.1":
-  version "1.0.1"
-  resolved "https://registry.npmjs.org/@ai-sdk/provider/-/provider-1.0.1.tgz"
-  integrity sha512-mV+3iNDkzUsZ0pR2jG0sVzU6xtQY5DtSCBy3JFycLp6PwjyLw/iodfL3MwdmMCRJWgs3dadcHejRnMvF9nGTBg==
+"@ai-sdk/provider@1.0.2":
+  version "1.0.2"
+  resolved "https://registry.yarnpkg.com/@ai-sdk/provider/-/provider-1.0.2.tgz#1d3fa62f4d242868523549eb6cdefc2452b9bfde"
+  integrity sha512-YYtP6xWQyaAf5LiWLJ+ycGTOeBLWrED7LUrvc+SQIWhGaneylqbaGsyQL7VouQUeQ4JZ1qKYZuhmi3W56HADPA==
   dependencies:
     json-schema "^0.4.0"
 
-"@ai-sdk/react@1.0.3":
-  version "1.0.3"
-  resolved "https://registry.yarnpkg.com/@ai-sdk/react/-/react-1.0.3.tgz#b9bc24e20bdc5768cbb0d9c65471fb60ab2675ec"
-  integrity sha512-Mak7qIRlbgtP4I7EFoNKRIQTlABJHhgwrN8SV2WKKdmsfWK2RwcubQWz1hp88cQ0bpF6KxxjSY1UUnS/S9oR5g==
+"@ai-sdk/react@1.0.6":
+  version "1.0.6"
+  resolved "https://registry.yarnpkg.com/@ai-sdk/react/-/react-1.0.6.tgz#8757e7bd21c6496e007d73f878bce103a483667a"
+  integrity sha512-8Hkserq0Ge6AEi7N4hlv2FkfglAGbkoAXEZ8YSp255c3PbnZz6+/5fppw+aROmZMOfNwallSRuy1i/iPa2rBpQ==
   dependencies:
-    "@ai-sdk/provider-utils" "2.0.2"
-    "@ai-sdk/ui-utils" "1.0.2"
+    "@ai-sdk/provider-utils" "2.0.4"
+    "@ai-sdk/ui-utils" "1.0.5"
     swr "^2.2.5"
     throttleit "2.1.0"
 
-"@ai-sdk/ui-utils@1.0.2":
-  version "1.0.2"
-  resolved "https://registry.npmjs.org/@ai-sdk/ui-utils/-/ui-utils-1.0.2.tgz"
-  integrity sha512-hHrUdeThGHu/rsGZBWQ9PjrAU9Htxgbo9MFyR5B/aWoNbBeXn1HLMY1+uMEnXL5pRPlmyVRjgIavWg7UgeNDOw==
+"@ai-sdk/ui-utils@1.0.5":
+  version "1.0.5"
+  resolved "https://registry.yarnpkg.com/@ai-sdk/ui-utils/-/ui-utils-1.0.5.tgz#096db17d070131851e5dc27dfe2131d658e00906"
+  integrity sha512-DGJSbDf+vJyWmFNexSPUsS1AAy7gtsmFmoSyNbNbJjwl9hRIf2dknfA1V0ahx6pg3NNklNYFm53L8Nphjovfvg==
   dependencies:
-    "@ai-sdk/provider" "1.0.1"
-    "@ai-sdk/provider-utils" "2.0.2"
+    "@ai-sdk/provider" "1.0.2"
+    "@ai-sdk/provider-utils" "2.0.4"
     zod-to-json-schema "^3.23.5"
 
-"@ai-sdk/xai@^1.0.4":
-  version "1.0.4"
-  resolved "https://registry.yarnpkg.com/@ai-sdk/xai/-/xai-1.0.4.tgz#ba2abdb78d13cc046aa023899245b853f919f7e3"
-  integrity sha512-Xp/J8v0SGuJRdo00cYISNoTw0gOZwYMexJvH+AeM0vR/SDxDqNiNhMVFMpCYqbkfSHaO7hZDm4U7waHEphswzA==
+"@ai-sdk/xai@^1.0.6":
+  version "1.0.6"
+  resolved "https://registry.yarnpkg.com/@ai-sdk/xai/-/xai-1.0.6.tgz#80c1f3779cd8bd77f4a727b69d523b76f4dacb97"
+  integrity sha512-bNEAJMSyjMNJIUx9bEr0o3PvP+s4tTU+GzuzG9OVhNc8Zx28kHGXogl4SjDkOgCKHOLixE9RIKuVojZFOACdww==
   dependencies:
-    "@ai-sdk/provider" "1.0.1"
-    "@ai-sdk/provider-utils" "2.0.2"
+    "@ai-sdk/provider" "1.0.2"
+    "@ai-sdk/provider-utils" "2.0.4"
 
 "@antfu/eslint-config@^3.11.2":
   version "3.11.2"
@@ -215,43 +218,43 @@
   dependencies:
     mime "^3.0.0"
 
-"@cloudflare/workerd-darwin-64@1.20241106.1":
-  version "1.20241106.1"
-  resolved "https://registry.yarnpkg.com/@cloudflare/workerd-darwin-64/-/workerd-darwin-64-1.20241106.1.tgz#4f470f98ca12dbc3262ec8a432466e1c1525aad9"
-  integrity sha512-zxvaToi1m0qzAScrxFt7UvFVqU8DxrCO2CinM1yQkv5no7pA1HolpIrwZ0xOhR3ny64Is2s/J6BrRjpO5dM9Zw==
+"@cloudflare/workerd-darwin-64@1.20241205.0":
+  version "1.20241205.0"
+  resolved "https://registry.yarnpkg.com/@cloudflare/workerd-darwin-64/-/workerd-darwin-64-1.20241205.0.tgz#44fac2be0c2088150ee08a8b063345d80b5063d1"
+  integrity sha512-TArEZkSZkHJyEwnlWWkSpCI99cF6lJ14OVeEoI9Um/+cD9CKZLM9vCmsLeKglKheJ0KcdCnkA+DbeD15t3VaWg==
 
-"@cloudflare/workerd-darwin-arm64@1.20241106.1":
-  version "1.20241106.1"
-  resolved "https://registry.npmjs.org/@cloudflare/workerd-darwin-arm64/-/workerd-darwin-arm64-1.20241106.1.tgz"
-  integrity sha512-j3dg/42D/bPgfNP3cRUBxF+4waCKO/5YKwXNj+lnVOwHxDu+ne5pFw9TIkKYcWTcwn0ZUkbNZNM5rhJqRn4xbg==
+"@cloudflare/workerd-darwin-arm64@1.20241205.0":
+  version "1.20241205.0"
+  resolved "https://registry.yarnpkg.com/@cloudflare/workerd-darwin-arm64/-/workerd-darwin-arm64-1.20241205.0.tgz#388323c215d341fee84da3f1dfa07a877609a88c"
+  integrity sha512-u5eqKa9QRdA8MugfgCoD+ADDjY6EpKbv3hSYJETmmUh17l7WXjWBzv4pUvOKIX67C0UzMUy4jZYwC53MymhX3w==
 
-"@cloudflare/workerd-linux-64@1.20241106.1":
-  version "1.20241106.1"
-  resolved "https://registry.yarnpkg.com/@cloudflare/workerd-linux-64/-/workerd-linux-64-1.20241106.1.tgz#42c425137c151348146a70d3f271e5f3293d3b75"
-  integrity sha512-Ih+Ye8E1DMBXcKrJktGfGztFqHKaX1CeByqshmTbODnWKHt6O65ax3oTecUwyC0+abuyraOpAtdhHNpFMhUkmw==
+"@cloudflare/workerd-linux-64@1.20241205.0":
+  version "1.20241205.0"
+  resolved "https://registry.yarnpkg.com/@cloudflare/workerd-linux-64/-/workerd-linux-64-1.20241205.0.tgz#5d716a4cba8252746e91db1d4c6f71bd40689a89"
+  integrity sha512-OYA7S5zpumMamWEW+IhhBU6YojIEocyE5X/YFPiTOCrDE3dsfr9t6oqNE7hxGm1VAAu+Irtl+a/5LwmBOU681w==
 
-"@cloudflare/workerd-linux-arm64@1.20241106.1":
-  version "1.20241106.1"
-  resolved "https://registry.yarnpkg.com/@cloudflare/workerd-linux-arm64/-/workerd-linux-arm64-1.20241106.1.tgz#f3bc7ab9424dafbf1816d8bc2e8aae24646ecad0"
-  integrity sha512-mdQFPk4+14Yywn7n1xIzI+6olWM8Ybz10R7H3h+rk0XulMumCWUCy1CzIDauOx6GyIcSgKIibYMssVHZR30ObA==
+"@cloudflare/workerd-linux-arm64@1.20241205.0":
+  version "1.20241205.0"
+  resolved "https://registry.yarnpkg.com/@cloudflare/workerd-linux-arm64/-/workerd-linux-arm64-1.20241205.0.tgz#0242a5a13d7b8c9020680c90de85ac72e209beef"
+  integrity sha512-qAzecONjFJGIAVJZKExQ5dlbic0f3d4A+GdKa+H6SoUJtPaWiE3K6WuePo4JOT7W3/Zfh25McmX+MmpMUUcM5Q==
 
-"@cloudflare/workerd-windows-64@1.20241106.1":
-  version "1.20241106.1"
-  resolved "https://registry.yarnpkg.com/@cloudflare/workerd-windows-64/-/workerd-windows-64-1.20241106.1.tgz#9e2f1ec0d993c8b12c4cd7f9c5e6b953a0672707"
-  integrity sha512-4rtcss31E/Rb/PeFocZfr+B9i1MdrkhsTBWizh8siNR4KMmkslU2xs2wPaH1z8+ErxkOsHrKRa5EPLh5rIiFeg==
+"@cloudflare/workerd-windows-64@1.20241205.0":
+  version "1.20241205.0"
+  resolved "https://registry.yarnpkg.com/@cloudflare/workerd-windows-64/-/workerd-windows-64-1.20241205.0.tgz#a2a15eef4d154076527ccb9049d216b4c80717fe"
+  integrity sha512-BEab+HiUgCdl6GXAT7EI2yaRtDPiRJlB94XLvRvXi1ZcmQqsrq6awGo6apctFo4WUL29V7c09LxmN4HQ3X2Tvg==
 
-"@cloudflare/workers-shared@0.9.0":
-  version "0.9.0"
-  resolved "https://registry.yarnpkg.com/@cloudflare/workers-shared/-/workers-shared-0.9.0.tgz#26712ad6d7b34330c988248b2520a4b0e31a8a0a"
-  integrity sha512-eP6Ir45uPbKnpADVzUCtkRUYxYxjB1Ew6n/whTJvHu8H4m93USHAceCMm736VBZdlxuhXXUjEP3fCUxKPn+cfw==
+"@cloudflare/workers-shared@0.11.0":
+  version "0.11.0"
+  resolved "https://registry.yarnpkg.com/@cloudflare/workers-shared/-/workers-shared-0.11.0.tgz#e08c21e0634d54f9dbb32c0ffaa9b27119b59a9c"
+  integrity sha512-A+lQ8xp7992qSeMmuQ0ssL6CPmm+ZmAv6Ddikan0n1jjpMAic+97l7xtVIsswSn9iLMFPYQ9uNN/8Fl0AgARIQ==
   dependencies:
     mime "^3.0.0"
     zod "^3.22.3"
 
-"@cloudflare/workers-types@^4.20241127.0":
-  version "4.20241127.0"
-  resolved "https://registry.yarnpkg.com/@cloudflare/workers-types/-/workers-types-4.20241127.0.tgz#e41d120a60ef1929ace1c5d94d2e9f436612352e"
-  integrity sha512-UqlvtqV8eI0CdPR7nxlbVlE52+lcjHvGdbYXEPwisy23+39RsFV7OOy0da0moJAhqnL2OhDmWTOaKdsVcPHiJQ==
+"@cloudflare/workers-types@^4.20241205.0":
+  version "4.20241205.0"
+  resolved "https://registry.yarnpkg.com/@cloudflare/workers-types/-/workers-types-4.20241205.0.tgz#210d532063d9a11e91ee9c8615f9a666674e08d6"
+  integrity sha512-pj1VKRHT/ScQbHOIMFODZaNAlJHQHdBSZXNIdr9ebJzwBff9Qz8VdqhbhggV7f+aUEh8WSbrsPIo4a+WtgjUvw==
 
 "@cspotcode/source-map-support@0.8.1", "@cspotcode/source-map-support@^0.8.0":
   version "0.8.1"
@@ -801,10 +804,10 @@
   resolved "https://registry.npmjs.org/@gar/promisify/-/promisify-1.1.3.tgz"
   integrity sha512-k2Ty1JcVojjJFwrg/ThKi2ujJ7XNLYaFGNB/bWT9wGR+oSMJHMa5w+CUq6p/pVrKeNNgA7pCqEcjSnHVoqJQFw==
 
-"@google-cloud/vertexai@^1.9.0":
-  version "1.9.0"
-  resolved "https://registry.npmjs.org/@google-cloud/vertexai/-/vertexai-1.9.0.tgz"
-  integrity sha512-8brlcJwFXI4fPuBtsDNQqCdWZmz8gV9jeEKOU0vc5H2SjehCQpXK/NwuSEr916zbhlBHtg/sU37qQQdgvh5BRA==
+"@google-cloud/vertexai@^1.9.2":
+  version "1.9.2"
+  resolved "https://registry.yarnpkg.com/@google-cloud/vertexai/-/vertexai-1.9.2.tgz#11015e39cc7c9988d829e91c72b80a019c1cd36c"
+  integrity sha512-pJSUG3r5QIvCFNfkz7/y7kEqvEJaVAk0jZbZoKbcPCRUnXaUeAq7p8I0oklqetGyxbUcZ2FOGpt+Y+4uIltVPg==
   dependencies:
     google-auth-library "^9.1.0"
 
@@ -1279,10 +1282,10 @@
   dependencies:
     undici-types "~5.26.4"
 
-"@types/node@^22.10.1":
-  version "22.10.1"
-  resolved "https://registry.yarnpkg.com/@types/node/-/node-22.10.1.tgz#41ffeee127b8975a05f8c4f83fb89bcb2987d766"
-  integrity sha512-qKgsUwfHZV2WCWLAnVP1JqnpE6Im6h3Y0+fYgMTasNQ7V++CBX5OT1as0g0f+OyubbFqhf6XVNIsmN4IIhEgGQ==
+"@types/node@^22.10.2":
+  version "22.10.2"
+  resolved "https://registry.yarnpkg.com/@types/node/-/node-22.10.2.tgz#a485426e6d1fdafc7b0d4c7b24e2c78182ddabb9"
+  integrity sha512-Xxr6BBRCAOQixvonOye19wnzyDiUtTeqldOOmj3CkeblonbccA12PFwlufvRdrpjXxqnmUaeiU5EOA+7s5diUQ==
   dependencies:
     undici-types "~6.20.0"
 
@@ -1291,24 +1294,16 @@
   resolved "https://registry.npmjs.org/@types/normalize-package-data/-/normalize-package-data-2.4.4.tgz"
   integrity sha512-37i+OaWTh9qeK4LSHPsyRC7NahnGotNuZvjLSgcPzblpHB3rrCJxAOgI5gCdKm7coonsaX1Of0ILiTcnZjbfxA==
 
-"@types/prop-types@*":
-  version "15.7.13"
-  resolved "https://registry.npmjs.org/@types/prop-types/-/prop-types-15.7.13.tgz"
-  integrity sha512-hCZTSvwbzWGvhqxp/RqVqwU999pBf2vp7hzIjiYOsl8wqOmUxkQ6ddw1cV3l8811+kdUFus/q4d1Y3E3SyEifA==
+"@types/react-dom@^19.0.2":
+  version "19.0.2"
+  resolved "https://registry.yarnpkg.com/@types/react-dom/-/react-dom-19.0.2.tgz#ad21f9a1ee881817995fd3f7fd33659c87e7b1b7"
+  integrity sha512-c1s+7TKFaDRRxr1TxccIX2u7sfCnc3RxkVyBIUA2lCpyqCF+QoAwQ/CBg7bsMdVwP120HEH143VQezKtef5nCg==
 
-"@types/react-dom@^18.3.1":
-  version "18.3.1"
-  resolved "https://registry.npmjs.org/@types/react-dom/-/react-dom-18.3.1.tgz"
-  integrity sha512-qW1Mfv8taImTthu4KoXgDfLuk4bydU6Q/TkADnDWWHwi4NX4BR+LWfTp2sVmTqRrsHvyDDTelgelxJ+SsejKKQ==
+"@types/react@^19.0.1":
+  version "19.0.1"
+  resolved "https://registry.yarnpkg.com/@types/react/-/react-19.0.1.tgz#a000d5b78f473732a08cecbead0f3751e550b3df"
+  integrity sha512-YW6614BDhqbpR5KtUYzTA+zlA7nayzJRA9ljz9CQoxthR0sDisYZLuvSMsil36t4EH/uAt8T52Xb4sVw17G+SQ==
   dependencies:
-    "@types/react" "*"
-
-"@types/react@*", "@types/react@^18.3.12":
-  version "18.3.12"
-  resolved "https://registry.npmjs.org/@types/react/-/react-18.3.12.tgz"
-  integrity sha512-D2wOSq/d6Agt28q7rSI3jhU7G6aiuzljDGZ2hTZHIkrTLUI+AF3WMeKkEZ9nN2fkBAlcktT6vcZjDFiIhMYEQw==
-  dependencies:
-    "@types/prop-types" "*"
     csstype "^3.0.2"
 
 "@types/resolve@1.20.2":
@@ -1600,10 +1595,10 @@
   dependencies:
     crypto-js "^4.2.0"
 
-"@vercel/build-utils@8.6.0":
-  version "8.6.0"
-  resolved "https://registry.yarnpkg.com/@vercel/build-utils/-/build-utils-8.6.0.tgz#c58d3551d6917795038bbcf1921aa678379cda7b"
-  integrity sha512-shST7/8zY0Oi2uxgwt9S/fjat96Ohpt0bXB+4/TeekdDmIIIL8t+mg9ASEg1WGF8JjWqWx+tYQfXlvv7d/D+dg==
+"@vercel/build-utils@8.7.0":
+  version "8.7.0"
+  resolved "https://registry.yarnpkg.com/@vercel/build-utils/-/build-utils-8.7.0.tgz#253736b07938787e08470c3758e87c20ecb1fb89"
+  integrity sha512-ofZX+ABiW76u5khIyYyH5xK5KSuiAteqRu5hz2k1a2WHLwF7VpeBg8gdFR+HwbVnNkHtkMA64ya5Dd/lNoABkw==
 
 "@vercel/error-utils@2.0.3":
   version "2.0.3"
@@ -1628,16 +1623,16 @@
     node-gyp-build "^4.2.2"
     resolve-from "^5.0.0"
 
-"@vercel/node@^3.2.27":
-  version "3.2.27"
-  resolved "https://registry.yarnpkg.com/@vercel/node/-/node-3.2.27.tgz#7ec19723b142bcb6fa809bfca7928420a8375b5c"
-  integrity sha512-vvTBD8Rz2jgbnm9/mTe+wB1rh/uISr7HRkyECUt92IlI4tYxOf/vS7ARgR86TGzb9WDwTrnRVxCl92q//f7hHA==
+"@vercel/node@^3.2.29":
+  version "3.2.29"
+  resolved "https://registry.yarnpkg.com/@vercel/node/-/node-3.2.29.tgz#71285b4fb0c6ea7df1036e1c58dff28f1aa78a52"
+  integrity sha512-WRVYidBqtRyYUw36v/WyUB2v97PsiV2+LepUiOPWcW9UpszQGGT2DAzsXOYqWveXMJKFhx0aETR6Nn6i+Yps1Q==
   dependencies:
     "@edge-runtime/node-utils" "2.3.0"
     "@edge-runtime/primitives" "4.1.0"
     "@edge-runtime/vm" "3.2.0"
     "@types/node" "16.18.11"
-    "@vercel/build-utils" "8.6.0"
+    "@vercel/build-utils" "8.7.0"
     "@vercel/error-utils" "2.0.3"
     "@vercel/nft" "0.27.3"
     "@vercel/static-config" "3.0.0"
@@ -1798,15 +1793,15 @@ aggregate-error@^3.0.0:
     clean-stack "^2.0.0"
     indent-string "^4.0.0"
 
-ai@^4.0.9:
-  version "4.0.9"
-  resolved "https://registry.yarnpkg.com/ai/-/ai-4.0.9.tgz#9b93dc5776e3ff53e919778f3909068fefde0682"
-  integrity sha512-25Ve05XJYjlV2os//J2WVITm8GXRRGgt9Y5vQyxnJJ6P4ttyH585Uc1fbOTh5tK1CEXTfn+Ml+Ux7oR9J8hImA==
+ai@^4.0.14:
+  version "4.0.14"
+  resolved "https://registry.yarnpkg.com/ai/-/ai-4.0.14.tgz#9465e0e0cb671aab69ba0b5e0bb81449c88fbca7"
+  integrity sha512-0Cefmf13LItpef4PotGnVX37vpx0CGxAcMypS429PweGOMAR913jxX3yPtRyS5S3pcKOK006phRZKLZreTBgmg==
   dependencies:
-    "@ai-sdk/provider" "1.0.1"
-    "@ai-sdk/provider-utils" "2.0.2"
-    "@ai-sdk/react" "1.0.3"
-    "@ai-sdk/ui-utils" "1.0.2"
+    "@ai-sdk/provider" "1.0.2"
+    "@ai-sdk/provider-utils" "2.0.4"
+    "@ai-sdk/react" "1.0.6"
+    "@ai-sdk/ui-utils" "1.0.5"
     "@opentelemetry/api" "1.9.0"
     jsondiffpatch "0.6.0"
     zod-to-json-schema "^3.23.5"
@@ -2247,16 +2242,15 @@ cliui@^8.0.1:
     strip-ansi "^6.0.1"
     wrap-ansi "^7.0.0"
 
-cloudflare-worker-adapter@^1.3.4:
-  version "1.3.4"
-  resolved "https://registry.npmjs.org/cloudflare-worker-adapter/-/cloudflare-worker-adapter-1.3.4.tgz"
-  integrity sha512-zqOrZLI9vj2UgpM9k8E8fMYuYjjUnCeccwzHR4ROVxSr0fg6nIKf4rdPJAh2tsSmgJX+PL2mg8x0ECW4dkPq7w==
+"cloudflare-worker-adapter@github:adolphnov/cloudflare-worker-adapter":
+  version "1.4.0"
+  resolved "https://codeload.github.com/adolphnov/cloudflare-worker-adapter/tar.gz/cad7bc90f6491f4bac81aa22f1f30d8e81a1b63a"
   dependencies:
     "@upstash/redis" "^1.34.3"
     ioredis "^5.4.1"
     sqlite3 "^5.1.7"
     toml "^3.0.0"
-    undici "^6.21.0"
+    undici "^7.1.0"
 
 cluster-key-slot@^1.1.0:
   version "1.1.2"
@@ -3714,6 +3708,18 @@ google-auth-library@^9.1.0:
     gtoken "^7.0.0"
     jws "^4.0.0"
 
+google-auth-library@^9.15.0:
+  version "9.15.0"
+  resolved "https://registry.yarnpkg.com/google-auth-library/-/google-auth-library-9.15.0.tgz#1b009c08557929c881d72f953f17e839e91b009b"
+  integrity sha512-7ccSEJFDFO7exFbO6NRyC+xH8/mZ1GZGG2xxx9iHxZWcjUjJpjWxIMw3cofAKcueZ6DATiukmmprD7yavQHOyQ==
+  dependencies:
+    base64-js "^1.3.0"
+    ecdsa-sig-formatter "^1.0.11"
+    gaxios "^6.1.1"
+    gcp-metadata "^6.1.0"
+    gtoken "^7.0.0"
+    jws "^4.0.0"
+
 graceful-fs@^4.1.2, graceful-fs@^4.1.6, graceful-fs@^4.2.0, graceful-fs@^4.2.4, graceful-fs@^4.2.6, graceful-fs@^4.2.9:
   version "4.2.11"
   resolved "https://registry.npmjs.org/graceful-fs/-/graceful-fs-4.2.11.tgz"
@@ -4043,7 +4049,7 @@ js-cleanup@^1.2.0:
     perf-regexes "^1.0.1"
     skip-regex "^1.0.2"
 
-"js-tokens@^3.0.0 || ^4.0.0", js-tokens@^4.0.0:
+js-tokens@^4.0.0:
   version "4.0.0"
   resolved "https://registry.npmjs.org/js-tokens/-/js-tokens-4.0.0.tgz"
   integrity sha512-RdJUflcE3cUzKiMqQgsCu06FPu9UdIJO0beYbPhHN4k6apgJtifcoCtT9bcxOpYBtpD2kCM6Sbzg4CausW/PKQ==
@@ -4261,13 +4267,6 @@ longest-streak@^3.0.0:
   version "3.1.0"
   resolved "https://registry.npmjs.org/longest-streak/-/longest-streak-3.1.0.tgz"
   integrity sha512-9Ri+o0JYgehTaVBBDoMqIl8GXtbWg711O3srftcHhZ0dqnETqLaoIK0x17fUw9rFSlK/0NlsKe0Ahhyl5pXE2g==
-
-loose-envify@^1.1.0:
-  version "1.4.0"
-  resolved "https://registry.npmjs.org/loose-envify/-/loose-envify-1.4.0.tgz"
-  integrity sha512-lyuxPGr/Wfhrlem2CL/UcnUc1zcqKAImBDzukY7Y5F/yQiNdko6+fRLevlw1HgMySw7f611UIY408EtxRSoK3Q==
-  dependencies:
-    js-tokens "^3.0.0 || ^4.0.0"
 
 lru-cache@^6.0.0:
   version "6.0.0"
@@ -4803,10 +4802,10 @@ min-indent@^1.0.0:
   resolved "https://registry.npmjs.org/min-indent/-/min-indent-1.0.1.tgz"
   integrity sha512-I9jwMn07Sy/IwOj3zVkVik2JTvgpaykDZEigL6Rx6N9LbMywwUSMtxET+7lVoDLLd3O3IXwJwvuuns8UB/HeAg==
 
-miniflare@3.20241106.1:
-  version "3.20241106.1"
-  resolved "https://registry.npmjs.org/miniflare/-/miniflare-3.20241106.1.tgz"
-  integrity sha512-dM3RBlJE8rUFxnqlPCaFCq0E7qQqEQvKbYX7W/APGCK+rLcyLmEBzC4GQR/niXdNM/oV6gdg9AA50ghnn2ALuw==
+miniflare@3.20241205.0:
+  version "3.20241205.0"
+  resolved "https://registry.yarnpkg.com/miniflare/-/miniflare-3.20241205.0.tgz#602546d4bdcc22f2f3efdd0dc2c44cbd895e4430"
+  integrity sha512-Z0cTtIf6ZrcAJ3SrOI9EUM3s4dkGhNeU6Ubl8sroYhsPVD+rtz3m5+p6McHFWCkcMff1o60X5XEKVTmkz0gbpA==
   dependencies:
     "@cspotcode/source-map-support" "0.8.1"
     acorn "^8.8.0"
@@ -4816,7 +4815,7 @@ miniflare@3.20241106.1:
     glob-to-regexp "^0.4.1"
     stoppable "^1.1.0"
     undici "^5.28.4"
-    workerd "1.20241106.1"
+    workerd "1.20241205.0"
     ws "^8.18.0"
     youch "^3.2.2"
     zod "^3.22.3"
@@ -4974,6 +4973,11 @@ nanoid@^3.3.3, nanoid@^3.3.7:
   version "3.3.7"
   resolved "https://registry.npmjs.org/nanoid/-/nanoid-3.3.7.tgz"
   integrity sha512-eSRppjcPIatRIMC1U6UngP8XFcz8MQWGQdt1MTBQ7NaAmvXDfvNxbvWV3x2y6CdEUciCSsDHDQZbhYaB8QEo2g==
+
+nanoid@^3.3.8:
+  version "3.3.8"
+  resolved "https://registry.yarnpkg.com/nanoid/-/nanoid-3.3.8.tgz#b1be3030bee36aaff18bacb375e5cce521684baf"
+  integrity sha512-WNLf5Sd8oZxOm+TzppcYk8gVOgP+l58xNy58D0nbUnOxOWRWvlcCV4kUF7ltmI6PsrLl/BgKEyS4mqsGChFN0w==
 
 napi-build-utils@^1.0.1:
   version "1.0.2"
@@ -5164,10 +5168,10 @@ onetime@^5.1.0, onetime@^5.1.2:
   dependencies:
     mimic-fn "^2.1.0"
 
-openai@^4.73.1:
-  version "4.73.1"
-  resolved "https://registry.yarnpkg.com/openai/-/openai-4.73.1.tgz#532bd000d5f1a558e4fff1119da6749992ac41e4"
-  integrity sha512-nWImDJBcUsqrhy7yJScXB4+iqjzbUEgzfA3un/6UnHFdwWhjX24oztj69Ped/njABfOdLcO/F7CeWTI5dt8Xmg==
+openai@^4.76.1:
+  version "4.76.1"
+  resolved "https://registry.yarnpkg.com/openai/-/openai-4.76.1.tgz#3e844cef2f2d55814ff7c6e134700eacb7c9897b"
+  integrity sha512-ci63/WFEMd6QjjEVeH0pV7hnFS6CCqhgJydSti4Aak/8uo2SpgzKjteUDaY+OkwziVj11mi6j+0mRUIiGKUzWw==
   dependencies:
     "@types/node" "^18.11.18"
     "@types/node-fetch" "^2.6.4"
@@ -5473,13 +5477,12 @@ rc@^1.2.7:
     minimist "^1.2.0"
     strip-json-comments "~2.0.1"
 
-react-dom@^18.3.1:
-  version "18.3.1"
-  resolved "https://registry.npmjs.org/react-dom/-/react-dom-18.3.1.tgz"
-  integrity sha512-5m4nQKp+rZRb09LNH59GM4BxTh9251/ylbKIbpe7TpGxfJ+9kv6BLkLBXIjjspbgbnIBNqlI23tRnTWT0snUIw==
+react-dom@^19.0.0:
+  version "19.0.0"
+  resolved "https://registry.yarnpkg.com/react-dom/-/react-dom-19.0.0.tgz#43446f1f01c65a4cd7f7588083e686a6726cfb57"
+  integrity sha512-4GV5sHFG0e/0AD4X+ySy6UJd3jVl1iNsNHdpad0qhABJ11twS3TTBnseqsKurKcsNqCEFeGL3uLpVChpIO3QfQ==
   dependencies:
-    loose-envify "^1.1.0"
-    scheduler "^0.23.2"
+    scheduler "^0.25.0"
 
 read-pkg-up@^7.0.1:
   version "7.0.1"
@@ -5597,11 +5600,6 @@ resolve-pkg-maps@^1.0.0:
   version "1.0.0"
   resolved "https://registry.npmjs.org/resolve-pkg-maps/-/resolve-pkg-maps-1.0.0.tgz"
   integrity sha512-seS2Tj26TBVOC2NIc2rOe2y2ZO7efxITtLZcGSOnHHNOQ7CkiUBfw0Iw2ck6xkIhPwLhKNLS8BO+hEpngQlqzw==
-
-resolve.exports@^2.0.2:
-  version "2.0.2"
-  resolved "https://registry.npmjs.org/resolve.exports/-/resolve.exports-2.0.2.tgz"
-  integrity sha512-X2UW6Nw3n/aMgDVy+0rSqgHlv39WZAlZrXCdnbyEiKm17DSqHX4MmQMaST3FbeWR5FTuRcUwYAziZajji0Y7mg==
 
 resolve@^1.10.0, resolve@^1.22.1, resolve@^1.22.4, resolve@^1.22.8, resolve@~1.22.1, resolve@~1.22.2:
   version "1.22.8"
@@ -5729,12 +5727,10 @@ safe-buffer@^5.0.1, safe-buffer@~5.2.0:
   resolved "https://registry.npmjs.org/safer-buffer/-/safer-buffer-2.1.2.tgz"
   integrity sha512-YZo3K82SD7Riyi0E1EQPojLz7kpepnSQI9IyPbHHg1XXXevb5dJI7tpyN2ADxGcQbHG7vcyRHk0cbwqcQriUtg==
 
-scheduler@^0.23.2:
-  version "0.23.2"
-  resolved "https://registry.npmjs.org/scheduler/-/scheduler-0.23.2.tgz"
-  integrity sha512-UOShsPwz7NrMUqhR6t0hWjFduvOzbtv7toDH1/hIrfRNIDBnnBWd0CwJTGvTpngVlmwGCdP9/Zl/tVrDqcuYzQ==
-  dependencies:
-    loose-envify "^1.1.0"
+scheduler@^0.25.0:
+  version "0.25.0"
+  resolved "https://registry.yarnpkg.com/scheduler/-/scheduler-0.25.0.tgz#336cd9768e8cceebf52d3c80e3dcf5de23e7e015"
+  integrity sha512-xFVuu11jh+xcO7JOAGJNOXld8/TcEHK/4CituBUeUb5hqxJLj9YuemAEuvm9gQ/+pgXYfbQuqAkiYu+u7YEsNA==
 
 scslre@^0.3.0:
   version "0.3.0"
@@ -6094,10 +6090,10 @@ tar@^6.0.2, tar@^6.1.11, tar@^6.1.2:
     mkdirp "^1.0.3"
     yallist "^4.0.0"
 
-telegram-bot-api-types@^8.0.0:
-  version "8.0.0"
-  resolved "https://registry.yarnpkg.com/telegram-bot-api-types/-/telegram-bot-api-types-8.0.0.tgz#92028b09e19cc1b6c90897071bde8708cf87155d"
-  integrity sha512-6VvhhzOKBdxk9Vh3DO+XAkPiOWgxpUNGq7tqh/gsEUbzEvrzl7bczhdT8Y0b/mO3ap4ERoswK4oFldRNZey1FQ==
+telegram-bot-api-types@^8.1.0:
+  version "8.1.0"
+  resolved "https://registry.yarnpkg.com/telegram-bot-api-types/-/telegram-bot-api-types-8.1.0.tgz#1da6159ff894b0f9b8b54115521f6dcb4f97d45f"
+  integrity sha512-CaPLzYORotm7mbd8c6UKHxOcEwvgrL8MDgyRx5rC7IrYYRd1zmy8+8jsPcP8P0v3X7rAmp5ew7obNlqSBM5dKw==
 
 text-table@^0.2.0:
   version "0.2.0"
@@ -6312,15 +6308,15 @@ undici@5.28.4, undici@^5.28.4:
   dependencies:
     "@fastify/busboy" "^2.0.0"
 
-undici@^6.21.0:
-  version "6.21.0"
-  resolved "https://registry.npmjs.org/undici/-/undici-6.21.0.tgz"
-  integrity sha512-BUgJXc752Kou3oOIuU1i+yZZypyZRqNPW0vqoMPl8VaoalSfeR0D8/t4iAS3yirs79SSMTxTag+ZC86uswv+Cw==
+undici@^7.1.0:
+  version "7.1.0"
+  resolved "https://registry.yarnpkg.com/undici/-/undici-7.1.0.tgz#38efe485eef81f02d2a112121284ab15d5c5b905"
+  integrity sha512-3+mdX2R31khuLCm2mKExSlMdJsfol7bJkIMH80tdXA74W34rT1jKemUTlYR7WY3TqsV4wfOgpatWmmB2Jl1+5g==
 
-"unenv@npm:unenv-nightly@2.0.0-20241121-161142-806b5c0":
-  version "2.0.0-20241121-161142-806b5c0"
-  resolved "https://registry.yarnpkg.com/unenv-nightly/-/unenv-nightly-2.0.0-20241121-161142-806b5c0.tgz#ce8e0281d7492878daca3b9284d18fa8b765fd1c"
-  integrity sha512-RnFOasE/O0Q55gBkNB1b84OgKttgLEijGO0JCWpbn+O4XxpyCQg89NmcqQ5RGUiy4y+rMIrKzePTquQcLQF5pQ==
+"unenv@npm:unenv-nightly@2.0.0-20241204-140205-a5d5190":
+  version "2.0.0-20241204-140205-a5d5190"
+  resolved "https://registry.yarnpkg.com/unenv-nightly/-/unenv-nightly-2.0.0-20241204-140205-a5d5190.tgz#e0fd0d1315a03764f1f20fece9c8546ae8019f48"
+  integrity sha512-jpmAytLeiiW01pl5bhVn9wYJ4vtiLdhGe10oXlJBuQEX8mxjxO8BlEXGHU4vr4yEikjFP1wsomTHt/CLU8kUwg==
   dependencies:
     defu "^6.1.4"
     ohash "^1.1.4"
@@ -6465,10 +6461,10 @@ vite-plugin-dts@^4.3.0:
     local-pkg "^0.5.0"
     magic-string "^0.30.11"
 
-vite@^6.0.1:
-  version "6.0.1"
-  resolved "https://registry.yarnpkg.com/vite/-/vite-6.0.1.tgz#24c9caf24998f0598de37bed67e50ec5b9dfeaf0"
-  integrity sha512-Ldn6gorLGr4mCdFnmeAOLweJxZ34HjKnDm4HGo6P66IEqTxQb36VEdFJQENKxWjupNfoIjvRUnswjn1hpYEpjQ==
+vite@^6.0.3:
+  version "6.0.3"
+  resolved "https://registry.yarnpkg.com/vite/-/vite-6.0.3.tgz#cc01f403e326a9fc1e064235df8a6de084c8a491"
+  integrity sha512-Cmuo5P0ENTN6HxLSo6IHsjCLn/81Vgrp81oaiFFMRa8gGDj5xEjIcEpf2ZymZtZR8oU0P2JX5WuUp/rlXcHkAw==
   dependencies:
     esbuild "^0.24.0"
     postcss "^8.4.49"
@@ -6577,24 +6573,24 @@ word-wrap@^1.2.5:
   resolved "https://registry.npmjs.org/word-wrap/-/word-wrap-1.2.5.tgz"
   integrity sha512-BN22B5eaMMI9UMtjrGd5g5eCYPpCPDUy0FJXbYsaT5zYxjFOckS53SQDE3pWkVoWpHXVb3BrYcEN4Twa55B5cA==
 
-workerd@1.20241106.1:
-  version "1.20241106.1"
-  resolved "https://registry.npmjs.org/workerd/-/workerd-1.20241106.1.tgz"
-  integrity sha512-1GdKl0kDw8rrirr/ThcK66Kbl4/jd4h8uHx5g7YHBrnenY5SX1UPuop2cnCzYUxlg55kPjzIqqYslz1muRFgFw==
+workerd@1.20241205.0:
+  version "1.20241205.0"
+  resolved "https://registry.yarnpkg.com/workerd/-/workerd-1.20241205.0.tgz#db66f5ef2c0b7c5ddd993b22e4c8cc9b446d72b6"
+  integrity sha512-vso/2n0c5SdBDWiD+Sx5gM7unA6SiZXRVUHDqH1euoP/9mFVHZF8icoYsNLB87b/TX8zNgpae+I5N/xFpd9v0g==
   optionalDependencies:
-    "@cloudflare/workerd-darwin-64" "1.20241106.1"
-    "@cloudflare/workerd-darwin-arm64" "1.20241106.1"
-    "@cloudflare/workerd-linux-64" "1.20241106.1"
-    "@cloudflare/workerd-linux-arm64" "1.20241106.1"
-    "@cloudflare/workerd-windows-64" "1.20241106.1"
+    "@cloudflare/workerd-darwin-64" "1.20241205.0"
+    "@cloudflare/workerd-darwin-arm64" "1.20241205.0"
+    "@cloudflare/workerd-linux-64" "1.20241205.0"
+    "@cloudflare/workerd-linux-arm64" "1.20241205.0"
+    "@cloudflare/workerd-windows-64" "1.20241205.0"
 
-wrangler@^3.91.0:
-  version "3.91.0"
-  resolved "https://registry.yarnpkg.com/wrangler/-/wrangler-3.91.0.tgz#d3839bb02a704549a403017ba29473885b15660c"
-  integrity sha512-Hdzn6wbY9cz5kL85ZUvWLwLIH7nPaEVRblfms40jhRf4qQO/Zf74aFlku8rQFbe8/2aVZFaxJVfBd6JQMeMSBQ==
+wrangler@^3.95.0:
+  version "3.95.0"
+  resolved "https://registry.yarnpkg.com/wrangler/-/wrangler-3.95.0.tgz#920af5dba125263ab58f4bf9affc01bf425f0dda"
+  integrity sha512-3w5852i3FNyDz421K2Qk4v5L8jjwegO5O8E1+VAQmjnm82HFNxpIRUBq0bmM7CTLvOPI/Jjcmj/eAWjQBL7QYg==
   dependencies:
     "@cloudflare/kv-asset-handler" "0.3.4"
-    "@cloudflare/workers-shared" "0.9.0"
+    "@cloudflare/workers-shared" "0.11.0"
     "@esbuild-plugins/node-globals-polyfill" "^0.2.3"
     "@esbuild-plugins/node-modules-polyfill" "^0.2.2"
     blake3-wasm "^2.1.5"
@@ -6602,15 +6598,14 @@ wrangler@^3.91.0:
     date-fns "^4.1.0"
     esbuild "0.17.19"
     itty-time "^1.0.6"
-    miniflare "3.20241106.1"
+    miniflare "3.20241205.0"
     nanoid "^3.3.3"
     path-to-regexp "^6.3.0"
     resolve "^1.22.8"
-    resolve.exports "^2.0.2"
     selfsigned "^2.0.1"
     source-map "^0.6.1"
-    unenv "npm:unenv-nightly@2.0.0-20241121-161142-806b5c0"
-    workerd "1.20241106.1"
+    unenv "npm:unenv-nightly@2.0.0-20241204-140205-a5d5190"
+    workerd "1.20241205.0"
     xxhash-wasm "^1.0.1"
   optionalDependencies:
     fsevents "~2.3.2"

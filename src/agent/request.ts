@@ -138,8 +138,9 @@ export async function streamHandler(stream: AsyncIterable<any>, contentExtractor
 
     let contentFull = '';
     let lengthDelta = 0;
-    let updateStep = 5;
+    let updateStep = 10;
     let lastChunk = '';
+    const maxLength = 10_000;
 
     const immediatePromise = Promise.resolve('[PROMISE DONE]');
     let sendPromise: Promise<any> | null = null;
@@ -165,7 +166,7 @@ export async function streamHandler(stream: AsyncIterable<any>, contentExtractor
                 }
 
                 lengthDelta = 0;
-                updateStep += 20;
+                updateStep = Math.min(updateStep + 40, maxLength);
                 sendPromise = onStream.send(`${contentFull}●`);
             }
         }

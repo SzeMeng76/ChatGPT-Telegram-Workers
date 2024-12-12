@@ -1,5 +1,4 @@
 import type { CoreMessage } from 'ai';
-import type { ChosenInlineResult, Message } from 'telegram-bot-api-types';
 import type * as Telegram from 'telegram-bot-api-types';
 import type { WorkerContext } from '../../config/context';
 import type { TelegramBotAPI } from '../api';
@@ -25,13 +24,13 @@ import { CallbackQueryContext, ChosenInlineWorkerContext, InlineQueryContext } f
 
 interface answerInlineQuery {
     type: string;
-    handler: (chosenInline: ChosenInlineResult, context: ChosenInlineWorkerContext) => Promise<Response>;
-    handlerQuestion: (chosenInline: ChosenInlineResult, context: ChosenInlineWorkerContext, sender: MessageSender) => Promise<string>;
+    handler: (chosenInline: Telegram.ChosenInlineResult, context: ChosenInlineWorkerContext) => Promise<Response>;
+    handlerQuestion: (chosenInline: Telegram.ChosenInlineResult, context: ChosenInlineWorkerContext, sender: MessageSender) => Promise<string>;
 }
 
 export class AnswerChatInlineQuery implements answerInlineQuery {
     type = ':c';
-    handler = async (chosenInline: ChosenInlineResult, context: ChosenInlineWorkerContext): Promise<Response> => {
+    handler = async (chosenInline: Telegram.ChosenInlineResult, context: ChosenInlineWorkerContext): Promise<Response> => {
         const sender = ChosenInlineSender.from(context.botToken, chosenInline);
         const question = await this.handlerQuestion(chosenInline, context, sender as unknown as MessageSender);
         if (!question) {
@@ -59,10 +58,10 @@ export class AnswerChatInlineQuery implements answerInlineQuery {
         }
     };
 
-    handlerQuestion = async (chosenInline: ChosenInlineResult, context: ChosenInlineWorkerContext, sender: MessageSender): Promise<string> => {
+    handlerQuestion = async (chosenInline: Telegram.ChosenInlineResult, context: ChosenInlineWorkerContext, sender: MessageSender): Promise<string> => {
         const question = chosenInline.query.substring(0, chosenInline.query.length - 1).trim();
         // simulate message and substitute words
-        const message = { text: question } as unknown as Message;
+        const message = { text: question } as unknown as Telegram.Message;
         SubstituteWords(message);
         if (message.text?.startsWith('/set ')) {
             const resp = await new SetCommandHandler().handle(message, message.text.substring(5).trim(), context as unknown as WorkerContext, sender);

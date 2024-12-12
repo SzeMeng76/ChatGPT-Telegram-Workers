@@ -76,7 +76,7 @@ export class UpstashRedis {
     async put(key: string, value: any, info: any) {
         const data = ['set', key, value];
         if (info?.expiration) {
-            data.push(...['pxat', info.expiration]);
+            data.push(...['exat', info.expiration]);
         } else if (info?.expirationTtl) {
             data.push(...['ex', info.expirationTtl]);
         }
