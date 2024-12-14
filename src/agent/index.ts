@@ -122,7 +122,7 @@ export function customInfo(config: AgentUserConfig): string {
         SEND_IMAGE_AS_FILE: ENV.SEND_IMAGE_AS_FILE,
         SUPPORT_PROMPT_ROLE: Object.keys(config.PROMPT).join('|'),
         // DISABLE_WEB_PREVIEW: ENV.DISABLE_WEB_PREVIEW,
-        VERTEX_SEARCH_GROUNDING: config.VERTEX_SEARCH_GROUNDING,
+        SEARCH_GROUNDING: config.SEARCH_GROUNDING,
         TEXT_OUTPUT: config.TEXT_OUTPUT,
         TEXT_HANDLE_TYPE: config.TEXT_HANDLE_TYPE,
         AUDIO_OUTPUT: config.AUDIO_OUTPUT,
@@ -145,7 +145,7 @@ export async function warpLLMParams(params: { messages: CoreMessage[]; model: La
 
     let activeTools = tool?.activeToolAlias.map(t => tools[t].schema.name);
     // if vertex use search grounding, do not use other tools
-    if (params.model.provider === 'google-vertex' && context.VERTEX_SEARCH_GROUNDING) {
+    if (params.model.provider === 'google-vertex' && context.SEARCH_GROUNDING) {
         activeTools = undefined;
         tool = undefined;
         // only use first system message and last user message
@@ -206,6 +206,7 @@ export async function createLlmModel(model: string, context: AgentUserConfig) {
                     { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
                     { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
                 ],
+                useSearchGrounding: context.SEARCH_GROUNDING,
             });
         case 'cohere':
             return createCohere({
@@ -225,8 +226,12 @@ export async function createLlmModel(model: string, context: AgentUserConfig) {
             }).languageModel(model_id, {
                 safetySettings: [
                     { category: 'HARM_CATEGORY_UNSPECIFIED', threshold: 'BLOCK_NONE' },
+                    { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
+                    { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
+                    { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
+                    { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
                 ],
-                useSearchGrounding: context.VERTEX_SEARCH_GROUNDING,
+                useSearchGrounding: context.SEARCH_GROUNDING,
             });
         case 'xai':
             return createXai({

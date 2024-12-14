@@ -330,7 +330,7 @@ export class VertexConfig {
     // Vertex Vision Model
     VERTEX_VISION_MODEL = 'gemini-1.5-flash-002';
     // when use search grounding, do not use other tools at the same time, otherwise errors occur.
-    VERTEX_SEARCH_GROUNDING = false;
+    SEARCH_GROUNDING = false;
 }
 
 export class XAIConfig {

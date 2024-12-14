@@ -2,7 +2,7 @@ import type { CoreUserMessage } from 'ai';
 import type { AgentUserConfig } from '../config/env';
 import type { ChatAgent, ChatStreamTextHandler, LLMChatParams, LLMChatRequestParams, ResponseMessage } from './types';
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
-import { warpLLMParams } from '.';
+import { createLlmModel, warpLLMParams } from '.';
 import { requestChatCompletionsV2 } from './request';
 
 export class Google implements ChatAgent {
@@ -25,12 +25,8 @@ export class Google implements ChatAgent {
     };
 
     readonly request = async (params: LLMChatParams, context: AgentUserConfig, onStream: ChatStreamTextHandler | null): Promise<{ messages: ResponseMessage[]; content: string }> => {
-        const provider = createGoogleGenerativeAI({
-            baseURL: context.GOOGLE_API_BASE,
-            apiKey: context.GOOGLE_API_KEY || undefined,
-        });
         const userMessage = params.messages.at(-1) as CoreUserMessage;
-        const languageModelV1 = provider.languageModel(this.model(context, userMessage), undefined);
+        const languageModelV1 = await createLlmModel(this.model(context, userMessage), context);
         return requestChatCompletionsV2(await warpLLMParams({
             model: languageModelV1,
             messages: params.messages,
