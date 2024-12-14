@@ -6,7 +6,7 @@ import type { AgentUserConfig } from '../../config/env';
 import type { ChosenInlineSender } from '../utils/send';
 import type { UnionData } from '../utils/utils';
 import type { MessageHandler } from './types';
-import { APICallError, type FilePart, type TextPart, type ToolResultPart, UserContent } from 'ai';
+import { APICallError, type FilePart, type TextPart, type ToolResultPart } from 'ai';
 import { loadASRLLM, loadChatLLM, loadImageGen, loadTTSLLM } from '../../agent';
 import { loadHistory, requestCompletionsFromLLM } from '../../agent/chat';
 import { ENV } from '../../config/env';

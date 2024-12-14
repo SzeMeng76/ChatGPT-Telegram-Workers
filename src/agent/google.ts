@@ -1,7 +1,6 @@
 import type { CoreUserMessage } from 'ai';
 import type { AgentUserConfig } from '../config/env';
 import type { ChatAgent, ChatStreamTextHandler, LLMChatParams, LLMChatRequestParams, ResponseMessage } from './types';
-import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { createLlmModel, warpLLMParams } from '.';
 import { requestChatCompletionsV2 } from './request';
 

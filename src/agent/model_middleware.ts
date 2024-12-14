@@ -72,7 +72,6 @@ export function AIMiddleware({ config, activeTools, onStream, toolChoice, messag
             log.debug('step text:', text);
             log.debug('step raw request:', request);
             // log.debug('step raw response:', response);
-
             const time = ((Date.now() - startTime!) / 1e3).toFixed(1);
             if (toolResults.length > 0) {
                 if (toolResults.find(i => i.result === '')) {
@@ -182,5 +181,24 @@ function recordModelLog(config: AgentUserConfig, model: LanguageModelV1, activeT
         logs.tool.model = model.modelId;
     } else {
         logs.chat.model.push(model.modelId);
+    }
+}
+
+export function metaDataExtractor(metadata: any, provider: string) {
+    switch (provider) {
+        case 'google.generative-ai':
+        case 'google.vertex.chat':
+        {
+            const { groundingChunks, webSearchQueries } = metadata?.google?.groundingMetadata || {};
+            if (!groundingChunks) {
+                return '';
+            }
+            const sources = groundingChunks
+                ?.map(({ web: { title, uri } }: { web: { title: string; uri: string } }, i: number) => `[${i + 1}] [${title}](${uri})`)
+                .join('\n');
+            return `\n## Sources:\n${sources}\n## Search Query:\n${webSearchQueries || ''}`;
+        }
+        default:
+            return '';
     }
 }

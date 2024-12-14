@@ -6,7 +6,7 @@ import { createLlmModel, type ToolChoice } from '.';
 import { ENV } from '../config/env';
 import { log } from '../log/logger';
 import { manualRequestTool } from '../tools';
-import { AIMiddleware } from './model_middleware';
+import { AIMiddleware, metaDataExtractor } from './model_middleware';
 import { Stream } from './stream';
 
 export interface SseChatCompatibleOptions {
@@ -213,18 +213,21 @@ export async function requestChatCompletionsV2(params: { model: LanguageModelV1;
         });
         const contentFull = await streamHandler(stream.textStream, t => t, onStream, messageReferencer);
         onResult?.(contentFull);
+        const metadata = metaDataExtractor(await stream.experimental_providerMetadata, params.model.provider);
         await manualRequestTool((await stream.response).messages, params.context);
         return {
             messages: (await stream.response).messages,
-            content: contentFull,
+            content: contentFull + metadata,
         };
     } else {
         const result = await generateText(hander_params);
         onResult?.(result.text);
+        const metadata = metaDataExtractor(await result.experimental_providerMetadata, params.model.provider);
+
         await manualRequestTool(result.response.messages, params.context);
         return {
             messages: result.response.messages,
-            content: result.text,
+            content: result.text + metadata,
         };
     }
 }
