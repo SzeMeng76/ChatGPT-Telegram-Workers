@@ -776,18 +776,19 @@ export class KlingAICommandHandler implements CommandHandler {
             const resp = await fetch(`https://klingai.com/api/task/status?taskId=${taskId}`, {
                 headers,
             }).then(res => res.json());
-            if (resp.data?.status === 5 || resp.data?.status === 99) {
+            if ([5, 98, 99].includes(resp.data?.status)) {
                 const pics = resp.data.works.map(({ resource }: { resource: { resource: string } }) => ({
                     type: 'photo',
                     media: resource.resource,
                 })).filter((i: { media: string }) => i.media);
                 if (pics.length > 0) {
+                    sender.api.deleteMessage({ chat_id: sender.context.chat_id, message_id: sender.context.message_id! });
                     log.info(`KlingAI image urls: ${pics.map((i: { media: any }) => i.media).join(', ')}`);
                     return sender.sendMediaGroup(pics);
                 }
             } else if (resp.data?.status !== 10) {
-                console.error(resp.data.message || JSON.stringify(resp.data));
-                throw new Error(`KlingAI Task failed, see logs for more details`);
+                log.error(JSON.stringify(resp));
+                throw new Error(`${resp.data?.message || resp.message || JSON.stringify(resp)}`);
             }
             if (Date.now() - startTime > MAX_WAIT_TIME) {
                 throw new Error(`KlingAI Task timeout`);

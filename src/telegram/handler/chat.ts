@@ -66,12 +66,12 @@ export async function chatWithLLM(
             errMsg += 'Chat with LLM timeout';
         } else {
             errMsg += (e as Error).message;
-            if (e instanceof APICallError && e.responseBody) {
+            if (e instanceof APICallError && e.responseBody && errMsg === '') {
                 log.error(`error detail: ${e.responseBody}`);
                 errMsg += `\n\n${e.responseBody}`;
             }
         }
-        errMsg = errMsg.replace(context.SHARE_CONTEXT.botToken, '[REDACTED]').substring(0, 2048);
+        errMsg = errMsg.trim().replace(context.SHARE_CONTEXT.botToken, '[REDACTED]').substring(0, 2048);
         return streamSender.end!(`\`\`\`Error\n${errMsg}\n\`\`\``, false);
     }
 }
@@ -124,7 +124,10 @@ export class ChatHandler implements MessageHandler<WorkerContext> {
         if (id) {
             const api = createTelegramBotAPI(context.SHARE_CONTEXT.botToken);
             const files = await Promise.all(id.map(i => api.getFileWithReturns({ file_id: i })));
-            const paths = files.map(f => f.result.file_path).filter(Boolean) as string[];
+            const paths = files.map(f => f.result?.file_path).filter(Boolean) as string[];
+            if (paths.length === 0) {
+                throw new Error(files.map(f => (f as any).description).join('\n'));
+            }
             const urls = paths.map(p => `https://api.telegram.org/file/bot${context.SHARE_CONTEXT.botToken}/${p}`);
             log.info(`File URLs:\n${urls.join('\n')}`);
             if (urls.length > 0) {

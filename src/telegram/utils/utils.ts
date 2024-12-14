@@ -68,9 +68,14 @@ function extractTypeFromMessage(message: Telegram.Message): UnionData {
         case 'sticker':
         case 'video':
         {
+            const MAX_FILE_SIZE = 20 * 1024 * 1024; // 能直接下载的文件大小为20MB
+            const fileSize = message[msgType]?.file_size;
+            if (fileSize && fileSize > MAX_FILE_SIZE) {
+                throw new Error(`File size over limit: ${(fileSize / 1024 / 1024).toFixed(1)}MB\nThe maximum file size to download is 20 MB`);
+            }
             const id = message[msgType]?.file_id;
             if (!id) {
-                console.error('file_id not found', message);
+                throw new Error('file_id not found');
             }
             if (msgType === 'document') {
                 const testSupport = message.document?.mime_type?.match(/(audio|image|text|video)/)?.[1];

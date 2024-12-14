@@ -6,7 +6,7 @@ import type { InlineItem } from '../command/types';
 import type { MessageHandler } from '../handler/types';
 import type { MessageSender } from '../utils/send';
 import type { CallbackQueryHandler, ChosenInlineQueryHandler, InlineQueryHandler } from './types';
-import { OpenAI } from '../../agent/openai';
+import { loadChatLLM } from '../../agent';
 import { WorkerContextBase } from '../../config/context';
 import { ENV } from '../../config/env';
 import { log } from '../../log/logger';
@@ -36,7 +36,10 @@ export class AnswerChatInlineQuery implements answerInlineQuery {
         if (!question) {
             return new Response('ok');
         }
-        const agent = new OpenAI();
+        const agent = loadChatLLM(context.USER_CONFIG);
+        if (!agent) {
+            throw new Error('Agent not found');
+        }
         const isStream = chosenInline.result_id === ':c stream';
         const OnStream = OnStreamHander(sender as unknown as MessageSender, context as unknown as WorkerContext, question);
         const messages = [{ role: 'user', content: question }];
