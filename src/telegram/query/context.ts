@@ -61,7 +61,7 @@ export class ChosenInlineWorkerContext {
         this.botToken = token;
         // 模拟私聊消息
         this.MIDDLE_CONTEXT = {
-            originalMessageInfo: { type: 'text' },
+            messageInfo: { type: 'text' },
         };
         this.SHARE_CONTEXT = {
             botName: 'AI',

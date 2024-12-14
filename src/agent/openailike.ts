@@ -151,9 +151,10 @@ export class OpenAILikeTTS extends OpenAILikeBase {
                 stream: false,
             }),
         });
-        if (!resp.ok) {
-            throw new Error(await resp.text());
+        if (resp.ok) {
+            return resp.blob();
+        } else {
+            throw new Error(`${resp.status} ${resp.statusText}\n\n${await resp.text()}`);
         }
-        return resp.blob();
     };
 }

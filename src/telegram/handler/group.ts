@@ -284,14 +284,14 @@ class HandleMediaGroupMessage extends Lock {
         if (!storeMediaMessageKey) {
             return null;
         }
-        const msgInfo = context.MIDDLE_CONTEXT.originalMessageInfo;
+        const msgInfo = context.MIDDLE_CONTEXT.messageInfo;
         if (message.media_group_id && ['photo', 'image'].includes(msgInfo.type) && Array.isArray(msgInfo.id)) {
             return this.storeMediaMessage(message, storeMediaMessageKey, msgInfo);
         } else if (message.reply_to_message?.media_group_id) {
             const data: Record<string, string[]> = JSON.parse(await ENV.DATABASE.get(storeMediaMessageKey) || '{}');
             const fileIds = data[message.reply_to_message.media_group_id];
             if (fileIds) {
-                context.MIDDLE_CONTEXT.originalMessageInfo.id = fileIds;
+                context.MIDDLE_CONTEXT.messageInfo.id = fileIds;
             }
         }
         return null;

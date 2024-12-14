@@ -103,7 +103,7 @@ export class ShareContext {
 }
 
 export class MiddleContext {
-    originalMessageInfo: UnionData = { type: 'text' };
+    messageInfo: UnionData = { type: 'text' };
     history: HistoryItem[] = [];
     sender: MessageSender | null = null;
 }

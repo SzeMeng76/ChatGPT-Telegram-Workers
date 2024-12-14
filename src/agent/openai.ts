@@ -197,13 +197,13 @@ export class OpenAITTS extends OpenAIBase implements TTSAgent {
         return ctx.OPENAI_TTS_MODEL;
     };
 
-    request = (text: string, context: AgentUserConfig): Promise<Blob> => {
+    request = async (text: string, context: AgentUserConfig): Promise<Blob> => {
         const url = `${context.OPENAI_API_BASE}/audio/speech`;
         const headers = {
             'Authorization': `Bearer ${this.apikey(context)}`,
             'Content-Type': 'application/json',
         };
-        return fetch(url, {
+        const resp = await fetch(url, {
             method: 'POST',
             headers,
             body: JSON.stringify({
@@ -213,6 +213,11 @@ export class OpenAITTS extends OpenAIBase implements TTSAgent {
                 response_format: 'opus',
                 speed: 1,
             }),
-        }).then(r => r.blob());
+        });
+        if (resp.ok) {
+            return resp.blob();
+        } else {
+            throw new Error(`${resp.status} ${resp.statusText}\n\n${await resp.text()}`);
+        }
     };
 }

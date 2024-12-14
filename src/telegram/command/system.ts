@@ -747,8 +747,8 @@ export class KlingAICommandHandler implements CommandHandler {
             inputs: [] as any[],
         };
 
-        if (['image', 'photo'].includes(context.MIDDLE_CONTEXT.originalMessageInfo?.type) && context.MIDDLE_CONTEXT.originalMessageInfo.id?.[0]) {
-            const img_id = context.MIDDLE_CONTEXT.originalMessageInfo.id?.[0];
+        if (['image', 'photo'].includes(context.MIDDLE_CONTEXT.messageInfo?.type) && context.MIDDLE_CONTEXT.messageInfo.id?.[0]) {
+            const img_id = context.MIDDLE_CONTEXT.messageInfo.id?.[0];
             const img_url = await this.getFileUrl(img_id, context, headers);
             log.info(`Uploaded image url: ${img_url}`);
             body.inputs.push({ name: 'input', url: img_url, inputType: 'URL' });

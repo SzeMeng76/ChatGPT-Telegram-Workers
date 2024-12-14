@@ -99,16 +99,19 @@ export class WhiteListFilter implements MessageHandler<WorkerContextBase> {
 
 export class MessageFilter implements MessageHandler<WorkerContextBase> {
     handle = async (message: Telegram.Message, context: WorkerContextBase): Promise<Response | null> => {
-        const messageInfo = extractMessageInfo(message, context.SHARE_CONTEXT.botId);
-        const supportMessageType = ENV.ENABLE_FILE ? ['text', 'photo', 'voice', 'audio', 'image'] : ['text'];
-        if (!supportMessageType.includes(messageInfo.type)) {
-            throw new Error('Not supported message type');
-        };
-        context.MIDDLE_CONTEXT.originalMessageInfo = messageInfo;
         if (ENV.IGNORE_TEXT_PERFIX && (message.text || message.caption || '').startsWith(ENV.IGNORE_TEXT_PERFIX)) {
             log.info(`[IGNORE MESSAGE] Ignore message`);
             return new Response('success', { status: 200 });
         }
+
+        const messageInfo = extractMessageInfo(message, context.SHARE_CONTEXT.botId);
+        const supportMessageType = ENV.ENABLE_FILE === false ? ['text'] : ENV.SUPPORT_FORMAT;
+        const types = [messageInfo.original_type, messageInfo.type];
+
+        if (!types.every(type => supportMessageType.includes(type!))) {
+            throw new Error('Not supported message type');
+        };
+        context.MIDDLE_CONTEXT.messageInfo = messageInfo;
         return null;
     };
 }
@@ -133,9 +136,9 @@ export class InitUserConfig implements MessageHandler<WorkerContextBase> {
 export class StoreHistory implements MessageHandler<WorkerContext> {
     handle = async (message: Telegram.Message, context: WorkerContext): Promise<Response | null> => {
         const historyDisable = ENV.AUTO_TRIM_HISTORY && ENV.MAX_HISTORY_LENGTH <= 0;
-        const isTts = context.USER_CONFIG.TEXT_HANDLE_TYPE === 'tts';
-        const isStt = context.USER_CONFIG.AUDIO_HANDLE_TYPE === 'stt';
-        if (!historyDisable && (!isTts || !isStt)) {
+        const isTts = context.USER_CONFIG.TEXT_HANDLE_TYPE === 'tts' && message.text !== undefined;
+        const isStt = context.USER_CONFIG.AUDIO_HANDLE_TYPE === 'stt' && (message.voice !== undefined || message.audio !== undefined);
+        if (!historyDisable && !isTts && !isStt) {
             const historyKey = context.SHARE_CONTEXT.chatHistoryKey;
             const history = context.MIDDLE_CONTEXT.history;
             const userMessage = history.findLast(h => h.role === 'user');

@@ -42,8 +42,8 @@ export class Rerank {
         return result.results.map((item: any) => ({ similar: item.relevance_score, value: item.document.text }));
     };
 
-    readonly openai = async (context: any, data: string[], topN: number): Promise<RerankResult[]> => {
-        const embeddings = await new OpenaiEmbedding().request(context, data);
+    readonly openai = async (context: AgentUserConfig, data: string[], topN: number): Promise<RerankResult[]> => {
+        const embeddings = await new OpenaiEmbedding().request(data, context);
         const inputEmbeddings = embeddings[0].embed;
         return embeddings.slice(1)
             .map(({ embed, value }) => ({ similar: cosineSimilarity(inputEmbeddings, embed), value }))
@@ -52,7 +52,7 @@ export class Rerank {
     };
 
     readonly oailikeV1 = async (context: AgentUserConfig, data: string[], topN: number): Promise<RerankResult[]> => {
-        const embeddings = await new OpenAILikeEmbedding().request(context, data);
+        const embeddings = await new OpenAILikeEmbedding().request(data, context);
         const inputEmbeddings = embeddings[0].embed;
         return embeddings.slice(1)
             .map(({ embed, value }) => ({ similar: cosineSimilarity(inputEmbeddings, embed), value }))

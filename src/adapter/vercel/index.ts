@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import * as process from 'node:process';
-import { UpStashRedis } from 'cloudflare-worker-adapter/cache/upstash';
+import { UpStashRedis } from 'cf-worker-adapter/cache/upstash';
 import { ENV } from '../../config/env';
 import { createRouter } from '../../route';
 

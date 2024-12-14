@@ -5,7 +5,7 @@ import { OpenAIBase } from '../../agent/openai';
 import { OpenAILikeBase } from '../../agent/openailike';
 
 export class OpenaiEmbedding extends OpenAIBase {
-    readonly request = async (context: AgentUserConfig, data: string[]) => {
+    readonly request = async (data: string[], context: AgentUserConfig) => {
         const { embeddings, values } = await embedMany({
             model: createOpenAI({
                 baseURL: context.OPENAI_API_BASE,
@@ -48,7 +48,7 @@ export class JinaEmbedding {
 }
 
 export class OpenAILikeEmbedding extends OpenAILikeBase {
-    readonly request = async (context: AgentUserConfig, data: string[]) => {
+    readonly request = async (data: string[], context: AgentUserConfig) => {
         const { embeddings, values } = await embedMany({
             model: createOpenAI({
                 baseURL: context.OAILIKE_API_BASE,

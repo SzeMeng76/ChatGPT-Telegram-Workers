@@ -138,7 +138,7 @@ export async function streamHandler(stream: AsyncIterable<any>, contentExtractor
 
     let contentFull = '';
     let lengthDelta = 0;
-    let updateStep = 10;
+    let updateStep = 5;
     let lastChunk = '';
     const maxLength = 10_000;
 

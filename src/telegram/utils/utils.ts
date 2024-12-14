@@ -9,6 +9,7 @@ export function isTelegramChatTypeGroup(type: string): boolean {
 type MsgType = 'text' | 'photo' | 'voice' | 'image' | 'audio' | 'document' | 'sticker' | 'video' | 'animation' | 'unknown' | 'unsupported';
 export interface UnionData {
     type: MsgType;
+    original_type?: MsgType;
     mime_type?: string;
     media_group_id?: string;
     text?: string;
@@ -37,10 +38,11 @@ export function extractMessageInfo(message: Telegram.Message, currentBotId: numb
 }
 
 function extractTypeFromMessage(message: Telegram.Message): UnionData {
-    const msgTypes: string[] = ['text', 'photo', 'voice', 'document', 'audio', 'animation', 'sticker'];
+    const msgTypes: string[] = ['text', 'photo', 'voice', 'document', 'audio', 'animation', 'sticker', 'video'];
     const msgType = Object.keys(message).find(t => msgTypes.includes(t));
     const typeInfo = {
         type: msgType ?? 'unknown',
+        original_type: msgType ?? 'unknown',
     } as UnionData;
 
     switch (msgType) {
@@ -54,6 +56,7 @@ function extractTypeFromMessage(message: Telegram.Message): UnionData {
             }
             return {
                 type: msgType,
+                original_type: 'photo',
                 id: file_id ? [file_id] : undefined,
                 media_group_id: message.media_group_id,
             };
@@ -63,17 +66,19 @@ function extractTypeFromMessage(message: Telegram.Message): UnionData {
         case 'voice':
         case 'animation':
         case 'sticker':
+        case 'video':
         {
             const id = message[msgType]?.file_id;
             if (!id) {
                 console.error('file_id not found', message);
             }
             if (msgType === 'document') {
-                const testSupport = message.document?.mime_type?.match(/(audio|image)/)?.[1];
+                const testSupport = message.document?.mime_type?.match(/(audio|image|text|video)/)?.[1];
                 testSupport && (typeInfo.type = testSupport as UnionData['type']);
             }
             return {
-                type: msgType,
+                type: typeInfo.type,
+                original_type: msgType,
                 id: id ? [id] : undefined,
                 media_group_id: message.media_group_id,
             };

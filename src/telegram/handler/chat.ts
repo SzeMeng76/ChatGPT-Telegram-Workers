@@ -1,5 +1,4 @@
 /* eslint-disable unused-imports/no-unused-vars */
-import type { ReadableStream as WebReadableStream } from 'node:stream/web';
 import type * as Telegram from 'telegram-bot-api-types';
 import type { ChatStreamTextHandler, HistoryModifier, ImageResult, LLMChatRequestParams } from '../../agent/types';
 import type { WorkerContext } from '../../config/context';
@@ -7,7 +6,7 @@ import type { AgentUserConfig } from '../../config/env';
 import type { ChosenInlineSender } from '../utils/send';
 import type { UnionData } from '../utils/utils';
 import type { MessageHandler } from './types';
-import { APICallError, type FilePart, type TextPart, type ToolResultPart } from 'ai';
+import { APICallError, type FilePart, type TextPart, type ToolResultPart, UserContent } from 'ai';
 import { loadASRLLM, loadChatLLM, loadImageGen, loadTTSLLM } from '../../agent';
 import { loadHistory, requestCompletionsFromLLM } from '../../agent/chat';
 import { ENV } from '../../config/env';
@@ -15,7 +14,7 @@ import { clearLog, getLog, logSingleton } from '../../log/logDecortor';
 import { log } from '../../log/logger';
 import { sendToolResult } from '../../tools';
 import { imageToBase64String } from '../../utils/image';
-import { OggToMp3Converter } from '../../utils/others/audio';
+import { convertOgaToMp3 } from '../../utils/others/audio';
 import { createTelegramBotAPI } from '../api';
 import { escape } from '../utils/md2tgmd';
 import { MessageSender, sendAction, TelegraphSender } from '../utils/send';
@@ -88,7 +87,7 @@ export class ChatHandler implements MessageHandler<WorkerContext> {
         const sender = MessageSender.from(context.SHARE_CONTEXT.botToken, message);
         const streamSender = await messageInitialize(sender, context, message);
         try {
-            log.info(`message type: ${context.MIDDLE_CONTEXT.originalMessageInfo.type}`);
+            log.info(`message type: ${context.MIDDLE_CONTEXT.messageInfo.type}`);
             await this.initializeHistory(context);
 
             // 处理原始消息
@@ -116,13 +115,13 @@ export class ChatHandler implements MessageHandler<WorkerContext> {
         message: Telegram.Message,
         context: WorkerContext,
     ): Promise<LLMChatRequestParams> {
-        const { type, id } = context.MIDDLE_CONTEXT.originalMessageInfo;
+        const { type, id } = context.MIDDLE_CONTEXT.messageInfo;
         const params: LLMChatRequestParams = {
             role: 'user',
             content: message.text || message.caption || '',
         };
 
-        if (type !== 'text' && id) {
+        if (id) {
             const api = createTelegramBotAPI(context.SHARE_CONTEXT.botToken);
             const files = await Promise.all(id.map(i => api.getFileWithReturns({ file_id: i })));
             const paths = files.map(f => f.result.file_path).filter(Boolean) as string[];
@@ -135,32 +134,84 @@ export class ChatHandler implements MessageHandler<WorkerContext> {
                         type: 'text',
                         text: message.text || message.caption || '',
                     });
-                }
-                if (type === 'image' || type === 'photo') {
-                    const isUrl = ENV.TELEGRAM_IMAGE_TRANSFER_MODE === 'url';
-                    for (const url of urls) {
-                        const { data, format } = isUrl ? { data: url, format: 'image/jpeg' } : await imageToBase64String(url);
-                        params.content.push({
-                            type: 'image',
-                            image: data,
-                            mimeType: format,
-                        });
-                    }
-                } else if (type === 'audio' || type === 'voice') {
-                    const isChat = context.USER_CONFIG.AUDIO_HANDLE_TYPE === 'chat';
-                    let audioData = urls[0];
-                    if (isChat) {
-                        const response = await fetch(urls[0]);
-                        if (!response.body) {
-                            throw new Error('Failed to fetch audio data');
-                        }
-                        audioData = await new OggToMp3Converter(response.body as WebReadableStream, 'base64').convert() as string;
-                    }
+                } else {
                     params.content.push({
-                        type: 'file',
-                        data: audioData,
-                        mimeType: 'audio/mpeg',
+                        type: 'text',
+                        text: type === 'sticker' ? 'User sent a sticker to respond to you' : `Please explain the ${type}`,
                     });
+                }
+                switch (type) {
+                    case 'image':
+                    case 'photo':
+                    {
+                        const isUrl = ENV.TELEGRAM_IMAGE_TRANSFER_MODE === 'url';
+                        for (const url of urls) {
+                            const { data, format } = isUrl ? { data: url, format: `image/${url.split('.').pop()}` } : await imageToBase64String(url);
+                            params.content.push({
+                                type: 'image',
+                                image: data,
+                                mimeType: format,
+                            });
+                        }
+                        break;
+                    }
+                    case 'sticker':
+                    {
+                        const isUrl = ENV.TELEGRAM_IMAGE_TRANSFER_MODE === 'url';
+                        const format = urls[0].split('.').pop();
+                        if (format === 'webm') {
+                            params.content.push({
+                                type: 'file',
+                                data: urls[0],
+                                mimeType: 'video/webm',
+                            });
+                        } else {
+                            const { data, format: mimeType } = isUrl ? { data: urls[0], format: `image/${format}` } : await imageToBase64String(urls[0]);
+                            params.content.push({
+                                type: 'image',
+                                image: data,
+                                mimeType,
+                            });
+                        }
+                        break;
+                    }
+                    case 'audio':
+                    case 'voice':
+                    {
+                        const isChat = context.USER_CONFIG.AUDIO_HANDLE_TYPE === 'chat';
+                        let audioData = urls[0];
+                        if (isChat && context.USER_CONFIG.AI_PROVIDER === 'openai') {
+                            const response = await fetch(urls[0]);
+                            if (!response.body) {
+                                throw new Error('Failed to fetch audio data');
+                            }
+                            audioData = await convertOgaToMp3(response, 'base64') as string;
+                        }
+                        params.content.push({
+                            type: 'file',
+                            data: audioData,
+                            mimeType: `audio/${audioData.split('.').pop()}`,
+                        });
+                        break;
+                    }
+                    case 'text':
+                    {
+                        const text = await Promise.all(urls.map(url => fetch(url).then(r => r.text()))).then(t => t.join('\n'));
+                        params.content = [
+                            {
+                                type: 'text',
+                                text: `${message.text || message.caption}\n${text}`.trim(),
+                            },
+                        ];
+                        break;
+                    }
+                    case 'video':
+                        params.content.push({
+                            type: 'file',
+                            data: urls[0],
+                            mimeType: `video/${urls[0].split('.').pop()}`,
+                        });
+                        break;
                 }
             }
         }
@@ -298,15 +349,17 @@ type WorkflowHandler = (
 
 function workflowHandlers(type: string): WorkflowHandler {
     switch (type) {
-        case 'text:text':
-        case 'text:audio':
-        case 'tts:text':
-        case 'tts:audio':
-        case 'image:text':
-        case 'photo:text':
-        case 'chat:text':
-        case 'chat:audio':
-            return handleText;
+        // case 'text:text':
+        // case 'text:audio':
+        // case 'tts:text':
+        // case 'tts:audio':
+        // case 'image:text':
+        // case 'photo:text':
+        // case 'chat:text':
+        // case 'chat:audio':
+        // case 'sticker:text':
+        // case 'video:text':
+        //     return handleText;
         case 'text:image':
             return handleTextToImage;
         case 'audio:audio':
@@ -315,7 +368,7 @@ function workflowHandlers(type: string): WorkflowHandler {
         case 'stt:audio':
             return handleAudio;
         default:
-            throw new Error(`Unsupported message type: ${type}`);
+            return handleText;
     }
 }
 
@@ -325,7 +378,7 @@ async function workflow(
     params: LLMChatRequestParams,
     streamSender: ChatStreamTextHandler,
 ): Promise<Response | Blob | string> {
-    const msgType = context.MIDDLE_CONTEXT.originalMessageInfo.type;
+    const msgType = context.MIDDLE_CONTEXT.messageInfo.type;
     let handlerKey = `${msgType}:`;
     if (msgType === 'text') {
         handlerKey = `${context.USER_CONFIG.TEXT_HANDLE_TYPE}:${context.USER_CONFIG.TEXT_OUTPUT}`;
@@ -396,7 +449,7 @@ async function handleAudio(
     if (handleKey === 'audio:text' || !ENV.HIDE_MIDDLE_MESSAGE) {
         await sender.sendRichText(`${getLog(context.USER_CONFIG, false, false)}\n> \n${text}`);
     }
-    if (handleKey === 'stt:text') {
+    if (handleKey.startsWith('stt')) {
         return new Response('audio handle done');
     }
     clearLog(context.USER_CONFIG);
@@ -480,7 +533,9 @@ async function asr(audio: Blob, config: AgentUserConfig) {
         throw new Error('ASR agent not found');
     }
     if (agent.name === 'oailike') {
-        audio = await new OggToMp3Converter(audio, 'blob').convert() as Blob;
+        const start = Date.now();
+        audio = await convertOgaToMp3(audio, 'blob') as Blob;
+        log.info(`transform audio time: ${((Date.now() - start) / 1000).toFixed(2)}s`);
     }
     return agent.request(audio, config);
 }

@@ -78,7 +78,12 @@ export class EnvironmentConfig {
     // -------------
 
     // Whether to read files
+    /**
+     * @deprecated Use a higher granularity parameter SUPPORT_FORMAT.
+     */
     ENABLE_FILE = true;
+    // Supported file formats: text, photo, voice, audio, video(based on model support), document(send image、audio、text as file), sticker(gif, jpg, png, webp, webm as video)
+    SUPPORT_FORMAT: string[] = ['text', 'photo', 'voice', 'audio'];
     // In group chats, the reply object is the trigger object by default, and when enabled, it is prioritized as the object to be replied to
     ENABLE_REPLY_TO_MENTION = false;
     // Ignore messages starting with specified text

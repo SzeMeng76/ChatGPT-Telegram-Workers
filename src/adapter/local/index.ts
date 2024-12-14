@@ -1,9 +1,9 @@
 import type { GetUpdatesResponse } from 'telegram-bot-api-types';
 import type { TelegramBotAPI } from '../../telegram/api';
 import * as fs from 'node:fs';
-import { createCache } from 'cloudflare-worker-adapter/cache';
-import { installFetchProxy } from 'cloudflare-worker-adapter/proxy';
-import { defaultRequestBuilder, initEnv, startServerV2 } from 'cloudflare-worker-adapter/serve';
+import { createCache } from 'cf-worker-adapter/cache';
+import { installFetchProxy } from 'cf-worker-adapter/proxy';
+import { defaultRequestBuilder, initEnv, startServerV2 } from 'cf-worker-adapter/serve';
 import { schedule } from 'node-cron';
 import worker from '../../';
 import { ENV } from '../../config/env';
