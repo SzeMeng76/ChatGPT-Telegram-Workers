@@ -217,9 +217,9 @@ class Lock {
         // if (lock && lock.expiration < Math.floor(Date.now() / 1000)) {
         //     await ENV.DATABASE.delete(this.lockKey);
         // }
-        while (retry < 5) {
-            await new Promise(resolve => setTimeout(resolve, 100 * retry));
-            const lock = await ENV.DATABASE.put(this.lockKey, '1', { expirationTtl: 5, condition: 'NX' });
+        while (retry < 24) {
+            await new Promise(resolve => setTimeout(resolve, 50));
+            const lock = await ENV.DATABASE.put(this.lockKey, '1', { expirationTtl: 1, condition: 'NX' });
             if (lock === true || lock === undefined) {
                 log.info(`Lock success, key: ${this.lockKey}, retry: ${retry}`);
                 return;
