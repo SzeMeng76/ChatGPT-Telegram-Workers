@@ -103,19 +103,14 @@ export class MessageFilter implements MessageHandler<WorkerContextBase> {
             log.info(`[IGNORE MESSAGE] Ignore message`);
             return new Response('success', { status: 200 });
         }
-        try {
-            const messageInfo = extractMessageInfo(message, context.SHARE_CONTEXT.botId);
-            const supportMessageType = ENV.ENABLE_FILE === false ? ['text'] : ENV.SUPPORT_FORMAT;
-            const types = [messageInfo.original_type, messageInfo.type];
-            if (!types.every(type => supportMessageType.includes(type!))) {
-                log.error(`[MESSAGE FILTER] Not supported message type: ${types.join(', ')}`);
-                return new Response('success', { status: 200 });
-            }
-            context.MIDDLE_CONTEXT.messageInfo = messageInfo;
-        } catch (e) {
-            const sender = MessageSender.from(context.SHARE_CONTEXT.botToken, message);
-            return sender.sendRichText(`\`\`\`Error\n${(e as Error).message}\n\`\`\``, 'MarkdownV2', 'tip');
+        const messageInfo = extractMessageInfo(message, context.SHARE_CONTEXT.botId);
+        const supportMessageType = ENV.ENABLE_FILE === false ? ['text'] : ENV.SUPPORT_FORMAT;
+        const types = [messageInfo.original_type, messageInfo.type];
+        if (!types.every(type => supportMessageType.includes(type!))) {
+            log.error(`[MESSAGE FILTER] Not supported message type: ${types.join(', ')}`);
+            return new Response('success', { status: 200 });
         }
+        context.MIDDLE_CONTEXT.messageInfo = messageInfo;
         return null;
     };
 }
