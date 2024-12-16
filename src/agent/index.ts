@@ -180,6 +180,13 @@ export async function createLlmModel(model: string, context: AgentUserConfig) {
     if (!model_id) {
         model_id = context[`${agent.toUpperCase()}_CHAT_MODEL`];
     }
+    const GOOGLE_SAFETY = [
+        { category: 'HARM_CATEGORY_UNSPECIFIED', threshold: 'BLOCK_NONE' },
+        { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
+        { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
+        { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
+        { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' }];
+
     switch (agent) {
         case 'openai':
         case 'gpt':
@@ -200,12 +207,7 @@ export async function createLlmModel(model: string, context: AgentUserConfig) {
                 baseURL: context.GOOGLE_API_BASE,
                 apiKey: context.GOOGLE_API_KEY || undefined,
             }).languageModel(model_id, {
-                safetySettings: [
-                    { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_LOW_AND_ABOVE' },
-                    { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
-                    { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
-                    { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
-                ],
+                safetySettings: GOOGLE_SAFETY,
                 useSearchGrounding: context.SEARCH_GROUNDING,
             });
         case 'cohere':
@@ -224,13 +226,7 @@ export async function createLlmModel(model: string, context: AgentUserConfig) {
                     credentials: context.VERTEX_CREDENTIALS,
                 },
             }).languageModel(model_id, {
-                safetySettings: [
-                    { category: 'HARM_CATEGORY_UNSPECIFIED', threshold: 'BLOCK_NONE' },
-                    { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
-                    { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
-                    { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
-                    { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
-                ],
+                safetySettings: GOOGLE_SAFETY,
                 useSearchGrounding: context.SEARCH_GROUNDING,
             });
         case 'xai':
