@@ -132,25 +132,6 @@ export class InitUserConfig implements MessageHandler<WorkerContextBase> {
     };
 }
 
-export class StoreHistory implements MessageHandler<WorkerContext> {
-    handle = async (message: Telegram.Message, context: WorkerContext): Promise<Response | null> => {
-        const historyDisable = ENV.AUTO_TRIM_HISTORY && ENV.MAX_HISTORY_LENGTH <= 0;
-        const isTts = context.USER_CONFIG.TEXT_HANDLE_TYPE === 'tts' && message.text !== undefined;
-        const isStt = context.USER_CONFIG.AUDIO_HANDLE_TYPE === 'stt' && (message.voice !== undefined || message.audio !== undefined);
-        if (!historyDisable && !isTts && !isStt) {
-            const historyKey = context.SHARE_CONTEXT.chatHistoryKey;
-            const history = context.MIDDLE_CONTEXT.history;
-            const userMessage = history.findLast(h => h.role === 'user');
-            if (ENV.HISTORY_IMAGE_PLACEHOLDER && Array.isArray(userMessage?.content) && userMessage.content.length > 0) {
-                userMessage.content = userMessage.content.map(c => c.type === 'text' ? c.text : `[${c.type}]`).join('\n');
-            }
-            await ENV.DATABASE.put(historyKey, JSON.stringify(history)).catch(console.error);
-            log.info(`[STORE HISTORY] DONE`);
-        }
-        return null;
-    };
-}
-
 export class TagNeedDelete implements MessageHandler<WorkerContext> {
     handle = async (message: Telegram.Message, context: WorkerContext): Promise<Response | null> => {
         // 未记录消息
@@ -160,7 +141,7 @@ export class TagNeedDelete implements MessageHandler<WorkerContext> {
         }
         const botName = context.SHARE_CONTEXT?.botName;
         if (!botName) {
-            throw new Error('未检索到Bot Name, 无法设定定时删除.');
+            throw new Error('Cannot find Bot Name, cannot set scheduled deletion.');
         }
 
         const chatId = message.chat.id;

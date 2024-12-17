@@ -14,7 +14,6 @@ import {
     MessageFilter,
     OldMessageFilter,
     SaveLastMessage,
-    StoreHistory,
     TagNeedDelete,
     WhiteListFilter,
 } from './handlers';
@@ -71,8 +70,6 @@ async function handleMessage(token: string, message: Telegram.Message, isForward
         new CheckForwarding(),
         // 与llm聊天
         new ChatHandler(),
-        // 缓存历史记录
-        new StoreHistory(),
     ];
     // 延迟初始化用户配置
     const context = new WorkerContextBase(token, message);

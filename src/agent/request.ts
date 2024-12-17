@@ -167,7 +167,7 @@ export async function streamHandler(stream: AsyncIterable<any>, contentExtractor
 
                 lengthDelta = 0;
                 updateStep = Math.min(updateStep + 40, maxLength);
-                sendPromise = onStream.send(`${contentFull}●`);
+                sendPromise = onStream.send(`${contentFull.trimEnd()}●`);
             }
         }
         contentFull += lastChunk;
@@ -176,7 +176,7 @@ export async function streamHandler(stream: AsyncIterable<any>, contentExtractor
             throw e;
         }
         console.error((e as Error).message);
-        contentFull += `\nERROR: ${(e as Error).message}`;
+        contentFull += `\n\n\`\`\`Error\n${(e as Error).message}\n\`\`\``;
     }
 
     await sendPromise;

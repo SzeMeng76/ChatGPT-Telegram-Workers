@@ -59,10 +59,8 @@ export class EnvironmentConfig {
 
     // -- 历史记录相关 --
     //
-    // 为了避免4096字符限制，将消息删减
+    // 是否自动裁剪历史记录
     AUTO_TRIM_HISTORY = true;
-    // 最大历史记录长度
-    MAX_HISTORY_LENGTH = 12;
     // Image占位符: 当此环境变量存在时，则历史记录中的图片将被替换为此占位符
     HISTORY_IMAGE_PLACEHOLDER: string | null = '[A IMAGE]';
 
@@ -421,4 +419,6 @@ export class ExtraUserConfig {
     // Cover message role, the key is the model name, separated by commas, and the value is overridden_role:new_role.
     // example: COVER_MESSAGE_ROLE = { 'o1-mini,o1-preview': 'system:user' };
     COVER_MESSAGE_ROLE: Record<string, string> = {};
+    // 最大历史记录长度 默认12 超过时会自动裁剪
+    MAX_HISTORY_LENGTH = 12;
 }

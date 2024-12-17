@@ -1,5 +1,5 @@
 /* eslint-disable unused-imports/no-unused-vars */
-/* eslint-disable no-eval */
+
 import type { ToolCallPart, ToolResultPart } from 'ai';
 import type { ResponseMessage } from '../agent/types';
 import type { AgentUserConfig } from '../config/env';
@@ -11,7 +11,6 @@ import { ENV } from '../config/env';
 import { log } from '../log/logger';
 import { interpolate } from '../plugins/interpolate';
 import { sendImages } from '../telegram/handler/chat';
-import { isCfWorker } from '../telegram/utils/utils';
 import externalTools from './external';
 import internalTools from './internal';
 import { processHtmlText, webCrawler } from './internal/web';
@@ -63,12 +62,12 @@ export function executeTool(toolName: string) {
             let result = data;
             const handler = tools[toolName].handler;
             switch (handler?.type) {
-                case 'function':
-                    if (!isCfWorker && handler.data) {
-                        const f = eval(handler.data);
-                        result = f(data);
-                    }
-                    break;
+                // case 'function':
+                //     if (!isCfWorker && handler.data) {
+                //         const f = eval(handler.data);
+                //         result = f(data);
+                //     }
+                //     break;
                 case 'template':
                     result = interpolate(handler.data, result);
                     if (handler.patterns) {

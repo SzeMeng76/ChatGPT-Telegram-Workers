@@ -22,7 +22,7 @@ export interface UnionData {
 export function extractMessageInfo(message: Telegram.Message, currentBotId: number): UnionData {
     const messageData = extractTypeFromMessage(message);
 
-    if (messageData && messageData.type === 'text' && isNeedGetReplyMessage(message, currentBotId)) {
+    if (messageData.type === 'text' && isNeedGetReplyMessage(message, currentBotId)) {
         const { type, id, mime_type, media_group_id } = extractTypeFromMessage(message.reply_to_message as any) || {};
         if (type && type !== 'text' && type !== 'unknown')
             messageData.type = type;

@@ -1,8 +1,10 @@
+import type { CoreMessage } from 'ai';
 import type { WorkerContext } from '../config/context';
 import type { ChatAgent, ChatStreamTextHandler, HistoryItem, HistoryModifier, ImageResult, LLMChatParams, LLMChatRequestParams, ResponseMessage } from './types';
 import { ENV } from '../config/env';
+import { log } from '../log/logger';
 
-export async function loadHistory(key: string): Promise<HistoryItem[]> {
+export async function loadHistory(key: string, length: number): Promise<HistoryItem[]> {
     // 加载历史记录
     let history = [];
     try {
@@ -14,7 +16,7 @@ export async function loadHistory(key: string): Promise<HistoryItem[]> {
         history = [];
     }
 
-    const trimHistory = (list: HistoryItem[], initLength: number, maxLength: number) => {
+    const trimHistory = (list: HistoryItem[], maxLength: number) => {
         // 历史记录超出长度需要裁剪, 小于0不裁剪
         if (maxLength >= 0 && list.length > maxLength) {
             list = list.splice(list.length - maxLength);
@@ -23,8 +25,8 @@ export async function loadHistory(key: string): Promise<HistoryItem[]> {
     };
 
     // 裁剪
-    if (ENV.AUTO_TRIM_HISTORY && ENV.MAX_HISTORY_LENGTH > 0) {
-        history = trimHistory(history, 0, ENV.MAX_HISTORY_LENGTH);
+    if (ENV.AUTO_TRIM_HISTORY) {
+        history = trimHistory(history, length);
         // 裁剪开始的tool call 以避免报错
         let validStart = 0;
         for (const h of history) {
@@ -42,8 +44,7 @@ export async function loadHistory(key: string): Promise<HistoryItem[]> {
 
 export async function requestCompletionsFromLLM(params: LLMChatRequestParams | null, context: WorkerContext, agent: ChatAgent, modifier: HistoryModifier | null, onStream: ChatStreamTextHandler | null): Promise<{ messages: ResponseMessage[]; content: string }> {
     let history = context.MIDDLE_CONTEXT.history;
-    const historyDisable = ENV.AUTO_TRIM_HISTORY && ENV.MAX_HISTORY_LENGTH <= 0;
-    // const historyKey = context.SHARE_CONTEXT.chatHistoryKey;
+    const historyDisable = context.USER_CONFIG.MAX_HISTORY_LENGTH <= 0;
     if (modifier) {
         const modifierData = modifier(history, params);
         history = modifierData.history;
@@ -70,6 +71,7 @@ export async function requestCompletionsFromLLM(params: LLMChatRequestParams | n
         if (raw_messages.at(-1)?.role === 'assistant') {
             history.push(params);
             history.push(...raw_messages);
+            await storeHistory(history, context);
         }
     }
     return answer;
@@ -87,4 +89,14 @@ export async function requestText2Image(url: string, headers: Record<string, any
         throw new Error(result.message);
     }
     return result;
+}
+
+export async function storeHistory(history: CoreMessage[], context: WorkerContext) {
+    const historyKey = context.SHARE_CONTEXT.chatHistoryKey;
+    const userMessage = history.findLast(h => h.role === 'user');
+    if (ENV.HISTORY_IMAGE_PLACEHOLDER && Array.isArray(userMessage?.content) && userMessage.content.length > 0) {
+        userMessage.content = userMessage.content.map(c => c.type === 'text' ? c.text : `[${c.type}]`).join('\n');
+    }
+    await ENV.DATABASE.put(historyKey, JSON.stringify(history)).catch(console.error);
+    log.info(`[STORE HISTORY] DONE`);
 }

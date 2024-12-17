@@ -13,11 +13,11 @@ export interface SchemaData<T extends Record<string, any>> {
 }
 
 export type ToolHandler =
-    | {
-        type: 'function';
-        data?: string;
-        patterns?: PatternInfo[];
-    }
+    // | {
+    //     type: 'function';
+    //     data?: string;
+    //     patterns?: PatternInfo[];
+    // }
     | {
         type: 'template';
         data: string;
@@ -66,11 +66,10 @@ export interface FuncTool {
     };
 }
 
-type cleanPattern = string;
 export interface PatternInfo {
     pattern: string;
     group?: number;
-    clean?: [cleanPattern, string];
+    clean?: [string, string];
 }
 
 export interface ToolResult {

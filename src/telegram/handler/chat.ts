@@ -108,7 +108,10 @@ export class ChatHandler implements MessageHandler<WorkerContext> {
         if (!historyKey) {
             throw new Error('History key not found');
         }
-        context.MIDDLE_CONTEXT.history = await loadHistory(historyKey);
+        const length = context.USER_CONFIG.MAX_HISTORY_LENGTH;
+        if (length > 0) {
+            context.MIDDLE_CONTEXT.history = await loadHistory(historyKey, length);
+        }
     }
 
     private async processOriginalMessage(
@@ -352,17 +355,6 @@ type WorkflowHandler = (
 
 function workflowHandlers(type: string): WorkflowHandler {
     switch (type) {
-        // case 'text:text':
-        // case 'text:audio':
-        // case 'tts:text':
-        // case 'tts:audio':
-        // case 'image:text':
-        // case 'photo:text':
-        // case 'chat:text':
-        // case 'chat:audio':
-        // case 'sticker:text':
-        // case 'video:text':
-        //     return handleText;
         case 'text:image':
             return handleTextToImage;
         case 'audio:audio':

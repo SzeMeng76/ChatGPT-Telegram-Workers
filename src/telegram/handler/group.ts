@@ -91,6 +91,13 @@ export function SubstituteWords(message: Telegram.Message): boolean {
 export class GroupMention implements MessageHandler {
     handle = async (message: Telegram.Message, context: WorkerContext): Promise<Response | null> => {
         const substituteMention = SubstituteWords(message);
+        const messageInfo = context.MIDDLE_CONTEXT.messageInfo;
+        if (messageInfo.type === 'text' && message.text === '') {
+            return createTelegramBotAPI(context.SHARE_CONTEXT.botToken).sendMessage({
+                chat_id: message.chat.id,
+                text: '?',
+            });
+        }
         // 非群组消息不作判断，交给下一个中间件处理
         if (!isTelegramChatTypeGroup(message.chat.type)) {
             this.mergeMessage(false, message);
