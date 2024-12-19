@@ -19,13 +19,11 @@ export const tools = {
     ...externalTools,
     ...internalTools,
 } as unknown as Record<string, FuncTool>;
-
-injectFunction();
-
 export function executeTool(toolName: string) {
     return async (args: any, options: Record<string, any> & { signal?: AbortSignal }): Promise<{ result: any; time: string }> => {
         const { signal } = options;
-        let filledPayload = JSON.stringify(tools[toolName].payload).replace(/\{\{([^}]+)\}\}/g, (match, p1) => args[p1] || match);
+        let filledPayload = JSON.stringify(tools[toolName].payload)
+            .replace(/\{\{([^}]+)\}\}/g, (match, p1) => args[p1] || match);
 
         (tools[toolName].required || []).forEach((key: string) => {
             if (!ENV.PLUGINS_ENV[key]) {
@@ -52,6 +50,8 @@ export function executeTool(toolName: string) {
         });
         log.info(`tool request end`);
         if (!result.ok) {
+            const text = await result.text();
+            log.error(`Tool call error: ${result.statusText} ${text}`);
             return { result: `Tool call error: ${result.statusText}`, time: ((Date.now() - startTime) / 1e3).toFixed(1) };
         }
         try {
@@ -89,6 +89,7 @@ export function executeTool(toolName: string) {
 }
 
 export async function vaildTools(tools_config: string[]) {
+    await injectFunction();
     const activeToolAlias = tools_config.filter(t => Object.keys(tools).includes(t));
     // real tool name, not the key name
     const useTools = Object.entries(tools).filter(([tname, _]) => activeToolAlias.includes(tname)).reduce((acc: Record<string, any>, [name, t]) => {
