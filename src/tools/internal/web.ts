@@ -4,15 +4,20 @@ import { interpolate } from '../../plugins/interpolate';
 
 export function processHtmlText(patterns: PatternInfo[], text: string): string {
     let results: string[] = [text];
-    for (const { pattern, group = 0, clean } of patterns) {
+    for (const { pattern = '', group = 0, clean = [] } of patterns) {
         results = results.flatMap((text) => {
-            const regex = new RegExp(pattern, 'g');
-            const matches = Array.from(text.matchAll(regex));
+            let matches = [[text]];
+            if (pattern) {
+                const regex = new RegExp(pattern, 'gi');
+                matches = Array.from(text.matchAll(regex));
+            }
+
+            const cleanRegex = clean.filter(Boolean).map(c => (
+                { reg: new RegExp(Array.isArray(c) ? c[0] : c, 'g'), replacer: Array.isArray(c) ? c[1] ?? '' : '' }));
             return matches.map((match) => {
                 let extractedText = match[group];
-                if (clean) {
-                    const cleanRegex = new RegExp(clean[0], 'g');
-                    extractedText = extractedText.replace(cleanRegex, clean[1] ?? '');
+                for (const c of cleanRegex) {
+                    extractedText = extractedText.replace(c.reg, c.replacer);
                 }
                 return extractedText.replace(/\s+/g, ' ').trim();
             });

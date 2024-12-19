@@ -148,22 +148,20 @@ export class MessageSender {
         if (!this.context) {
             throw new Error('Message context not set');
         }
-        const resp = this.sendLongMessage(message, {
+        return checkIsNeedTagIds(this.context, this.sendLongMessage(message, {
             ...this.context,
             parse_mode: parseMode,
-        });
-        return checkIsNeedTagIds(this.context, resp, type);
+        }), type);
     }
 
     sendPlainText(message: string, type: 'tip' | 'chat' = 'tip'): Promise<Response> {
         if (!this.context) {
             throw new Error('Message context not set');
         }
-        const resp = this.sendLongMessage(message, {
+        return checkIsNeedTagIds(this.context, this.sendLongMessage(message, {
             ...this.context,
             parse_mode: null,
-        });
-        return checkIsNeedTagIds(this.context, resp, type);
+        }), type);
     }
 
     sendPhoto(photo: string | Blob, caption?: string | undefined, parse_mode?: Telegram.ParseMode): Promise<Response> {
@@ -184,8 +182,7 @@ export class MessageSender {
                 allow_sending_without_reply: this.context.allow_sending_without_reply || undefined,
             };
         }
-        const resp = this.api.sendPhoto(params);
-        return checkIsNeedTagIds(this.context, resp, 'chat');
+        return checkIsNeedTagIds(this.context, this.api.sendPhoto(params), 'chat');
     }
 
     sendMediaGroup(media: Telegram.InputMedia[]): Promise<Response> {
@@ -205,8 +202,7 @@ export class MessageSender {
             };
         }
 
-        const resp = this.api.sendMediaGroup(params);
-        return checkIsNeedTagIds(this.context, resp, 'chat');
+        return checkIsNeedTagIds(this.context, this.api.sendMediaGroup(params), 'chat');
     }
 
     sendDocument(document: string | Blob, caption?: string | undefined, parse_mode?: Telegram.ParseMode): Promise<Response> {
@@ -227,8 +223,7 @@ export class MessageSender {
                 allow_sending_without_reply: this.context.allow_sending_without_reply || undefined,
             };
         }
-        const resp = this.api.sendDocument(params);
-        return checkIsNeedTagIds(this.context, resp, 'chat');
+        return checkIsNeedTagIds(this.context, this.api.sendDocument(params), 'chat');
     }
 
     editMessageMedia(media: Telegram.InputMedia, parse_mode?: Telegram.ParseMode, file?: File | Blob): Promise<Response> {
@@ -248,8 +243,7 @@ export class MessageSender {
             },
         };
 
-        const resp = this.api.request('editMessageMedia', { ...params, file });
-        return checkIsNeedTagIds(this.context, resp, 'chat');
+        return checkIsNeedTagIds(this.context, this.api.request('editMessageMedia', { ...params, file }), 'chat');
     }
 
     sendVoice(voice: Blob, caption?: string | undefined): Promise<Response> {
@@ -272,8 +266,7 @@ export class MessageSender {
                 allow_sending_without_reply: this.context.allow_sending_without_reply || undefined,
             };
         }
-        const resp = this.api.sendVoice(params);
-        return checkIsNeedTagIds(this.context, resp, 'chat');
+        return checkIsNeedTagIds(this.context, this.api.sendVoice(params), 'chat');
     }
 }
 
@@ -395,8 +388,8 @@ export function sendAction(botToken: string, chat_id: number, action: Telegram.C
     }).catch(console.error), 0);
 }
 
-async function checkIsNeedTagIds(context: MessageContext, resp: Promise<Response>, msgType: 'tip' | 'chat') {
-    const { chatType } = context;
+export async function checkIsNeedTagIds(context: { chatType: string; message: Telegram.Message }, resp: Promise<Response>, msgType: 'tip' | 'chat') {
+    const { chatType, message } = context;
     let message_id: number[] = [];
     const original_resp = await resp;
     do {
@@ -417,10 +410,10 @@ async function checkIsNeedTagIds(context: MessageContext, resp: Promise<Response
             = (isGroup && ENV.SCHEDULE_GROUP_DELETE_TYPE.includes(msgType))
             || (!isGroup && ENV.SCHEDULE_PRIVATE_DELETE_TYPE.includes(msgType));
         if (isNeedTag) {
-            if (!tagMessageIds.has(context.message)) {
-                tagMessageIds.set(context.message, new Set());
+            if (!tagMessageIds.has(message)) {
+                tagMessageIds.set(message, new Set());
             }
-            message_id.forEach(id => tagMessageIds.get(context.message)?.add(id));
+            message_id.forEach(id => tagMessageIds.get(message)?.add(id));
         }
     } while (false);
 

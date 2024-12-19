@@ -1,0 +1,48 @@
+{
+    "schema": {
+        "name": "icloud_price",
+        "description": "Retrieve iCloud prices for different countries or regions. Always return the US iCloud price as a reference in case some countries do not have corresponding prices.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "countries": {
+                    "type": "string",
+                    "description": "Full country/region English Name to query, separated by |.",
+                    "examples": [
+                        "Japan",
+                        "Turkey|China",
+                        "Nigeria|Turkey|India"
+                    ]
+                }
+            },
+            "required": [
+                "countries"
+            ],
+            "additionalProperties": false
+        }
+    },
+    "payload": {
+        "url": "https://support.apple.com/en-us/108047"
+    },
+    "handler": {
+        "type": "webclean",
+        "patterns": [
+            {
+                "pattern": "<h3 id=\"nasalac\" class=\"gb-header\">([\\s\\S]+?)class=\"note gb-note\"",
+                "group": 1,
+                "clean": [["&yen;", " ¥"], ["&pound;", "£"], ["&euro;", "€"], ["T&uuml;rkiye", "Turkey"]]
+            },
+            {
+                "pattern": "<p class=\"gb-paragraph\">.*?(</p>(?:\\s+?<p[\\s\\S]+?<b>.*?</b>.*?</p>){5})",
+                "clean": ["<[^>]*>?"]
+            }
+        ],
+        "dynamic_patterns": [
+            {
+                "pattern": "^\\s*(United States|Turkey|Nigeria|Egypt|{{countries}})[\\s\\S]+",
+                "clean": [["^\\s*([\\w\\s]+?)\\d+", "$1"]]
+            }
+        ]
+    },
+    "prompt": "If the user does not provide country, use United States as the default country."
+}

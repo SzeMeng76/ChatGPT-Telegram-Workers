@@ -38,7 +38,7 @@
             {
                 "pattern": "<li class=\\\"list-with-numbers__item\\\">([\\s\\S]+?)<\\/li>",
                 "group": 1,
-                "clean": ["<[^>]*>?", ""]
+                "clean": ["<[^>]*>?"]
             }
         ]
     },

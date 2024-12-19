@@ -25,7 +25,7 @@
                 },
                 "entity": {
                     "type": "string",
-                    "description": "Types of search software",
+                    "description": "Types of search software, software means ios app, iPadSoftware means ipad app, macSoftware means mac app",
                     "default": "software",
                     "enum": [
                         "software",
@@ -43,7 +43,7 @@
         }
     },
     "payload": {
-        "url": "https://itunes.apple.com/search?entity={{entity}}&limit=3&term={{app_name}}&country={{country}}&fields=trackId,trackCensoredName",
+        "url": "https://itunes.apple.com/search?entity={{entity}}&limit=5&term={{app_name}}&country={{country}}&fields=trackId,trackCensoredName",
         "method": "GET",
         "headers": {
             "Accept": "application/json"

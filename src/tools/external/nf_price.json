@@ -1,0 +1,41 @@
+{
+    "schema": {
+        "name": "nf_price",
+        "description": "Query Netflix prices in different regions.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "country": {
+                    "type": "string",
+                    "description": "The English abbreviation of the countries or regions to be queried, default is US|TR|NG|EG, separated by |",
+                    "examples": [
+                        "TR",
+                        "US|UK",
+                        "NG|IN|EG"
+                    ]
+                }
+            },
+            "required": [
+                "country"
+            ],
+            "additionalProperties": false
+        }
+    },
+    "payload": {
+        "url": "https://github.com/tompec/netflix-prices/blob/main/data/latest.json?raw=true",
+        "method": "GET",
+        "headers": {
+            "Accept": "application/json"
+        }
+    },
+    "handler": {
+        "type": "webclean",
+        "dynamic_patterns": [
+            {
+                "pattern": "\\{\"country_code\":\"(US|TR|NG|EG|{{country}})[\\s\\S]+?\\]\\s*?\\}"
+            }
+        ]
+    },
+    "prompt": "If the user does not provide a currency type, please use US|TR|NG|EG as the default low-price area.",
+    "copyright": "data soucre: https://github.com/tompec/netflix-prices"
+}

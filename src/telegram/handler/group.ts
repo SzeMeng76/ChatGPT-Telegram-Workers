@@ -5,6 +5,7 @@ import type { MessageHandler } from './types';
 import { ENV } from '../../config/env';
 import { log } from '../../log/logger';
 import { createTelegramBotAPI } from '../api';
+import { checkIsNeedTagIds } from '../utils/send';
 import { isTelegramChatTypeGroup } from '../utils/utils';
 
 function checkMention(content: string, entities: Telegram.MessageEntity[], botName: string, botId: number): {
@@ -91,13 +92,6 @@ export function SubstituteWords(message: Telegram.Message): boolean {
 export class GroupMention implements MessageHandler {
     handle = async (message: Telegram.Message, context: WorkerContext): Promise<Response | null> => {
         const substituteMention = SubstituteWords(message);
-        const messageInfo = context.MIDDLE_CONTEXT.messageInfo;
-        if (messageInfo.type === 'text' && message.text === '') {
-            return createTelegramBotAPI(context.SHARE_CONTEXT.botToken).sendMessage({
-                chat_id: message.chat.id,
-                text: '?',
-            });
-        }
         // 非群组消息不作判断，交给下一个中间件处理
         if (!isTelegramChatTypeGroup(message.chat.type)) {
             this.mergeMessage(false, message);
@@ -141,6 +135,7 @@ export class GroupMention implements MessageHandler {
         if ((substituteMention || context.SHARE_CONTEXT.isForwarding) && !isMention) {
             isMention = true;
         }
+        // mediaGroupMessage & chunkMessage
         const finalCheckResult = await this.furtherChecker(message, context);
         if (finalCheckResult instanceof Response) {
             return finalCheckResult;
@@ -151,7 +146,7 @@ export class GroupMention implements MessageHandler {
         }
 
         this.mergeMessage(replyMe, message);
-        return null;
+        return this.noneMessage(message, context);
     };
 
     furtherChecker = async (message: Telegram.Message, context: WorkerContext): Promise<Response | null> => {
@@ -174,6 +169,18 @@ export class GroupMention implements MessageHandler {
             const currentText = message.text || message.caption || '';
             message.text = `${currentText}\n${replyText ? `> ${replyText}` : ''}`;
         }
+    };
+
+    noneMessage = async (message: Telegram.Message, context: WorkerContext) => {
+        const messageInfo = context.MIDDLE_CONTEXT.messageInfo;
+        if (messageInfo.type === 'text' && message.text === '' && (message.reply_to_message?.text ?? '') === '') {
+            const resp = createTelegramBotAPI(context.SHARE_CONTEXT.botToken).sendMessage({
+                chat_id: message.chat.id,
+                text: '?',
+            });
+            return checkIsNeedTagIds({ chatType: message.chat.type, message }, resp, 'chat');
+        }
+        return null;
     };
 }
 

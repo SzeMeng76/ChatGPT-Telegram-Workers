@@ -22,10 +22,14 @@ export type ToolHandler =
         type: 'template';
         data: string;
         patterns?: PatternInfo[];
+        dynamic_patterns?: PatternInfo[];
+
     }
     | {
         type: 'webclean';
         patterns?: PatternInfo[];
+        dynamic_patterns?: PatternInfo[];
+
     };
 
 /**
@@ -64,12 +68,13 @@ export interface FuncTool {
         url: string;
         patterns?: PatternInfo[];
     };
+    copyright?: string;
 }
 
 export interface PatternInfo {
-    pattern: string;
+    pattern?: string;
     group?: number;
-    clean?: [string, string];
+    clean?: Array<string | string[]>;
 }
 
 export interface ToolResult {

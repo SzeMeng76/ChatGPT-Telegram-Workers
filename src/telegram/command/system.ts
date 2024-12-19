@@ -18,7 +18,7 @@ import { WssRequest } from '../../utils/others/wsrequest';
 import { createTelegramBotAPI } from '../api';
 import { chatWithLLM, OnStreamHander, sendImages } from '../handler/chat';
 import { escape } from '../utils/md2tgmd';
-import { sendAction } from '../utils/send';
+import { checkIsNeedTagIds, sendAction } from '../utils/send';
 import { chunckArray, isCfWorker, isTelegramChatTypeGroup, UUIDv4 } from '../utils/utils';
 
 export const COMMAND_AUTH_CHECKER = {
@@ -116,7 +116,8 @@ class BaseNewCommandHandler {
                 selective: true,
             };
         }
-        return createTelegramBotAPI(context.SHARE_CONTEXT.botToken).sendMessage(params);
+        const resp = createTelegramBotAPI(context.SHARE_CONTEXT.botToken).sendMessage(params);
+        return checkIsNeedTagIds({ chatType: message.chat.type, message }, resp, 'tip');
     }
 }
 

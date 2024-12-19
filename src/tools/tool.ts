@@ -4,7 +4,7 @@ import type { ToolCallPart, ToolResultPart } from 'ai';
 import type { ResponseMessage } from '../agent/types';
 import type { AgentUserConfig } from '../config/env';
 import type { MessageSender } from '../telegram/utils/send';
-import type { FuncTool, ToolResult } from './types';
+import type { FuncTool, ToolHandler, ToolResult } from './types';
 
 import { jsonSchema, tool } from 'ai';
 import { ENV } from '../config/env';
@@ -19,6 +19,8 @@ export const tools = {
     ...externalTools,
     ...internalTools,
 } as unknown as Record<string, FuncTool>;
+
+injectFunction();
 
 export function executeTool(toolName: string) {
     return async (args: any, options: Record<string, any> & { signal?: AbortSignal }): Promise<{ result: any; time: string }> => {
@@ -59,20 +61,12 @@ export function executeTool(toolName: string) {
         }
 
         const middleHandler = async (data: any) => {
-            let result = data;
-            const handler = tools[toolName].handler;
+            let result = typeof data !== 'string' ? JSON.stringify(data) : data as any;
+            const handler = JSON.parse(JSON.stringify(tools[toolName]?.handler || '')) as ToolHandler;
+            handler && injectPatterns(handler, args);
             switch (handler?.type) {
-                // case 'function':
-                //     if (!isCfWorker && handler.data) {
-                //         const f = eval(handler.data);
-                //         result = f(data);
-                //     }
-                //     break;
                 case 'template':
-                    result = interpolate(handler.data, result);
-                    if (handler.patterns) {
-                        result = processHtmlText(handler.patterns, result);
-                    }
+                    result = processHtmlText(handler.patterns || [], interpolate(handler.data, result));
                     break;
                 case 'webclean':
                     result = processHtmlText(handler.patterns || [], result);
@@ -95,9 +89,9 @@ export function executeTool(toolName: string) {
 }
 
 export async function vaildTools(tools_config: string[]) {
-    await injectFunction();
+    const activeToolAlias = tools_config.filter(t => Object.keys(tools).includes(t));
     // real tool name, not the key name
-    const useTools = Object.entries(tools).reduce((acc: Record<string, any>, [name, t]) => {
+    const useTools = Object.entries(tools).filter(([tname, _]) => activeToolAlias.includes(tname)).reduce((acc: Record<string, any>, [name, t]) => {
         const execute = t.buildin ? t.func : executeTool(name) as any;
         acc[t.schema.name] = tool({
             description: t.schema.description,
@@ -107,7 +101,6 @@ export async function vaildTools(tools_config: string[]) {
         return acc;
     }, {});
     // tools key name
-    const activeToolAlias = tools_config.filter(t => Object.keys(tools).includes(t));
     return {
         tools: useTools,
         activeToolAlias,
@@ -178,4 +171,19 @@ async function injectFunction() {
             log.error(`Plugin ${plugin} is invalid`);
         }
     }));
+}
+
+function injectPatterns(handler: ToolHandler, args: Record<string, string>) {
+    const { dynamic_patterns } = handler;
+    if (!dynamic_patterns) {
+        return;
+    }
+    if (!handler.patterns) {
+        handler.patterns = [];
+    }
+    for (const p of dynamic_patterns) {
+        p.pattern = p?.pattern?.replace(/\{\{([^}]+)\}\}/g, (match, p1) => args[p1] || match);
+        handler.patterns.push(p);
+    }
+    log.debug(JSON.stringify(handler.patterns, null, 2));
 }
