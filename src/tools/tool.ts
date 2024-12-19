@@ -61,19 +61,19 @@ export function executeTool(toolName: string) {
         }
 
         const middleHandler = async (data: any) => {
-            let result = typeof data !== 'string' ? JSON.stringify(data) : data as any;
+            let result = data;
             const handler = JSON.parse(JSON.stringify(tools[toolName]?.handler || '')) as ToolHandler;
             handler && injectPatterns(handler, args);
             switch (handler?.type) {
                 case 'template':
-                    result = processHtmlText(handler.patterns || [], interpolate(handler.data, result));
+                    result = processHtmlText(handler.patterns || [], interpolate(handler.data, data));
                     break;
                 case 'webclean':
-                    result = processHtmlText(handler.patterns || [], result);
+                    result = processHtmlText(handler.patterns || [], typeof data !== 'string' ? JSON.stringify(data) : data as any);
                     break;
             }
             if (tools[toolName].webcrawler) {
-                result = await webCrawler(tools[toolName].webcrawler, data);
+                result = await webCrawler(tools[toolName].webcrawler, result);
             }
             return result;
         };
