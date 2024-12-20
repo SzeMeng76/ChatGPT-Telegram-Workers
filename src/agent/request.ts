@@ -204,6 +204,7 @@ export async function requestChatCompletionsV2(params: { model: LanguageModelV1;
         maxRetries: params.context.MAX_RETRIES,
         temperature: (params.activeTools?.length || 0) > 0 ? params.context.FUNCTION_CALL_TEMPERATURE : params.context.CHAT_TEMPERATURE,
         tools: params.tools,
+        maxTokens: params.context.MAX_TOKENS,
         activeTools: params.activeTools,
         onStepFinish: middleware.onStepFinish as (data: StepResult<any>) => void,
     };

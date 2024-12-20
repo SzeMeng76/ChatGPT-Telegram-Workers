@@ -324,7 +324,7 @@ export class TelegraphSender {
                 { tag: 'hr' },
                 {
                     tag: 'blockquote',
-                    children: ['raw data:'],
+                    children: ['RAW DATA'],
                 },
                 {
                     tag: 'pre',

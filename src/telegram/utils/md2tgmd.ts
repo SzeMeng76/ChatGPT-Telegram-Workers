@@ -22,6 +22,58 @@ const escapedChars = {
     '\\!': 'ESCAPEEXCLAMATION',
     '\\?': 'ESCAPEQUESTION',
 };
+const escapedRegexp = /\\[*_~|`\\()[\]{}>#+\-=.!]/g;
+// const logRegexp = /^LOGSTART\n(.*?)LOGEND/s;
+const reverseCodeRegexp = /\\`\\`\\`([\s\S]+)\\`\\`\\`$/g;
+const inlineCodeRegexp = /(?:^|[^\\])`[\s\S]*?[^\\]`/g;
+const escapeRegexpMatch = [
+    // bold
+    {
+        regex: /\\\*\\\*(\S|\S.*?\S)\\\*\\\*/g,
+        value: '**$1**',
+    },
+    // underline
+    {
+        regex: /\\_\\_(\S|\S.*?\S)\\_\\_/g,
+        value: '__$1__',
+    },
+    // italic
+    {
+        regex: /\\_(\S|\S.*?\S)\\_/g,
+        value: '_$1_',
+    },
+    // strikethrough
+    {
+        regex: /\\~(\S|\S.*?\S)\\~/g,
+        value: '~$1~',
+    },
+    // spoiler
+    {
+        regex: /\\\|\\\|(\S|\S.*?\S)\\\|\\\|/g,
+        value: '||$1||',
+    },
+    // url
+    {
+        regex: /\\\[([^\]]+)\\\]\\\((.+?)\\\)/g,
+        value: '[$1]($2)',
+    },
+    // quote
+    {
+        regex: /^ *\\>\s*(.+)$/gm,
+        value: '>$1',
+    },
+    // item
+    {
+        regex: /^(>?\s*)\\(-|\*)\s+(.+)$/gm,
+        value: '$1• $3',
+    },
+    // number sign
+    {
+        regex: /^((\\#){1,3}\s)(.+)/gm,
+        value: '$1*$3*',
+    },
+];
+
 const escapedCharsReverseMap = new Map(Object.entries(escapedChars).map(([key, value]) => [value, key]));
 
 export function escape(lines: string[]): string {
@@ -52,6 +104,9 @@ export function escape(lines: string[]): string {
             // add > to the beginning of the current line.
         } else if (lineTrim && i > 0 && /^\s*>/.test(result.at(-1) ?? '') && !lineTrim.startsWith('>')) {
             modifiedLine = `>${line}`;
+            // avoid > in the middle of the line
+        } else if (lineTrim === '>') {
+            modifiedLine = '\n';
         }
 
         if (!stack.length) {
@@ -62,31 +117,23 @@ export function escape(lines: string[]): string {
         const last = `${lines.slice(stack[0]).join('\n')}\n\`\`\``;
         result.push(handleEscape(last, 'code'));
     }
-    const regexp = /^LOGSTART\n(.*?)LOGEND/s;
-    return result.join('\n')
-        .replace(regexp, '**$1||')
-        .replace(new RegExp(Object.values(escapedChars).join('|'), 'g'), match => escapedCharsReverseMap.get(match) ?? match);
+    return extraCharsHandler(result.join('\n'));
 }
 
 function handleEscape(text: string, type: string = 'text'): string {
     if (!text.trim()) {
         return text;
     }
-    text = text.replace(/\\[*_~|`\\()[\]{}>#+\-=.!]/g, match => escapedChars[match as keyof typeof escapedChars]);
+
+    text = text.replace(escapedRegexp, match => escapedChars[match as keyof typeof escapedChars]);
+
     if (type === 'text') {
-        text = text
-            // force all characters that need to be escaped to be escaped once.
-            .replace(escapeChars, '\\$1')
-            .replace(/\\\*\\\*(\S|\S.*?\S)\\\*\\\*/g, '*$1*') // bold
-            .replace(/\\_\\_(\S|\S.*?\S)\\_\\_/g, '__$1__') // underline
-            .replace(/\\_(\S|\S.*?\S)\\_/g, '_$1_') // italic
-            .replace(/\\~(\S|\S.*?\S)\\~/g, '~$1~') // strikethrough
-            .replace(/\\\|\\\|(\S|\S.*?\S)\\\|\\\|/g, '||$1||') // spoiler
-            .replace(/\\\[([^\]]+)\\\]\\\((.+?)\\\)/g, '[$1]($2)') // url
-            .replace(/\\`(.*?)\\`/g, '`$1`') // inline code
-            .replace(/^\s*\\>\s*(.+)$/gm, '>$1') // >
-            .replace(/^(>?\s*)\\(-|\*)\s+(.+)$/gm, '$1• $3') // item
-            .replace(/^((\\#){1,3}\s)(.+)/gm, '$1*$3*'); // number sign
+        const { text: text1, inlineCode } = inlineCodeHandler(text);
+        text = text1.replace(escapeChars, match => `\\${match}`);
+        escapeRegexpMatch.forEach(item => text = text.replace(item.regex, item.value));
+        Object.entries(inlineCode).forEach(([key, value]) => {
+            text = text.replace(key, value);
+        });
     } else {
         const codeBlank = text.length - text.trimStart().length;
         if (codeBlank > 0) {
@@ -96,7 +143,7 @@ function handleEscape(text: string, type: string = 'text'): string {
         text = text
             .trimEnd()
             .replace(/([\\`])/g, '\\$1')
-            .replace(/^\\`\\`\\`([\s\S]+)\\`\\`\\`$/g, '```$1```'); // code block
+            .replace(reverseCodeRegexp, '```$1```'); // code block
     }
     return text;
 }
@@ -156,4 +203,39 @@ function chunkText(text: string, chunkSize: number): string[] {
         chunks.push(text.slice(i, i + chunkSize));
     }
     return chunks;
+}
+
+function inlineCodeHandler(text: string) {
+    const matches = text.matchAll(inlineCodeRegexp);
+    const inlineCode: Record<string, string> = {};
+    const perfix = 'INCODEDATA';
+    let i = 0;
+    for (const match of matches) {
+        inlineCode[`${perfix}${i}`] = match[0];
+        text = text.replace(match[0], `${perfix}${i}`);
+        i++;
+    }
+    // let match;
+    // while (match = regexp.exec(text)) {
+    //     inlineCode[`${perfix}${i}`] = match[0];
+    //     text = text.replace(match[0], `${perfix}${i}`);
+    //     i++;
+    // }
+    return {
+        text,
+        inlineCode,
+    };
+}
+
+function extraCharsHandler(text: string): string {
+    return text
+        // fold log data
+        // .replace(logRegexp, '**$1||')
+        // remove extra whitespace
+        .replace(/\n\s+\n/g, '\n\n')
+        // fold quote
+        // .replace(/((?:^>[^\n]+(?:\n|$))+)/gm, (match, p1) => `**${p1.trimEnd()}||\n`)
+        .replace(/(?:^>[^\n]+(\n|$)){3,}/gm, (match, p1) => `**${match.trimEnd()}||${p1}`)
+        // reverse escape chars
+        .replace(new RegExp(Object.values(escapedChars).join('|'), 'g'), match => escapedCharsReverseMap.get(match) ?? match);
 }

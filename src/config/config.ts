@@ -387,10 +387,8 @@ export class ExtraUserConfig {
     CHAT_TEMPERATURE = 0.5;
     // function call temperature
     FUNCTION_CALL_TEMPERATURE = 0.1;
-    // chat agent max tokens
-    CHAT_MAX_TOKENS = 8192;
-    // function call max tokens
-    FUNCTION_CALL_MAX_TOKENS = 1024;
+    // chat max tokens
+    MAX_TOKENS = 8192;
     // chat agent max steps
     MAX_STEPS = 3;
     // chat agent max retries

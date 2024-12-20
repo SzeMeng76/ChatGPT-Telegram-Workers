@@ -330,8 +330,8 @@ async function sendTelegraph(context: WorkerContext, sender: MessageSender | Cho
     log.info(logSingleton);
     log.info(getLog(context.USER_CONFIG));
 
-    const telegraph_prefix = `${prefix}\n#Answer\n🤖 **${getLog(context.USER_CONFIG, true, false)}**\n`;
-    const debug_info = `debug info:\n${getLog(context.USER_CONFIG, false, false) as string}`;
+    const telegraph_prefix = `${prefix}\n#Answer\n🤖 **${getLog(context.USER_CONFIG, true)}**\n`;
+    const debug_info = `debug info:\n${getLog(context.USER_CONFIG, false)}`;
     const telegraph_suffix = `\n---\n\`\`\`\n${debug_info}\n\`\`\``;
     const telegraphSender = new TelegraphSender(botName, context.SHARE_CONTEXT.telegraphAccessTokenKey!);
     const resp = await telegraphSender.send(
@@ -442,7 +442,7 @@ async function handleAudio(
     context.MIDDLE_CONTEXT.history.push({ role: 'user', content: text });
     const sender = streamSender.sender!;
     if (handleKey === 'audio:text' || !ENV.HIDE_MIDDLE_MESSAGE) {
-        await sender.sendRichText(`${getLog(context.USER_CONFIG, false, false)}\n> \n${text}`);
+        await sender.sendRichText(`${getLog(context.USER_CONFIG, false)}\n> \n${text}`);
     }
     if (handleKey.startsWith('stt')) {
         return new Response('audio handle done');
