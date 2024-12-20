@@ -200,6 +200,7 @@ export async function requestChatCompletionsV2(params: { model: LanguageModelV1;
         }),
         messages: params.messages,
         maxSteps: params.context.MAX_STEPS,
+        experimental_continueSteps: params.context.CONTINUE_STEP,
         maxRetries: params.context.MAX_RETRIES,
         temperature: (params.activeTools?.length || 0) > 0 ? params.context.FUNCTION_CALL_TEMPERATURE : params.context.CHAT_TEMPERATURE,
         tools: params.tools,

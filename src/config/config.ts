@@ -421,4 +421,6 @@ export class ExtraUserConfig {
     COVER_MESSAGE_ROLE: Record<string, string> = {};
     // 最大历史记录长度 默认12 超过时会自动裁剪
     MAX_HISTORY_LENGTH = 12;
+    // 是否生成长文本(受MAX_STEPS限制)
+    CONTINUE_STEP = false;
 }
