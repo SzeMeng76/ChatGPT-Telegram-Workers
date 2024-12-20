@@ -167,7 +167,7 @@ export function getLog(context: AgentUserConfig, onlyModel: boolean = false) {
         logList.push(`${logObj.tokens.join('|')}`);
     }
 
-    const formattedEntries = logList.filter(Boolean).map(entry => `>\`${entry}\``).join('\n');
+    const formattedEntries = `${logList.filter(Boolean).map(entry => `>\`${entry}\``).join('\n')}\n`;
     return formattedEntries;
 }
 

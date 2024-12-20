@@ -365,18 +365,16 @@ export class TelegraphSender {
 
         if (!this.teleph_path) {
             endPoint = 'https://api.telegra.ph/createPage';
-            const c_resp = await this.createOrEditPage(endPoint, title, content, raw);
-            if (c_resp.ok) {
-                this.teleph_path = c_resp.result!.path;
-                log.info('telegraph url:', c_resp.result!.url);
-                return c_resp;
-            } else {
-                console.error(c_resp.error);
-                throw new Error(c_resp.error);
-            }
-        } else {
-            return this.createOrEditPage(endPoint, title, content);
         }
+        const c_resp = await this.createOrEditPage(endPoint, title, content, raw);
+        if (c_resp.ok && !this.teleph_path) {
+            this.teleph_path = c_resp.result!.path;
+            log.info('telegraph url:', c_resp.result!.url);
+        } else if (!c_resp.ok) {
+            log.error('Send telegraph page failed:', c_resp.error);
+            throw new Error(c_resp.error);
+        }
+        return c_resp;
     }
 }
 

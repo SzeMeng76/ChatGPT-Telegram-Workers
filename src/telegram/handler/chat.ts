@@ -334,11 +334,20 @@ async function sendTelegraph(context: WorkerContext, sender: MessageSender | Cho
     const debug_info = `debug info:\n${getLog(context.USER_CONFIG, false)}`;
     const telegraph_suffix = `\n---\n\`\`\`\n${debug_info}\n\`\`\``;
     const telegraphSender = new TelegraphSender(botName, context.SHARE_CONTEXT.telegraphAccessTokenKey!);
-    const resp = await telegraphSender.send(
-        'Daily Q&A',
-        telegraph_prefix + text + telegraph_suffix,
-        containRaw ? text : undefined,
-    );
+    try {
+        if ((telegraph_prefix + text + telegraph_suffix).length >= 10917 * 6) {
+            const file = new File([text], 'answer.txt', { type: 'text/plain' });
+            return (sender as MessageSender).sendDocument(file, getLog(context.USER_CONFIG, false), 'MarkdownV2');
+        }
+        await telegraphSender.send(
+            'Daily Q&A',
+            telegraph_prefix + text + telegraph_suffix,
+            containRaw ? text : undefined,
+        );
+    } catch (error) {
+        const file = new File([text], 'answer.txt', { type: 'text/plain' });
+        return (sender as MessageSender).sendDocument(file, getLog(context.USER_CONFIG, false), 'MarkdownV2');
+    }
     const url = `https://telegra.ph/${telegraphSender.teleph_path}`;
     const msg = `${containRaw ? '由于渲染出现错误 ' : ''}回答已经转换成完整文章。\n[🔗点击进行查看](${url})`.trim();
     log.info(`send telegraph message: ${msg}`);

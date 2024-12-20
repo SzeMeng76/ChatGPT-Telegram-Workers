@@ -398,7 +398,7 @@ export class ExtraUserConfig {
     // Jina Rerank Model
     JINA_RERANK_MODEL = 'jina-colbert-v2';
     // Rerank Models
-    RERANK_MODELS: string[] = ['gpt-4o-mini', 'gpt-4o-2024-08-06', 'chatgpt-4o-latest', 'o1-mini', 'o1-preview', 'claude-3-5-sonnet-20241012', 'gemini-1.5-flash-latest', 'gemini-1.5-pro-latest', 'gemini-exp-1206', 'gemini-2.0-flash-exp', 'grok-beta'];
+    RERANK_MODELS: string[] = ['gpt-4o-mini', 'gpt-4o-2024-08-06', 'chatgpt-4o-latest', 'o1-mini', 'o1-preview', 'claude-3-5-sonnet-20241012', 'gemini-1.5-flash-latest', 'gemini-1.5-pro-latest', 'gemini-exp-1206', 'gemini-2.0-flash-exp', 'gemini-2.0-flash-thinking-exp'];
     // Whether to enable intelligent model processing
     ENABLE_INTELLIGENT_MODEL = false;
     // text handle type, to 'tts' or 'text' to chat with llm, or 'chat' by using audio-preview (default: text)
