@@ -93,7 +93,7 @@ export class OpenAI extends OpenAIBase implements ChatAgent {
             body.reasoning_effort = context.OPENAI_REASONING_EFFORT;
         }
         // add extra params
-        Object.entries(context.OPENAI_EXTRA_PARAMS).forEach(([key, value]) => {
+        Object.entries(context.OPENAI_API_EXTRA_PARAMS).forEach(([key, value]) => {
             body[key] = value;
         });
     };
