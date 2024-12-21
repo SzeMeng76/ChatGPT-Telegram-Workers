@@ -19,7 +19,7 @@ import { createTelegramBotAPI } from '../api';
 import { chatWithLLM, OnStreamHander, sendImages } from '../handler/chat';
 import { escape } from '../utils/md2tgmd';
 import { checkIsNeedTagIds, sendAction } from '../utils/send';
-import { chunckArray, isCfWorker, isTelegramChatTypeGroup, UUIDv4 } from '../utils/utils';
+import { chunckArray, isCfWorker, isTelegramChatTypeGroup, UUIDv4, waitUntil } from '../utils/utils';
 
 export const COMMAND_AUTH_CHECKER = {
     default(chatType: string): string[] | null {
@@ -794,7 +794,7 @@ export class KlingAICommandHandler implements CommandHandler {
             if (Date.now() - startTime > MAX_WAIT_TIME) {
                 throw new Error(`KlingAI Task timeout`);
             }
-            await new Promise(resolve => setTimeout(resolve, 10_000));
+            await waitUntil(Date.now() + 10_000);
         }
     };
 

@@ -166,6 +166,10 @@ export class EnvironmentConfig {
     STORE_TEXT_CHUNK_MESSAGE: boolean = false;
     // Audio text format
     AUDIO_TEXT_FORMAT: undefined | 'spoiler' | 'bold' | 'italic' | 'underline' | 'strikethrough' | 'code' | 'pre' = undefined;
+    // when message length exceeds this value, the message will be folded, set -1 to disable
+    FOLD_MESSAGE_LIMIT = -1;
+    // Fold message scope
+    FOLD_MESSAGE_SCOPE: string[] = ['group', 'supergroup'];
 }
 
 // -- 通用配置 --

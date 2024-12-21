@@ -10,7 +10,7 @@ import { APICallError, type FilePart, type TextPart, type ToolResultPart } from 
 import { loadASRLLM, loadChatLLM, loadImageGen, loadTTSLLM } from '../../agent';
 import { loadHistory, requestCompletionsFromLLM } from '../../agent/chat';
 import { ENV } from '../../config/env';
-import { clearLog, getLog, logSingleton } from '../../log/logDecortor';
+import { clearLog, getLog } from '../../log/logDecortor';
 import { log } from '../../log/logger';
 import { sendToolResult } from '../../tools';
 import { imageToBase64String } from '../../utils/image';
@@ -227,7 +227,7 @@ export class ChatHandler implements MessageHandler<WorkerContext> {
 }
 
 export function OnStreamHander(sender: MessageSender | ChosenInlineSender, context?: WorkerContext, question?: string): ChatStreamTextHandler {
-    let sentPromise = null as Promise<Response> | null;
+    let sentPromise = null as Promise<Response | undefined> | null;
     let nextEnableTime: number | null = null;
     // let sentError = false;
     const isMessageSender = sender instanceof MessageSender;
@@ -237,6 +237,20 @@ export function OnStreamHander(sender: MessageSender | ChosenInlineSender, conte
             ? ENV.TELEGRAPH_SCOPE.includes(sender.context.chatType) && ENV.TELEGRAPH_NUM_LIMIT > 0 && text.length > ENV.TELEGRAPH_NUM_LIMIT
             : sender.context.inline_message_id && text.length > 4096;
     };
+    const botName = context?.SHARE_CONTEXT?.botName || 'AI';
+    const telegraphAccessTokenKey = context?.SHARE_CONTEXT?.telegraphAccessTokenKey || '';
+    const telegraphSender = new TelegraphSender(botName, telegraphAccessTokenKey);
+    let hasSentTelegraphLink = false;
+    const telegraphContext = (isEnd: boolean, containRaw: boolean) => {
+        return {
+            context: context!,
+            textSender: sender,
+            telegraphSender,
+            hasSentTelegraphLink,
+            isEnd,
+            containRaw,
+        };
+    };
 
     const streamSender = {
         send: null as ((text: string, isEnd: boolean) => Promise<any>) | null,
@@ -245,9 +259,6 @@ export function OnStreamHander(sender: MessageSender | ChosenInlineSender, conte
     };
     streamSender.send = async (text: string): Promise<any> => {
         try {
-            if (isSendTelegraph(text)) {
-                return;
-            }
             // 判断是否需要等待
             if ((nextEnableTime || 0) > Date.now()) {
                 log.info(`Need await: ${(nextEnableTime || 0) - Date.now()}ms`);
@@ -261,11 +272,19 @@ export function OnStreamHander(sender: MessageSender | ChosenInlineSender, conte
                 nextEnableTime = Date.now() + sendInterval;
             }
 
+            if (isSendTelegraph(text)) {
+                await sentPromise;
+                sentPromise = sendTelegraph(telegraphContext(false, false), question || 'Redo Question', text);
+                hasSentTelegraphLink = true;
+                return;
+            }
+
+            text = quoteMessage(text, sender.context.chatType);
             const data = context ? `${getLog(context.USER_CONFIG)}\n${text}` : text;
             log.info(`sent message ids: ${isMessageSender ? [...sender.context.sentMessageIds] : sender.context.inline_message_id}`);
             isMessageSender && sendAction(sender.api.token, sender.context.chat_id, 'typing');
             sentPromise = sender.sendRichText(data);
-            const resp = await sentPromise;
+            const resp = await sentPromise as Response;
             // 判断429
             if (resp.status === 429) {
                 // 获取重试时间
@@ -279,8 +298,6 @@ export function OnStreamHander(sender: MessageSender | ChosenInlineSender, conte
 
             if (!resp.ok) {
                 log.error(`send message failed: ${resp.status} ${await resp.json().then(j => j.description)}`);
-                // sentError = true;
-                log.error(`send message failed: ${escape(data.split('\n'))}`);
                 return sentPromise = sender.sendPlainText(text);
             }
         } catch (e) {
@@ -291,11 +308,12 @@ export function OnStreamHander(sender: MessageSender | ChosenInlineSender, conte
     streamSender.end = async (text: string, needLog = true): Promise<any> => {
         log.info('--- start end ---');
         await sentPromise;
-        await waitUntil((nextEnableTime || 0) + 10);
+        // await waitUntil((nextEnableTime || 0) + 10);
         if (isSendTelegraph(text)) {
-            return sendTelegraph(context!, sender, question || 'Redo Question', text);
+            return sendTelegraph(telegraphContext(true, false), question || 'Redo Question', text);
         }
-        const data = context && needLog ? `${getLog(context.USER_CONFIG)}\n${text}` : text;
+        const quoteText = quoteMessage(text, sender.context.chatType);
+        const data = context && needLog ? `${getLog(context.USER_CONFIG)}\n${quoteText}` : quoteText;
         log.info(`sent message ids: ${isMessageSender ? [...sender.context.sentMessageIds] : sender.context.inline_message_id}`);
         while (true) {
             const finalResp = await sender.sendRichText(data);
@@ -303,14 +321,18 @@ export function OnStreamHander(sender: MessageSender | ChosenInlineSender, conte
                 const retryAfter = Number.parseInt(finalResp.headers.get('Retry-After') || '');
                 if (retryAfter) {
                     log.error(`Status 429, need wait: ${retryAfter}s`);
-                    await new Promise(resolve => setTimeout(resolve, retryAfter * 1000));
+                    await waitUntil(Date.now() + retryAfter * 1000 + 10);
+                    continue;
+                } else {
+                    await waitUntil(Date.now() + 10_000);
                     continue;
                 }
             }
             if (!finalResp.ok) {
                 (sender as MessageSender).context.sentMessageIds.clear();
                 log.error(`send message failed: ${finalResp.status} ${await finalResp.json().then(j => j.description)}`);
-                return sendTelegraph(context!, sender, question || 'Redo Question', text, true);
+                await sendTelegraph(telegraphContext(true, true), question || 'Redo Question', text);
+                return;
             }
             return finalResp;
         }
@@ -319,39 +341,48 @@ export function OnStreamHander(sender: MessageSender | ChosenInlineSender, conte
     return streamSender as unknown as ChatStreamTextHandler;
 }
 
-async function sendTelegraph(context: WorkerContext, sender: MessageSender | ChosenInlineSender, question: string, text: string, containRaw?: boolean) {
+async function sendTelegraph(sendContext: {
+    context: WorkerContext;
+    textSender: MessageSender | ChosenInlineSender;
+    telegraphSender: TelegraphSender;
+    hasSentTelegraphLink?: boolean;
+    isEnd?: boolean;
+    containRaw?: boolean;
+}, question: string, text: string) {
     log.info(`start send telegraph`);
+    const { context, textSender, telegraphSender, hasSentTelegraphLink, isEnd, containRaw } = sendContext;
     if (question.length > 600) {
         question = `${question.slice(0, 300)}...${question.slice(-300)}`;
     }
     const prefix = `#Question\n\`\`\`\n${question}\n\`\`\`\n---`;
-    const botName = context.SHARE_CONTEXT?.botName || 'AI';
-
-    log.info(logSingleton);
-    log.info(getLog(context.USER_CONFIG));
 
     const telegraph_prefix = `${prefix}\n#Answer\n🤖 **${getLog(context.USER_CONFIG, true)}**\n`;
     const debug_info = `debug info:\n${getLog(context.USER_CONFIG, false)}`;
     const telegraph_suffix = `\n---\n\`\`\`\n${debug_info}\n\`\`\``;
-    const telegraphSender = new TelegraphSender(botName, context.SHARE_CONTEXT.telegraphAccessTokenKey!);
     try {
         if ((telegraph_prefix + text + telegraph_suffix).length >= 10917 * 6) {
             const file = new File([text], 'answer.txt', { type: 'text/plain' });
-            return (sender as MessageSender).sendDocument(file, getLog(context.USER_CONFIG, false), 'MarkdownV2');
+            return (textSender as MessageSender).sendDocument(file, getLog(context.USER_CONFIG, false), 'MarkdownV2');
         }
-        await telegraphSender.send(
+        const resp = await telegraphSender.send(
             'Daily Q&A',
             telegraph_prefix + text + telegraph_suffix,
             containRaw ? text : undefined,
         );
+
+        if (!hasSentTelegraphLink) {
+            const url = `https://telegra.ph/${telegraphSender.teleph_path}`;
+            const msg = `${containRaw ? '由于渲染出现错误 ' : ''}回答已经转换成完整文章。\n[🔗点击进行查看](${url})`.trim();
+            log.info(`send telegraph message: ${msg}`);
+            return textSender.sendRichText(msg);
+        }
+        return resp;
     } catch (error) {
-        const file = new File([text], 'answer.txt', { type: 'text/plain' });
-        return (sender as MessageSender).sendDocument(file, getLog(context.USER_CONFIG, false), 'MarkdownV2');
+        if (isEnd) {
+            const file = new File([text], 'answer.txt', { type: 'text/plain' });
+            return (textSender as MessageSender).sendDocument(file, getLog(context.USER_CONFIG, false), 'MarkdownV2');
+        }
     }
-    const url = `https://telegra.ph/${telegraphSender.teleph_path}`;
-    const msg = `${containRaw ? '由于渲染出现错误 ' : ''}回答已经转换成完整文章。\n[🔗点击进行查看](${url})`.trim();
-    log.info(`send telegraph message: ${msg}`);
-    return sender.sendRichText(msg);
 }
 
 type WorkflowHandler = (
@@ -542,4 +573,17 @@ async function asr(audio: Blob, config: AgentUserConfig) {
         log.info(`transform audio time: ${((Date.now() - start) / 1000).toFixed(2)}s`);
     }
     return agent.request(audio, config);
+}
+
+function quoteMessage(text: string, scope: string) {
+    if (ENV.FOLD_MESSAGE_LIMIT > 0 && text.length > ENV.FOLD_MESSAGE_LIMIT && ENV.FOLD_MESSAGE_SCOPE.includes(scope)) {
+        const textList = text.split('\n');
+        textList.forEach((line, index) => {
+            if (!line.trimStart().startsWith('>')) {
+                textList[index] = `>${line}`;
+            }
+        });
+        return textList.join('\n');
+    }
+    return text;
 }

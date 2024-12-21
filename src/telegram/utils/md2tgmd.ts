@@ -30,7 +30,7 @@ const escapeRegexpMatch = [
     // bold
     {
         regex: /\\\*\\\*(\S|\S.*?\S)\\\*\\\*/g,
-        value: '**$1**',
+        value: '*$1*',
     },
     // underline
     {
@@ -39,8 +39,8 @@ const escapeRegexpMatch = [
     },
     // italic
     {
-        regex: /\\_(\S|\S.*?\S)\\_/g,
-        value: '_$1_',
+        regex: /\\(_|\*)(\S|\S.*?\S)\\\1/g,
+        value: '_$2_',
     },
     // strikethrough
     {
@@ -59,18 +59,18 @@ const escapeRegexpMatch = [
     },
     // quote
     {
-        regex: /^ *\\>\s*(.+)$/gm,
+        regex: /^ *\\>\s*(.*)$/gm,
         value: '>$1',
     },
     // item
     {
-        regex: /^(>?\s*)\\(-|\*)\s+(.+)$/gm,
-        value: '$1• $3',
+        regex: /^(>?\s*)\\(?:-|\*)\s+(.+)$/gm,
+        value: '$1• $2',
     },
     // number sign
     {
-        regex: /^((\\#){1,3}\s)(.+)/gm,
-        value: '$1*$3*',
+        regex: /^((?:\\#){1,3}\s)(.+)/gm,
+        value: '$1*$2*',
     },
 ];
 
@@ -102,12 +102,10 @@ export function escape(lines: string[]): string {
             }
             // If the current line does not start with > and the previous line starts with >,
             // add > to the beginning of the current line.
-        } else if (lineTrim && i > 0 && /^\s*>/.test(result.at(-1) ?? '') && !lineTrim.startsWith('>')) {
-            modifiedLine = `>${line}`;
-            // avoid > in the middle of the line
-        } else if (lineTrim === '>') {
-            modifiedLine = '\n';
         }
+        // else if (lineTrim && i > 0 && /^\s*>/.test(result.at(-1) ?? '') && !lineTrim.startsWith('>')) {
+        //     modifiedLine = `>${line}`;
+        // }
 
         if (!stack.length) {
             result.push(handleEscape(modifiedLine));
@@ -235,7 +233,7 @@ function extraCharsHandler(text: string): string {
         .replace(/\n\s+\n/g, '\n\n')
         // fold quote
         // .replace(/((?:^>[^\n]+(?:\n|$))+)/gm, (match, p1) => `**${p1.trimEnd()}||\n`)
-        .replace(/(?:^>[^\n]+(\n|$)){3,}/gm, (match, p1) => `**${match.trimEnd()}||${p1}`)
+        .replace(/(?:^>[^\n]*(\n|$)){3,}/gm, (match, p1) => `**${match.trimEnd()}||${p1}`)
         // reverse escape chars
         .replace(new RegExp(Object.values(escapedChars).join('|'), 'g'), match => escapedCharsReverseMap.get(match) ?? match);
 }

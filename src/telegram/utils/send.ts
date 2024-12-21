@@ -8,6 +8,7 @@ import { log } from '../../log/logger';
 import { createTelegramBotAPI } from '../api';
 import md2node from './md2node';
 import { chunkDocument, escape } from './md2tgmd';
+import { waitUntil } from './utils';
 
 class MessageContext implements Record<string, any> {
     chat_id: number;
@@ -317,7 +318,7 @@ export class TelegraphSender {
         }
     }
 
-    private async createOrEditPage(url: string, title: string, content: string, raw?: string): Promise<CreateOrEditPageResponse> {
+    private async createOrEditPage(url: string, title: string, content: string, raw?: string): Promise<Response> {
         const contentNode = md2node(content);
         if (raw) {
             contentNode.push(...[
@@ -340,7 +341,7 @@ export class TelegraphSender {
         }
         const body = {
             access_token: this.telegraphAccessToken,
-            teleph_path: this.teleph_path ?? undefined,
+            path: this.teleph_path ?? undefined,
             title: title || 'Daily Q&A',
             content: contentNode,
             ...this.author,
@@ -350,10 +351,10 @@ export class TelegraphSender {
             method: 'post',
             headers,
             body: JSON.stringify(body),
-        }).then(r => r.json());
+        });
     }
 
-    async send(title: string, content: string, raw?: string): Promise<CreateOrEditPageResponse> {
+    async send(title: string, content: string, raw?: string): Promise<Response> {
         let endPoint = 'https://api.telegra.ph/editPage';
         if (!this.telegraphAccessToken) {
             this.telegraphAccessToken = await ENV.DATABASE.get(this.telegraphAccessTokenKey);
@@ -366,15 +367,28 @@ export class TelegraphSender {
         if (!this.teleph_path) {
             endPoint = 'https://api.telegra.ph/createPage';
         }
-        const c_resp = await this.createOrEditPage(endPoint, title, content, raw);
-        if (c_resp.ok && !this.teleph_path) {
-            this.teleph_path = c_resp.result!.path;
-            log.info('telegraph url:', c_resp.result!.url);
-        } else if (!c_resp.ok) {
-            log.error('Send telegraph page failed:', c_resp.error);
-            throw new Error(c_resp.error);
+        const resp = await this.createOrEditPage(endPoint, title, content, raw);
+        if (resp.ok) {
+            const data = await resp.json() as CreateOrEditPageResponse;
+            if (!data.ok) {
+                console.error('telegraph send error:', JSON.stringify(data));
+                throw new Error(JSON.stringify(data));
+            }
+            this.teleph_path = data.result?.path;
+        } else if (resp.status === 429) {
+            const retryAfter = Number.parseInt(resp.headers.get('Retry-After') || '');
+            log.error(`Send telegraph page failed, Status 429, need wait: ${retryAfter || 10}s`);
+            if (retryAfter) {
+                await waitUntil(Date.now() + retryAfter * 1000);
+            } else {
+                await waitUntil(Date.now() + 5_000);
+            }
+            return this.send(title, content, raw);
+        } else if (!resp.ok) {
+            log.error('Send telegraph page failed:', resp.status);
+            throw new Error(await resp.text());
         }
-        return c_resp;
+        return resp;
     }
 }
 
@@ -491,6 +505,7 @@ class ChosenInlineContext {
     query: string;
     parse_mode: Telegram.ParseMode | null = null;
     telegraphAccessTokenKey?: string;
+    chatType = 'private';
     constructor(result: Telegram.ChosenInlineResult) {
         this.result_id = result.result_id;
         this.inline_message_id = result.inline_message_id;

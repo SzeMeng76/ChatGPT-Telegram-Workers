@@ -277,7 +277,6 @@ class HandleChunkMessage extends Lock {
             await ENV.DATABASE.delete(chunkMessageKey);
             return true;
         }
-        log.info('No chunk message');
         return false;
     };
 
