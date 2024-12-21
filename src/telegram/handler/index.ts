@@ -29,10 +29,11 @@ function loadMessage(body: Telegram.Update, isForwarding: boolean) {
         case !!body.chosen_inline_result:
             return (token: string) => handleChosenInline(token, body.chosen_inline_result!);
         case !!body.edited_message:
-            throw new Error('Ignore edited message');
+            log.info('Ignore edited message');
+            return null;
         default:
             log.info(`Not support message type: ${JSON.stringify(body, null, 2)}`);
-            throw new Error('Not support message type');
+            return null;
     }
 }
 
@@ -42,7 +43,7 @@ export async function handleUpdate(token: string, update: Telegram.Update, heade
     log.debug(`handleUpdate`, update.message?.chat);
     const isForwarding = headers?.get('User-Agent') === 'Upstash-QStash';
     const messageHandler = loadMessage(update, isForwarding);
-    return messageHandler(token);
+    return messageHandler ? messageHandler(token) : null;
 }
 
 async function handleMessage(token: string, message: Telegram.Message, isForwarding: boolean) {
