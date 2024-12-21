@@ -1,4 +1,6 @@
+/* eslint-disable no-case-declarations */
 /* eslint-disable unused-imports/no-unused-vars */
+import type { LanguageModelV1ToolCallPart } from '@ai-sdk/provider';
 import type {
     LanguageModelV1,
     LanguageModelV1CallOptions,
@@ -9,7 +11,6 @@ import type {
 import type { ToolChoice } from '.';
 import type { AgentUserConfig } from '../config/env';
 import type { ChatStreamTextHandler } from './types';
-import { createLlmModel } from '.';
 import { getLogSingleton } from '../log/logDecortor';
 import { log } from '../log/logger';
 import { tools } from '../tools';
@@ -24,7 +25,7 @@ export function AIMiddleware({ config, activeTools, onStream, toolChoice, messag
     return {
         wrapGenerate: async ({ doGenerate, params, model }) => {
             log.info('doGenerate called');
-            // await warpModel(model, config, activeTools, (params.mode as any).toolChoice, chatModel);
+            warpModel(model, config, activeTools, (params.mode as any).toolChoice, chatModel);
             recordModelLog(config, model, activeTools, (params.mode as any).toolChoice);
             const result = await doGenerate();
             log.debug(`doGenerate result: ${JSON.stringify(result)}`);
@@ -33,7 +34,7 @@ export function AIMiddleware({ config, activeTools, onStream, toolChoice, messag
 
         wrapStream: async ({ doStream, params, model }) => {
             log.info('doStream called');
-            // await warpModel(model, config, activeTools, (params.mode as any).toolChoice, chatModel);
+            warpModel(model, config, activeTools, (params.mode as any).toolChoice, chatModel);
             recordModelLog(config, model, activeTools, (params.mode as any).toolChoice);
             return doStream();
         },
@@ -45,7 +46,7 @@ export function AIMiddleware({ config, activeTools, onStream, toolChoice, messag
                 rawSystemPrompt = params.prompt[0].content;
             }
             const logs = getLogSingleton(config);
-            logs.ongoingFunctions.push({ name: 'chat_start', startTime });
+            logs.ongoingFunctions.push({ name: 'chat', startTime });
             if (toolChoice.length > 0 && step < toolChoice.length && params.mode.type === 'regular') {
                 params.mode.toolChoice = toolChoice[step] as any;
                 log.info(`toolChoice changed: ${JSON.stringify(toolChoice[step])}`);
@@ -112,60 +113,78 @@ export function AIMiddleware({ config, activeTools, onStream, toolChoice, messag
 }
 
 function warpMessages(params: LanguageModelV1CallOptions, tools: Record<string, any>, activeTools: string[], rawSystemPrompt: string | undefined) {
-    let { prompt: messages, mode } = params;
-    const trimMessages = (messages: LanguageModelV1Prompt) => {
-        if (messages.at(-1)?.role === 'tool') {
-            const content = messages.at(-1)!.content;
-            if (Array.isArray(content) && content.length > 0) {
-                content.forEach((i: any) => {
-                    delete i.result.time;
-                });
-            }
-        } else if (messages.at(-1)?.role === 'user') {
-            const content = messages.at(-1)!.content;
-            if (Array.isArray(content) && content.some(i => i.type === 'image')) {
-                const newMessages: LanguageModelV1Prompt = [];
-                for (const message of messages) {
-                    if (message.role === 'tool' || (message.role === 'assistant' && message.content.some(i => i.type === 'tool-call'))) {
-                        continue;
-                    }
-                    newMessages.push(message);
-                }
-                activeTools.length = 0;
-                messages = newMessages;
-            } else if (activeTools.length === 0) {
-                messages = messages.filter(message => ['user', 'system'].includes(message.role)
-                    || (message.role === 'assistant' && message.content[0].type !== 'tool-call'));
-            }
-        }
-        return messages;
+    const { prompt: messages, mode } = params;
+
+    const getSystemContent = () => {
+        if (!activeTools.length)
+            return rawSystemPrompt ?? 'You are a helpful assistant';
+        return `${rawSystemPrompt}\n\nYou can consider using the following tools:\n##TOOLS${activeTools.map(name =>
+            `\n\n### ${name}\n- desc: ${tools[name]?.schema?.description || ''} \n${tools[name]?.prompt || ''}`,
+        ).join('')}`;
     };
-    messages = trimMessages(messages);
-    if (activeTools.length > 0) {
-        if (messages[0].role === 'system') {
-            messages[0].content = `${rawSystemPrompt}\n\nYou can consider using the following tools:\n##TOOLS${activeTools.map(name =>
-                `\n\n### ${name}\n- desc: ${tools[name]?.schema?.description || ''} \n${tools[name]?.prompt || ''}`,
-            ).join('')}`;
+
+    const trimMessages = (messages: LanguageModelV1Prompt) => {
+        const modifiedMessages: LanguageModelV1Prompt = [];
+        for (const [i, message] of messages.entries()) {
+            switch (message.role) {
+                case 'system':
+                    if (activeTools.length > 0) {
+                        modifiedMessages.push({
+                            role: 'system',
+                            content: getSystemContent(),
+                        });
+                    }
+                    continue;
+                case 'assistant':
+                    if (message.content.every(i => i.type !== 'tool-call')) {
+                        modifiedMessages.push(message);
+                    }
+                    continue;
+                case 'tool':
+                    let text = '';
+                    const toolNames: Set<string> = new Set();
+                    for (const toolResultPart of message.content) {
+                        const { toolCallId, toolName, result } = toolResultPart;
+                        toolNames.add(toolName);
+                        let toolArgs = 'UNKNOWN';
+                        if (messages[i - 1].role === 'assistant' && (messages[i - 1].content as any[]).some(i => i.type === 'tool-call')) {
+                            toolArgs = JSON.stringify((messages[i - 1].content as LanguageModelV1ToolCallPart[]).find(i => i.toolCallId === toolCallId)?.args);
+                        }
+                        text += `[Calling tool ${toolName} with args ${toolArgs}]\nTool Result:\n${(result as { result: string }).result}\n\n`;
+                    }
+                    text = `${[...toolNames].map(name => `For Tool [${name}]: ${tools[name]?.prompt ?? ''}`).join('\n')}\n${text}`;
+                    modifiedMessages.push({
+                        role: 'user',
+                        content: [{ type: 'text', text }],
+                    });
+                    continue;
+                case 'user':
+                    modifiedMessages.push(message);
+                    continue;
+            }
         }
-    } else {
+        return modifiedMessages;
+    };
+
+    if (!activeTools.length) {
         (mode as any).tools = undefined;
-        messages[0].role === 'system' && (messages[0].content = rawSystemPrompt ?? '');
     }
-    params.prompt = messages;
+    params.prompt = trimMessages(messages);
 }
 
-async function warpModel(model: LanguageModelV1, config: AgentUserConfig, activeTools: string[], toolChoice: ToolChoice, chatModel: string) {
+function warpModel(model: LanguageModelV1, config: AgentUserConfig, activeTools: string[], toolChoice: ToolChoice, chatModel: string) {
     const mutableModel = model as Writeable<LanguageModelV1>;
     const effectiveModel = (activeTools.length > 0 && toolChoice?.type !== 'none') ? (config.TOOL_MODEL || chatModel) : chatModel;
     if (effectiveModel !== mutableModel.modelId) {
         let newModel: LanguageModelV1 | undefined;
-        if (effectiveModel.includes(':')) {
-            newModel = await createLlmModel(effectiveModel, config);
-            // mutableModel.provider = newModel.provider;
-            mutableModel.specificationVersion = newModel.specificationVersion;
-            mutableModel.doStream = newModel.doStream;
-            mutableModel.doGenerate = newModel.doGenerate;
-        }
+        // Not support cross-provider functionality.
+        // if (effectiveModel.includes(':')) {
+        //     newModel = await createLlmModel(effectiveModel, config);
+        //     // mutableModel.provider = newModel.provider;
+        //     mutableModel.specificationVersion = newModel.specificationVersion;
+        //     mutableModel.doStream = newModel.doStream;
+        //     mutableModel.doGenerate = newModel.doGenerate;
+        // }
         mutableModel.modelId = newModel?.modelId ?? effectiveModel;
     }
 }

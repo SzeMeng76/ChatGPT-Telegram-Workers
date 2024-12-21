@@ -179,7 +179,6 @@ export async function streamHandler(stream: AsyncIterable<any>, contentExtractor
         contentFull += `\n\n\`\`\`Error\n${(e as Error).message}\n\`\`\``;
     }
 
-    await sendPromise;
     return contentFull;
 }
 

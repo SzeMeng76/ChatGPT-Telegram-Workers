@@ -49,12 +49,10 @@ async function search(query: string, max_length = 6, signal?: AbortSignal): Prom
     const { path } = await getJS(query, signal);
     if (!path)
         throw new Error('Failed to get JS URL');
-    return {
-        result: (await regularSearch(path, signal))
-            .slice(0, max_length)
-            .map((d: any) => `title: ${d.title}\n description: ${d.description}\n url: ${d.url}`)
-            .join('\n---\n'),
-    };
+    return (await regularSearch(path, signal))
+        .slice(0, max_length)
+        .map((d: any) => `title: ${d.title}\n description: ${d.description}\n url: ${d.url}`)
+        .join('\n---\n');
 }
 
 export const duckduckgo: FuncTool = {

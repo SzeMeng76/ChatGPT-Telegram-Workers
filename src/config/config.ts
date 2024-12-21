@@ -211,7 +211,7 @@ export class OpenAIConfig {
     OPENAI_EMBEDDING_MODEL = 'text-embedding-3-small';
     // OpenAI Reasoning Effort, only for starts with 'o1'
     // reasoning_effort: 'low', 'medium', 'high'
-    OPENAI_REASONING_EFFORT = 'low';
+    OPENAI_REASONING_EFFORT: 'low' | 'medium' | 'high' | undefined = undefined;
 }
 
 // -- DALLE 配置 --
