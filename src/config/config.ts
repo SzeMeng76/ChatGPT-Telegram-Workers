@@ -260,6 +260,8 @@ export class GeminiConfig {
     GOOGLE_CHAT_MODEL = 'gemini-1.5-flash';
     // Google Gemini Vision Model
     GOOGLE_VISION_MODEL = 'gemini-1.5-flash';
+    // Google Embedding Model
+    GOOGLE_EMBEDDING_MODEL = 'text-embedding-004';
 }
 
 // -- Mistral 配置 --
@@ -313,8 +315,6 @@ export class OpenAILikeConfig {
     OAILIKE_EMBEDDING_MODEL = 'BAAI/bge-m3';
     // oailike rerank model
     OAILIKE_RERANK_MODEL = 'BAAI/bge-reranker-v2-m3';
-    // oailike rerank type, v1 means use embedding model, v2 means use rerank model to rerank
-    OAILIKE_RERANK_TYPE = 'v2';
     // oailike asr model
     OAILIKE_STT_MODEL = 'FunAudioLLM/SenseVoiceSmall';
     // oailike tts model
@@ -353,7 +353,7 @@ export class DefineKeys {
 }
 
 export class ExtraUserConfig {
-    MAPPING_KEY = '-p:SYSTEM_INIT_MESSAGE|-n:MAX_HISTORY_LENGTH|-a:AI_PROVIDER|-ai:AI_IMAGE_PROVIDER|-m:CHAT_MODEL|-md:CURRENT_MODE|-v:VISION_MODEL|-t:OPENAI_TTS_MODEL|-ex:OPENAI_API_EXTRA_PARAMS|-mk:MAPPING_KEY|-mv:MAPPING_VALUE|-asap:FUNCTION_REPLY_ASAP|-tm:TOOL_MODEL|-tool:USE_TOOLS|-oli:IMAGE_MODEL|-th:TEXT_HANDLE_TYPE|-to:TEXT_OUTPUT|-ah:AUDIO_HANDLE_TYPE|-ao:AUDIO_OUTPUT|-act:AUDIO_CONTAINS_TEXT|-as:AI_ASR_PROVIDER|-at:AI_TTS_PROVIDER';
+    MAPPING_KEY = '-p:SYSTEM_INIT_MESSAGE|-n:MAX_HISTORY_LENGTH|-a:AI_PROVIDER|-ai:AI_IMAGE_PROVIDER|-m:CHAT_MODEL|-md:CURRENT_MODE|-v:VISION_MODEL|-t:OPENAI_TTS_MODEL|-ex:OPENAI_API_EXTRA_PARAMS|-mk:MAPPING_KEY|-mv:MAPPING_VALUE|-asap:FUNCTION_REPLY_ASAP|-tm:TOOL_MODEL|-tool:USE_TOOLS|-oli:IMAGE_MODEL|-th:TEXT_HANDLE_TYPE|-to:TEXT_OUTPUT|-ah:AUDIO_HANDLE_TYPE|-ao:AUDIO_OUTPUT|-act:AUDIO_CONTAINS_TEXT|-as:AI_ASR_PROVIDER|-at:AI_TTS_PROVIDER|-ra:RERANK_AGENT';
     // /set command mapping value, separated by |, : separates multiple relationships
     MAPPING_VALUE = '';
     // MAPPING_VALUE = "cson:claude-3-5-sonnet-20240620|haiku:claude-3-haiku-20240307|g4m:gpt-4o-mini|g4:gpt-4o|rp+:command-r-plus";
@@ -400,8 +400,9 @@ export class ExtraUserConfig {
     MAX_STEPS = 3;
     // chat agent max retries
     MAX_RETRIES = 0;
-    // Rerank Agent, jina or openai or oailike (calculate the cosine similarity using embedding models to get the result)
-    RERANK_AGENT = 'oailike';
+    // Rerank Agent, jina or openai or oailikeV1 or oailikeV2 or google
+    // oailikeV1 means use embedding model, oailikeV2 means use rerank model to rerank
+    RERANK_AGENT = 'google';
     // Jina Rerank Model
     JINA_RERANK_MODEL = 'jina-colbert-v2';
     // Rerank Models

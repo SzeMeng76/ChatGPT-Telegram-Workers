@@ -1,11 +1,18 @@
 import type { AgentUserConfig } from '../../config/env';
 import { cosineSimilarity } from 'ai';
-import { OpenaiEmbedding, OpenAILikeEmbedding } from './embedding';
+import { GoogleEmbedding, OpenaiEmbedding, OpenAILikeEmbedding } from './embedding';
 
 interface RerankResult {
     similar: number;
     value: string;
 }
+
+const generalRerankAgent = {
+    openai: new OpenaiEmbedding(),
+    oailikeV1: new OpenAILikeEmbedding(),
+    oailikeV2: new OpenAILikeEmbedding(),
+    google: new GoogleEmbedding(),
+};
 
 export class Rerank {
     readonly rank = async (context: AgentUserConfig, data: string[], topN: number = 1): Promise<RerankResult[]> => {
@@ -13,12 +20,23 @@ export class Rerank {
             case 'jina':
                 return this.jina(context, data, topN);
             case 'openai':
-                return this.openai(context, data, topN);
-            case 'oailike':
-                return context.OAILIKE_RERANK_TYPE === 'v1' ? this.oailikeV1(context, data, topN) : this.oailikeV2(context, data, topN);
+            case 'oailikeV1':
+            case 'google':
+                return this.generalRerankAgent(context, data, topN);
+            case 'oailikeV2':
+                return this.oailikeV2(context, data, topN);
             default:
                 throw new Error('Invalid RERANK_AGENT');
         }
+    };
+
+    readonly generalRerankAgent = async (context: AgentUserConfig, data: string[], topN: number): Promise<RerankResult[]> => {
+        const embeddings = await generalRerankAgent[context.RERANK_AGENT as keyof typeof generalRerankAgent].request(data, context);
+        const inputEmbeddings = embeddings[0].embed;
+        return embeddings.slice(1)
+            .map(({ embed, value }) => ({ similar: cosineSimilarity(inputEmbeddings, embed), value }))
+            .sort((a, b) => b.similar - a.similar)
+            .slice(0, topN);
     };
 
     readonly jina = async (context: AgentUserConfig, data: string[], topN: number): Promise<RerankResult[]> => {
@@ -40,24 +58,6 @@ export class Rerank {
             throw new Error(`${JSON.stringify(result)}`);
         }
         return result.results.map((item: any) => ({ similar: item.relevance_score, value: item.document.text }));
-    };
-
-    readonly openai = async (context: AgentUserConfig, data: string[], topN: number): Promise<RerankResult[]> => {
-        const embeddings = await new OpenaiEmbedding().request(data, context);
-        const inputEmbeddings = embeddings[0].embed;
-        return embeddings.slice(1)
-            .map(({ embed, value }) => ({ similar: cosineSimilarity(inputEmbeddings, embed), value }))
-            .sort((a, b) => b.similar - a.similar)
-            .slice(0, topN);
-    };
-
-    readonly oailikeV1 = async (context: AgentUserConfig, data: string[], topN: number): Promise<RerankResult[]> => {
-        const embeddings = await new OpenAILikeEmbedding().request(data, context);
-        const inputEmbeddings = embeddings[0].embed;
-        return embeddings.slice(1)
-            .map(({ embed, value }) => ({ similar: cosineSimilarity(inputEmbeddings, embed), value }))
-            .sort((a, b) => b.similar - a.similar)
-            .slice(0, topN);
     };
 
     readonly oailikeV2 = async (context: AgentUserConfig, data: string[], topN: number): Promise<RerankResult[]> => {
