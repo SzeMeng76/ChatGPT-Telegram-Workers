@@ -150,7 +150,7 @@ function warpMessages(params: LanguageModelV1CallOptions, tools: Record<string, 
                         if (messages[i - 1].role === 'assistant' && (messages[i - 1].content as any[]).some(i => i.type === 'tool-call')) {
                             toolArgs = JSON.stringify((messages[i - 1].content as LanguageModelV1ToolCallPart[]).find(i => i.toolCallId === toolCallId)?.args);
                         }
-                        text += `[Calling tool ${toolName} with args ${toolArgs}]\nTool Result:\n${(result as { result: string }).result}\n\n`;
+                        text += `[Calling tool ${toolName} with args ${toolArgs}]\nTool Result:\n${JSON.stringify(result)}\n\n`;
                     }
                     text = `${[...toolNames].map(name => `For Tool [${name}]: ${tools[name]?.prompt ?? ''}`).join('\n')}\n${text}`;
                     modifiedMessages.push({
