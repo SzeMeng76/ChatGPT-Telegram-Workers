@@ -1,7 +1,7 @@
 {
     "schema": {
         "name": "app_lookup",
-        "description": "Retrive five sets of related app id and app name through region code and keywords. The app id is consistent across different countries. Only one piece of data is valid.",
+        "description": "Retrive five sets of related app id and app name through region code and keywords. This tool should only be called once, and the app id is the same in different regions.",
         "parameters": {
             "type": "object",
             "properties": {
@@ -53,5 +53,5 @@
         "type": "template",
         "data": "{{#each i in results}}{\"trackId\":{{i.trackId}},\"trackName\":\"{{i.trackName}}\",\"primaryGenreName\":{{i.primaryGenreName}}}{{/each}}"
     },
-    "prompt": "This tool should only be called once, and the app ID is the same in different regions. You should select the most relevant one."
+    "prompt": "Among them, **only one app** data is of interest to the user, which is usually of the tool, streaming, or game type. This is just an intermediate result, please call other tools to give the answer based on the existing data."
 }

@@ -1,6 +1,6 @@
 /* eslint-disable no-case-declarations */
 /* eslint-disable unused-imports/no-unused-vars */
-import type { LanguageModelV1ToolCallPart } from '@ai-sdk/provider';
+import type { LanguageModelV1ToolCallPart, LanguageModelV1ToolResultPart } from '@ai-sdk/provider';
 import type {
     LanguageModelV1,
     LanguageModelV1CallOptions,
@@ -116,11 +116,12 @@ function warpMessages(params: LanguageModelV1CallOptions, tools: Record<string, 
     const { prompt: messages, mode } = params;
 
     const getSystemContent = () => {
-        if (!activeTools.length)
-            return rawSystemPrompt ?? 'You are a helpful assistant';
-        return `${rawSystemPrompt}\n\nYou can consider using the following tools:\n##TOOLS${activeTools.map(name =>
-            `\n\n### ${name}\n- desc: ${tools[name]?.schema?.description || ''} \n${tools[name]?.prompt || ''}`,
-        ).join('')}`;
+        if (activeTools.length > 0) {
+            return `${rawSystemPrompt}\nYou can consider using the following tools:\n${activeTools.map(name =>
+                `### ${name}\n- desc: ${tools[name]?.schema?.description || ''} \n${tools[name]?.prompt || ''}`,
+            ).join('\n\n')}`;
+        }
+        return rawSystemPrompt ?? 'You are a helpful assistant';
     };
 
     const trimMessages = (messages: LanguageModelV1Prompt) => {
@@ -144,15 +145,15 @@ function warpMessages(params: LanguageModelV1CallOptions, tools: Record<string, 
                     let text = '';
                     const toolNames: Set<string> = new Set();
                     for (const toolResultPart of message.content) {
-                        const { toolCallId, toolName, result } = toolResultPart;
+                        const { toolCallId, toolName, result: { result } } = toolResultPart as LanguageModelV1ToolResultPart & { result: { result: any } };
                         toolNames.add(toolName);
                         let toolArgs = 'UNKNOWN';
                         if (messages[i - 1].role === 'assistant' && (messages[i - 1].content as any[]).some(i => i.type === 'tool-call')) {
                             toolArgs = JSON.stringify((messages[i - 1].content as LanguageModelV1ToolCallPart[]).find(i => i.toolCallId === toolCallId)?.args);
                         }
-                        text += `[Calling tool ${toolName} with args ${toolArgs}]\nTool Result:\n${JSON.stringify(result)}\n\n`;
+                        text += `#### [tool ${toolName} with args ${toolArgs}]\nResult:\n${JSON.stringify(result)}\n\n`;
                     }
-                    text = `${[...toolNames].map(name => `For Tool [${name}]: ${tools[name]?.prompt ?? ''}`).join('\n')}\n${text}`;
+                    text = `${[...toolNames].map(name => `## For tool ${name}, you should follow these rules:\n - ${tools[name]?.prompt ?? ''}`).join('\n')}\n### Please use the following retrieved data to answer the question:\n${text}`;
                     modifiedMessages.push({
                         role: 'user',
                         content: [{ type: 'text', text }],

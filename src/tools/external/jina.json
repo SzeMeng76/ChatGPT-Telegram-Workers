@@ -28,5 +28,6 @@
     "type": "reader",
     "required": [
         "JINA_API_KEY"
-    ]
+    ],
+    "prompt": "Please organize and summarize the retrieved data, always placing the latest news/developments at the top, and do not forget to mark the data source at the end."
 }

@@ -105,7 +105,7 @@ export function getLogSingleton(config: AgentUserConfig): Logs {
 }
 
 // 获取日志
-export function getLog(context: AgentUserConfig, onlyModel: boolean = false) {
+export function getLog(context: AgentUserConfig, onlyModel: boolean = false, isParagraph = false) {
     if (!context.ENABLE_SHOWINFO)
         return '';
 
@@ -162,8 +162,9 @@ export function getLog(context: AgentUserConfig, onlyModel: boolean = false) {
         logList.push(`${logObj.tokens.join('|')}`);
     }
 
-    const formattedEntries = `${logList.filter(Boolean).map(entry => `>\`${entry}\``).join('\n')}`;
-    return `LOGSTART\n${formattedEntries}LOGEND`;
+    return isParagraph
+        ? logList.filter(Boolean).join()
+        : `LOGSTART\n${logList.filter(Boolean).map(entry => `>\`${entry}\``).join('\n')}LOGEND\n`;
 }
 
 export function clearLog(context: AgentUserConfig) {

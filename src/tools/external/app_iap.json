@@ -1,7 +1,7 @@
 {
     "schema": {
         "name": "app_iap",
-        "description": "Retrive detailed in-app purchase information based on country code, app id.",
+        "description": "Retrive detailed in-app purchase information based on country code, app id. When the user does not specify a country, they usually want to know the price information for countries like Turkey, Nigeria, and India. Please do not ask the user for country information a second time. You should calculate the price list that the user wants to see by combining the exchange rate.",
         "parameters": {
             "type": "object",
             "properties": {
@@ -42,5 +42,5 @@
             }
         ]
     },
-    "prompt": "Please provide the detailed in-app purchase information for the app in the specified country. The default regions that users want to follow include Turkey and Nigeria, two low-cost areas, unless the user explicitly does not need to query these two regions."
+    "prompt": "List the organized data, with line spacing between different types of data, and use appropriate formatting such as quotes/bold/unordered lists; do not include any other information, and it is best to combine the data with real-time exchange rates."
 }

@@ -49,5 +49,6 @@
     "type": "weather",
     "required": [
         "QWEATHER_TOKEN"
-    ]
+    ],
+    "prompt": "Please answer my question based on the retrieved weather data, answer briefly and provide additional tips if possible."
 }

@@ -1,3 +1,5 @@
+import { log } from '../../log/logger';
+
 /* eslint-disable regexp/no-super-linear-backtracking */
 const escapeChars = /[_*[\]()\\~`>#+\-=|{}.!]/g;
 const escapedChars = {
@@ -120,7 +122,7 @@ export function escape(lines: string[], expandParams: ExpandParams = { addQuote:
     return addExpandable(result.join('\n'), expandParams.quoteExpandable);
 }
 
-function handleEscape(text: string, type: 'text' | 'code', { addQuote, quoteExpandable }: ExpandParams): string {
+function handleEscape(text: string, type: 'text' | 'code', { addQuote }: ExpandParams): string {
     if (!text.trim()) {
         return text;
     }
@@ -237,7 +239,7 @@ export function addExpandable(text: string, quoteExpandable: boolean): string {
     if (!quoteExpandable) {
         // fold first quote
         text = text.replace(logRegexp, `$1`).replace(/(?:^>[^\n]*(\n|$))+/m, (match, p1) => `**${match.trimEnd()}||${p1}`);
-        console.debug(`addExpandable:\n${text}`);
+        log.debug(`addExpandable:\n${text}`);
         return text;
     }
     // replace log data to expandable

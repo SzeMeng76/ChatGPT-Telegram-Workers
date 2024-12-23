@@ -1,13 +1,13 @@
 {
     "schema": {
         "name": "currency",
-        "description": "Retrieve exchange rates for multiple currencies based on a specific currency, the unit is 1. Default base currency is cny",
+        "description": "Retrieve exchange rates for multiple currencies based on a specific currency, the unit is 1. This function should only be used once to retrieve multiple currency exchange rates. If the user does not provide a currency type, please use cny as the base currency.",
         "parameters": {
             "type": "object",
             "properties": {
                 "base_currency": {
                     "type": "string",
-                    "description": "The base currency, needs English lowercase. If the user does not provide a base currency, please use cny.",
+                    "description": "The base currency, needs English lowercase.",
                     "default": "cny",
                     "examples": [
                         "usd",
@@ -16,7 +16,7 @@
                 },
                 "exchange_currencies": {
                     "type": "string",
-                    "description": "Currency names for which exchange rates need to be retrieved, English lowercase. Multiple currencies separated by |, default is usd|try|ngn",
+                    "description": "Currency names for which exchange rates need to be retrieved, English lowercase. Multiple currencies separated by |",
                     "default": "usd|try|ngn",
                     "examples": [
                         "usd|try",
@@ -44,5 +44,5 @@
         ]
     },
     "copyright": "data source: https://github.com/fawazahmed0/exchange-api",
-    "prompt": "This function should only be used once to retrieve multiple currency exchange rates. If the user does not provide a currency type, please use cny as the base currency, and usd|try|ngn as the exchange currencies for which exchange rates need to be queried. "
+    "prompt": "Refine the results and calculate the accurate data."
 }

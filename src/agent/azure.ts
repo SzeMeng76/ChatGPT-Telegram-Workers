@@ -3,9 +3,9 @@ import type { AgentUserConfig } from '../config/env';
 import type { ChatAgent, ChatStreamTextHandler, GeneratedImage, ImageAgent, ImageResult, LLMChatParams, LLMChatRequestParams, ResponseMessage } from './types';
 import { createAzure } from '@ai-sdk/azure';
 import { warpLLMParams } from '.';
+import { Log } from '../log/logDecortor';
 import { requestText2Image } from './chat';
 import { requestChatCompletionsV2 } from './request';
-import { Log } from '../log/logDecortor';
 
 export class AzureChatAI implements ChatAgent {
     readonly name = 'azure';

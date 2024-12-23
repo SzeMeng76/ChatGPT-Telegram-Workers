@@ -356,7 +356,7 @@ async function sendTelegraph(sendContext: {
     const prefix = `#Question\n\`\`\`\n${question}\n\`\`\`\n---`;
 
     const telegraph_prefix = `${prefix}\n#Answer\n🤖 **${getLog(context.USER_CONFIG, true)}**\n`;
-    const debug_info = `debug info:\n${getLog(context.USER_CONFIG, false)}`;
+    const debug_info = `${getLog(context.USER_CONFIG, false, true)}`;
     const telegraph_suffix = `\n---\n\`\`\`\n${debug_info}\n\`\`\``;
     try {
         if ((telegraph_prefix + text + telegraph_suffix).length >= 10917 * 6) {

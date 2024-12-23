@@ -26,5 +26,6 @@
     "type": "lookup",
     "required": [
         "QWEATHER_TOKEN"
-    ]
+    ],
+    "prompt": "This is just an intermediate result, please call other tools to give the answer based on the existing data."
 }

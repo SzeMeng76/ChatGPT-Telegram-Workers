@@ -1,7 +1,7 @@
 {
     "schema": {
         "name": "nf_price",
-        "description": "Query Netflix prices in different regions.",
+        "description": "Query Netflix prices in different regions. When users do not specify a country/region, they often want to know the price information for countries/regions such as Turkey, Nigeria, India, and Pakistan, and of course, not just these few countries are supported.",
         "parameters": {
             "type": "object",
             "properties": {
@@ -36,6 +36,6 @@
             }
         ]
     },
-    "prompt": "If the user does not provide a currency type, please use US|TR|NG|EG as the default low-price area.",
+    "prompt": "List the organized data, with line spacing between different types of data, and use appropriate formatting such as quotes/bold/unordered lists; do not include any other information, and it is best to combine the data with real-time exchange rates.",
     "copyright": "data soucre: https://github.com/tompec/netflix-prices"
 }
