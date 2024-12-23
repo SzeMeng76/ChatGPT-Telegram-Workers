@@ -49,7 +49,7 @@ export interface ChatStreamTextHandler {
     end?: (text: string, needLog?: boolean) => Promise<any>;
 }
 
-export type ImageAgentRequest = (prompt: string, context: AgentUserConfig) => Promise<ImageResult>;
+export type ImageAgentRequest = (prompt: string, context: AgentUserConfig, extraParams?: Record<string, any>) => Promise<ImageResult>;
 export type HistoryModifier = (history: HistoryItem[], message: CoreUserMessage | null) => HistoryModifierResult;
 
 export type LLMChatRequestParams = CoreUserMessage;
@@ -69,13 +69,13 @@ export interface Agent<AgentRequest> {
     enable: (context: AgentUserConfig) => boolean;
     request: AgentRequest;
     model: (ctx: AgentUserConfig, params?: LLMChatRequestParams) => string;
-    render?: (response: Response) => Promise<ImageResult>;
+    render?: (result: Response | GeneratedImage[], prompt: string) => Promise<ImageResult>;
 }
 
 export interface ImageResult extends UnionData {
     type: 'image';
     message?: string;
-    caption?: string;
+    caption?: string[];
 }
 
 export type ASRAgentRequest = (audio: Blob, context: AgentUserConfig) => Promise<string>;
@@ -110,3 +110,10 @@ export interface Image2ImageAgent {
 export type ChatAgent = Agent<ChatAgentRequest>;
 
 export type ImageAgent = Agent<ImageAgentRequest>;
+
+export interface GeneratedImage {
+    base64: string;
+    uint8Array: Uint8Array;
+}
+
+export type GoogleVertexImageModelId = 'imagen-3.0-fast-generate-001' | 'imagen-3.0-generate-001';

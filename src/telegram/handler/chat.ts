@@ -47,14 +47,13 @@ export async function chatWithLLM(
         const answer = await requestCompletionsFromLLM(params, context, agent, modifier, ENV.STREAM_MODE && !isMiddle ? streamSender : null);
         log.info(`chat with LLM done`);
         if (answer.messages.at(-1)?.role === 'tool') {
-            const result = await sendToolResult(answer.messages.at(-1)?.content as ToolResultPart[], streamSender.sender!, context.USER_CONFIG);
-            if (result instanceof Response) {
-                return result;
-            }
+            await sendToolResult(answer.messages.at(-1)?.content as ToolResultPart[], streamSender.sender!, context.USER_CONFIG);
+            return new Response('Success');
         }
         if (answer.content === '') {
-            return streamSender.end!('No response');
+            return answer.messages.at(-1)?.role === 'assistant' ? streamSender.end!('No response') : new Response('Success');
         }
+
         if (isMiddle) {
             return answer.content;
         }
@@ -229,7 +228,6 @@ export class ChatHandler implements MessageHandler<WorkerContext> {
 export function OnStreamHander(sender: MessageSender | ChosenInlineSender, context?: WorkerContext, question?: string): ChatStreamTextHandler {
     let sentPromise = null as Promise<Response | undefined> | null;
     let nextEnableTime: number | null = null;
-    // let sentError = false;
     const isMessageSender = sender instanceof MessageSender;
     const sendInterval = isMessageSender ? ENV.TELEGRAM_MIN_STREAM_INTERVAL : ENV.INLINE_QUERY_SEND_INTERVAL;
     const isSendTelegraph = (text: string) => {
@@ -237,6 +235,8 @@ export function OnStreamHander(sender: MessageSender | ChosenInlineSender, conte
             ? ENV.TELEGRAPH_SCOPE.includes(sender.context.chatType) && ENV.TELEGRAPH_NUM_LIMIT > 0 && text.length > ENV.TELEGRAPH_NUM_LIMIT
             : sender.context.inline_message_id && text.length > 4096;
     };
+    const addQuotePrerequisites = ENV.ADD_QUOTE_LIMIT > 0 && ENV.ADD_QUOTE_SCOPE.includes(sender.context.chatType);
+    const expandParams = { addQuote: false, quoteExpandable: ENV.QUOTE_EXPANDABLE };
     const botName = context?.SHARE_CONTEXT?.botName || 'AI';
     const telegraphAccessTokenKey = context?.SHARE_CONTEXT?.telegraphAccessTokenKey || '';
     const telegraphSender = new TelegraphSender(botName, telegraphAccessTokenKey);
@@ -273,17 +273,16 @@ export function OnStreamHander(sender: MessageSender | ChosenInlineSender, conte
             }
 
             if (isSendTelegraph(text)) {
-                await sentPromise;
                 sentPromise = sendTelegraph(telegraphContext(false, false), question || 'Redo Question', text);
                 hasSentTelegraphLink = true;
                 return;
             }
 
-            text = quoteMessage(text, sender.context.chatType);
-            const data = context ? `${getLog(context.USER_CONFIG)}\n${text}` : text;
+            const data = context ? `${getLog(context.USER_CONFIG)}\n${text}`.trimStart() : text;
+            expandParams.addQuote = addQuotePrerequisites && data.length > ENV.ADD_QUOTE_LIMIT;
             log.info(`sent message ids: ${isMessageSender ? [...sender.context.sentMessageIds] : sender.context.inline_message_id}`);
             isMessageSender && sendAction(sender.api.token, sender.context.chat_id, 'typing');
-            sentPromise = sender.sendRichText(data);
+            sentPromise = sender.sendRichText(data, undefined, 'chat', expandParams);
             const resp = await sentPromise as Response;
             // 判断429
             if (resp.status === 429) {
@@ -312,11 +311,11 @@ export function OnStreamHander(sender: MessageSender | ChosenInlineSender, conte
         if (isSendTelegraph(text)) {
             return sendTelegraph(telegraphContext(true, false), question || 'Redo Question', text);
         }
-        const quoteText = quoteMessage(text, sender.context.chatType);
-        const data = context && needLog ? `${getLog(context.USER_CONFIG)}\n${quoteText}` : quoteText;
+        const data = context && needLog ? `${getLog(context.USER_CONFIG)}\n${text}`.trimStart() : text;
         log.info(`sent message ids: ${isMessageSender ? [...sender.context.sentMessageIds] : sender.context.inline_message_id}`);
+        expandParams.addQuote = addQuotePrerequisites && data.length > ENV.ADD_QUOTE_LIMIT;
         while (true) {
-            const finalResp = await sender.sendRichText(data);
+            const finalResp = await sender.sendRichText(data, undefined, 'chat', expandParams);
             if (finalResp.status === 429) {
                 const retryAfter = Number.parseInt(finalResp.headers.get('Retry-After') || '');
                 if (retryAfter) {
@@ -482,7 +481,7 @@ async function handleAudio(
     context.MIDDLE_CONTEXT.history.push({ role: 'user', content: text });
     const sender = streamSender.sender!;
     if (handleKey === 'audio:text' || !ENV.HIDE_MIDDLE_MESSAGE) {
-        await sender.sendRichText(`${getLog(context.USER_CONFIG, false)}\n> \n${text}`);
+        await sender.sendRichText(`${getLog(context.USER_CONFIG, false)}\n> \n${text}`.trimStart());
     }
     if (handleKey.startsWith('stt')) {
         return new Response('audio handle done');
@@ -526,25 +525,31 @@ async function handleTextToAudio(
 }
 
 export async function sendImages(img: ImageResult, SEND_IMAGE_AS_FILE: boolean, sender: MessageSender, config: AgentUserConfig) {
-    const caption = img.text ? `${getLog(config)}\n> ${img.text}` : getLog(config);
-    if (img.url && img.url.length > 1) {
-        const images = img.url.map((url: string) => ({
-            type: (SEND_IMAGE_AS_FILE ? 'document' : 'photo'),
-            media: url,
-        })) as Telegram.InputMedia[];
-        images.at(-1)!.caption = escape(caption.split('\n'));
-        images.at(-1)!.parse_mode = ENV.DEFAULT_PARSE_MODE as Telegram.ParseMode;
-        return await sender.sendMediaGroup(images);
-    } else if (img.url && img.url.length === 1) {
-        return sender.editMessageMedia({
-            type: 'photo',
-            media: img.url[0],
-            caption,
-        }, ENV.DEFAULT_PARSE_MODE as Telegram.ParseMode);
-    } else if (img.url || img.raw) {
-        return sender.sendPhoto((img.url || img.raw)![0], caption, 'MarkdownV2');
-    } else {
+    if (img.url?.length === 0 && img.raw?.length === 0) {
         return sender.sendPlainText('ERROR: No image found');
+    }
+    const logText = getLog(config);
+    const caption = img.caption!.map((t, i) => `${i === 0 ? logText : ''}\n\n>${t}`.slice(0, 800).trim());
+
+    if (img.url?.length === 1 || img.raw?.length === 1) {
+        return sender.editMessageMedia({
+            type: SEND_IMAGE_AS_FILE ? 'document' : 'photo',
+            media: img.url?.[0] || '',
+            caption: escape(caption, { quoteExpandable: false, addQuote: true }),
+        }, ENV.DEFAULT_PARSE_MODE as Telegram.ParseMode, img.raw?.[0] && new File([img.raw[0]], 'image.png', { type: 'image/png' }));
+    } else {
+        const medias = (img.url || img.raw)!.map((media: string | Blob, index: number) => ({
+            type: (SEND_IMAGE_AS_FILE ? 'document' : 'photo'),
+            media: typeof media === 'string' ? media : '',
+            caption: escape(caption[index]?.split('\n') || [], { quoteExpandable: true, addQuote: true }),
+            parse_mode: ENV.DEFAULT_PARSE_MODE as Telegram.ParseMode,
+        })) as Telegram.InputMedia[];
+
+        if (img.raw && img.raw.length > 0) {
+            const files = img.raw.map((_, i) => new File([img.raw![i]], 'image.png', { type: 'image/png' }));
+            return sender.sendMediaGroup(medias, files);
+        }
+        return sender.sendMediaGroup(medias);
     }
 }
 
@@ -573,17 +578,4 @@ async function asr(audio: Blob, config: AgentUserConfig) {
         log.info(`transform audio time: ${((Date.now() - start) / 1000).toFixed(2)}s`);
     }
     return agent.request(audio, config);
-}
-
-function quoteMessage(text: string, scope: string) {
-    if (ENV.FOLD_MESSAGE_LIMIT > 0 && text.length > ENV.FOLD_MESSAGE_LIMIT && ENV.FOLD_MESSAGE_SCOPE.includes(scope)) {
-        const textList = text.split('\n');
-        textList.forEach((line, index) => {
-            if (!line.trimStart().startsWith('>')) {
-                textList[index] = `>${line}`;
-            }
-        });
-        return textList.join('\n');
-    }
-    return text;
 }

@@ -1,6 +1,6 @@
 import type { CoreMessage } from 'ai';
 import type { WorkerContext } from '../config/context';
-import type { ChatAgent, ChatStreamTextHandler, HistoryItem, HistoryModifier, ImageResult, LLMChatParams, LLMChatRequestParams, ResponseMessage } from './types';
+import type { ChatAgent, ChatStreamTextHandler, GeneratedImage, HistoryItem, HistoryModifier, ImageResult, LLMChatParams, LLMChatRequestParams, ResponseMessage } from './types';
 import { ENV } from '../config/env';
 import { log } from '../log/logger';
 
@@ -77,14 +77,14 @@ export async function requestCompletionsFromLLM(params: LLMChatRequestParams | n
     return answer;
 }
 
-export async function requestText2Image(url: string, headers: Record<string, any>, body: any, render: (arg: Response) => Promise<ImageResult>) {
+export async function requestText2Image(url: string, headers: Record<string, any>, body: any, render: (arg: Response | GeneratedImage[], prompt: string) => Promise<ImageResult>) {
     console.log('start generate image.');
     const resp = await fetch(url, {
         method: 'POST',
         headers,
         body: JSON.stringify(body),
     });
-    const result = await render(resp);
+    const result = await render(resp, body.prompt);
     if (result.message) {
         throw new Error(result.message);
     }

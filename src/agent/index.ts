@@ -17,7 +17,7 @@ import { Google } from './google';
 import { Mistral } from './mistralai';
 import { Dalle, OpenAI, OpenAIASR, OpenAITTS } from './openai';
 import { OpenAILike, OpenAILikeASR, OpenAILikeImage, OpenAILikeTTS } from './openailike';
-import { Vertex } from './vertex';
+import { Vertex, VertexImage } from './vertex';
 import { WorkersChat, WorkersImage } from './workersai';
 import { XAI } from './xai';
 
@@ -56,6 +56,7 @@ export const IMAGE_AGENTS: ImageAgent[] = [
     new Dalle(),
     new WorkersImage(),
     new OpenAILikeImage(),
+    new VertexImage(),
 ];
 
 export function loadImageGen(context: AgentUserConfig): ImageAgent | null {

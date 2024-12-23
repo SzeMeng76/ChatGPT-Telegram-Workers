@@ -154,3 +154,4 @@ out
 /dist/index.d.ts
 .cursorignore
 *.db
+test

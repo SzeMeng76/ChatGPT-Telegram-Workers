@@ -1,6 +1,6 @@
 import type { CoreUserMessage } from 'ai';
 import type { AgentUserConfig } from '../config/env';
-import type { ASRAgent, ChatAgent, ChatStreamTextHandler, ImageAgent, ImageResult, LLMChatParams, LLMChatRequestParams, ResponseMessage, TTSAgent } from './types';
+import type { ASRAgent, ChatAgent, ChatStreamTextHandler, GeneratedImage, ImageAgent, ImageResult, LLMChatParams, LLMChatRequestParams, ResponseMessage, TTSAgent } from './types';
 import { createOpenAI } from '@ai-sdk/openai';
 import { warpLLMParams } from '.';
 import { Log } from '../log/logDecortor';
@@ -130,21 +130,22 @@ export class Dalle extends OpenAIBase implements ImageAgent {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${this.apikey(context)}`,
         };
+        const { n = 1, size = '1024x1024', style = 'vivid', quality = 'hd' } = extraParams || {};
         const body: any = {
             prompt,
-            n: 1,
-            size: extraParams?.size || context.DALL_E_IMAGE_SIZE,
+            n,
             model: extraParams?.model || context.DALL_E_MODEL,
         };
         if (body.model === 'dall-e-3') {
-            body.quality = extraParams?.quality || context.DALL_E_IMAGE_QUALITY;
-            body.style = extraParams?.style || context.DALL_E_IMAGE_STYLE;
+            body.size = size || context.DALL_E_IMAGE_SIZE;
+            body.style = style || context.DALL_E_IMAGE_STYLE;
+            body.quality = quality || context.DALL_E_IMAGE_QUALITY;
         }
         return requestText2Image(url, header, body, this.render);
     };
 
-    render = async (response: Response): Promise<ImageResult> => {
-        const resp = await response.json();
+    render = async (response: Response | GeneratedImage[], prompt: string): Promise<ImageResult> => {
+        const resp = await (response as Response).json();
         if (resp.error?.message) {
             throw new Error(resp.error.message);
         }
@@ -154,7 +155,7 @@ export class Dalle extends OpenAIBase implements ImageAgent {
         return {
             type: 'image',
             url: resp.data?.map((i: { url: any }) => i?.url),
-            text: resp.data?.[0]?.revised_prompt || '',
+            text: resp.data?.[0]?.revised_prompt || prompt,
         };
     };
 }

@@ -1,5 +1,5 @@
 /* eslint-disable regexp/no-super-linear-backtracking */
-const escapeChars = /([_*[\]()\\~`>#+\-=|{}.!])/g;
+const escapeChars = /[_*[\]()\\~`>#+\-=|{}.!]/g;
 const escapedChars = {
     '\\*': 'ESCAPEASTERISK',
     '\\_': 'ESCAPEUNDERSCORE',
@@ -23,116 +23,118 @@ const escapedChars = {
     '\\?': 'ESCAPEQUESTION',
 };
 const escapedRegexp = /\\[*_~|`\\()[\]{}>#+\-=.!]/g;
-// const logRegexp = /^LOGSTART\n(.*?)LOGEND/s;
+const logRegexp = /^>?LOGSTART\n([\s\S]*?)LOGEND/;
 const reverseCodeRegexp = /\\`\\`\\`([\s\S]+)\\`\\`\\`$/g;
-const inlineCodeRegexp = /(?:^|[^\\])`[\s\S]*?[^\\]`/g;
+const inlineCodeRegexp = /`[^\n]*?`/g;
 const escapeRegexpMatch = [
     // bold
     {
-        regex: /\\\*\\\*(\S|\S.*?\S)\\\*\\\*/g,
+        regex: /\\\*\\\*(\S|\S[^\n]*?\S)\\\*\\\*/g,
         value: '*$1*',
     },
     // underline
     {
-        regex: /\\_\\_(\S|\S.*?\S)\\_\\_/g,
+        regex: /\\_\\_(\S|\S[^\n]*?\S)\\_\\_/g,
         value: '__$1__',
     },
     // italic
     {
-        regex: /\\(_|\*)(\S|\S.*?\S)\\\1/g,
+        regex: /\\(_|\*)(\S|\S[^\n]*?\S)\\\1/g,
         value: '_$2_',
     },
     // strikethrough
     {
-        regex: /\\~(\S|\S.*?\S)\\~/g,
+        regex: /\\~(\S|\S[^\n]*?\S)\\~/g,
         value: '~$1~',
     },
     // spoiler
     {
-        regex: /\\\|\\\|(\S|\S.*?\S)\\\|\\\|/g,
+        regex: /\\\|\\\|(\S|\S[^\n]*?\S)\\\|\\\|/g,
         value: '||$1||',
     },
     // url
     {
-        regex: /\\\[([^\]]+)\\\]\\\((.+?)\\\)/g,
+        regex: /\\\[([^\n]+)\\\]\\\((.+?)\\\)/g,
         value: '[$1]($2)',
     },
     // quote
     {
-        regex: /^ *\\>\s*(.*)$/gm,
+        regex: /^ *\\> *([^\n]*)$/gm,
         value: '>$1',
     },
     // item
     {
-        regex: /^(>?\s*)\\(?:-|\*)\s+(.+)$/gm,
+        regex: /^(>? *)\\(?:-|\*)\s+([^\n]*)$/gm,
         value: '$1• $2',
     },
     // number sign
     {
-        regex: /^((?:\\#){1,3}\s)(.+)/gm,
+        regex: /^((?:\\#){1,6} )([^\n]+)$/g,
         value: '$1*$2*',
     },
 ];
 
 const escapedCharsReverseMap = new Map(Object.entries(escapedChars).map(([key, value]) => [value, key]));
 
-export function escape(lines: string[]): string {
-    const stack: number[] = [];
+export function escape(lines: string[], expandParams: ExpandParams = { addQuote: false, quoteExpandable: false }): string {
+    const codeStack: number[] = [];
     const result: string[] = [];
     let lineTrim = '';
-    let modifiedLine = '';
+    // let modifiedLine = '';
+    let textStartIndex = 0;
 
     for (const [i, line] of lines.entries()) {
         lineTrim = line.trim();
-        modifiedLine = line;
-
-        let startIndex: number | undefined = 0;
+        let startIndex: number | undefined;
+        // if line starts with ```xx, push current line index to codeStack
         if (/^```.+/.test(lineTrim)) {
-            stack.push(i);
+            codeStack.push(i);
+            if (textStartIndex < i) {
+                result.push(handleEscape(lines.slice(textStartIndex, i).join('\n'), 'text', expandParams));
+            }
         } else if (lineTrim === '```') {
-            if (stack.length) {
-                startIndex = stack.pop();
-                if (!stack.length) {
+            // if line is ```, and codeStack is not empty, pop last element from codeStack
+            if (codeStack.length > 0) {
+                startIndex = codeStack.pop();
+                // if codeStack is empty now, push content to result and handle code escape
+                if (codeStack.length === 0) {
                     const content = lines.slice(startIndex, i + 1).join('\n');
-                    result.push(handleEscape(content, 'code'));
-                    continue;
+                    result.push(handleEscape(content, 'code', expandParams));
+                    textStartIndex = i + 1;
                 }
             } else {
-                stack.push(i);
+                // code start
+                codeStack.push(i);
+                if (textStartIndex < i) {
+                    result.push(handleEscape(lines.slice(textStartIndex, i).join('\n'), 'text', expandParams));
+                }
             }
-            // If the current line does not start with > and the previous line starts with >,
-            // add > to the beginning of the current line.
-        }
-        // else if (lineTrim && i > 0 && /^\s*>/.test(result.at(-1) ?? '') && !lineTrim.startsWith('>')) {
-        //     modifiedLine = `>${line}`;
-        // }
-
-        if (!stack.length) {
-            result.push(handleEscape(modifiedLine));
         }
     }
-    if (stack.length) {
-        const last = `${lines.slice(stack[0]).join('\n')}\n\`\`\``;
-        result.push(handleEscape(last, 'code'));
+    if (codeStack.length > 0) {
+        const last = `${lines.slice(codeStack[0]).join('\n')}\n\`\`\``;
+        result.push(handleEscape(last, 'code', expandParams));
+    } else if (textStartIndex < lines.length) {
+        result.push(handleEscape(lines.slice(textStartIndex).join('\n'), 'text', expandParams));
     }
-    return extraCharsHandler(result.join('\n'));
+    return addExpandable(result.join('\n'), expandParams.quoteExpandable);
 }
 
-function handleEscape(text: string, type: string = 'text'): string {
+function handleEscape(text: string, type: 'text' | 'code', { addQuote, quoteExpandable }: ExpandParams): string {
     if (!text.trim()) {
         return text;
     }
-
     text = text.replace(escapedRegexp, match => escapedChars[match as keyof typeof escapedChars]);
-
     if (type === 'text') {
-        const { text: text1, inlineCode } = inlineCodeHandler(text);
-        text = text1.replace(escapeChars, match => `\\${match}`);
+        const { inlineCode } = inlineCodeHandler(text);
+        text = inlineCodeHandler(text).text;
+        text = text.replace(escapeChars, match => `\\${match}`);
+
         escapeRegexpMatch.forEach(item => text = text.replace(item.regex, item.value));
         Object.entries(inlineCode).forEach(([key, value]) => {
             text = text.replace(key, value);
         });
-    } else {
+    } else if (!addQuote) {
         const codeBlank = text.length - text.trimStart().length;
         if (codeBlank > 0) {
             const blankReg = new RegExp(`^\\s{${codeBlank}}`, 'gm');
@@ -142,8 +144,14 @@ function handleEscape(text: string, type: string = 'text'): string {
             .trimEnd()
             .replace(/([\\`])/g, '\\$1')
             .replace(reverseCodeRegexp, '```$1```'); // code block
+    } else {
+        text = text.replace(escapeChars, match => `\\${match}`);
     }
-    return text;
+    addQuote && (text = quoteMessage(text));
+    return text.replace(
+        new RegExp(Object.values(escapedChars).join('|'), 'g'),
+        match => escapedCharsReverseMap.get(match) ?? match,
+    );
 }
 
 export function chunkDocument(text: string, chunkSize: number = 4096): string[][] {
@@ -225,15 +233,40 @@ function inlineCodeHandler(text: string) {
     };
 }
 
-function extraCharsHandler(text: string): string {
-    return text
-        // fold log data
-        // .replace(logRegexp, '**$1||')
+export function addExpandable(text: string, quoteExpandable: boolean): string {
+    if (!quoteExpandable) {
+        // fold first quote
+        text = text.replace(logRegexp, `$1`).replace(/(?:^>[^\n]*(\n|$))+/m, (match, p1) => `**${match.trimEnd()}||${p1}`);
+        console.debug(`addExpandable:\n${text}`);
+        return text;
+    }
+    // replace log data to expandable
+    text = text.replace(logRegexp, `$1`);
+    text = text
         // remove extra whitespace
         .replace(/\n\s+\n/g, '\n\n')
         // fold quote
         // .replace(/((?:^>[^\n]+(?:\n|$))+)/gm, (match, p1) => `**${p1.trimEnd()}||\n`)
-        .replace(/(?:^>[^\n]*(\n|$)){3,}/gm, (match, p1) => `**${match.trimEnd()}||${p1}`)
-        // reverse escape chars
-        .replace(new RegExp(Object.values(escapedChars).join('|'), 'g'), match => escapedCharsReverseMap.get(match) ?? match);
+        .replace(/(?:^>[^\n]*(\n|$))+/gm, (match, p1) => `**${match.trimEnd()}||${p1}`);
+    // reverse escape chars
+    console.debug(`addExpandable:\n${text}`);
+    return text;
+}
+
+export interface ExpandParams {
+    addQuote: boolean;
+    quoteExpandable: boolean;
+}
+
+function quoteMessage(text: string) {
+    const textList = text.split('\n');
+    if (textList.length <= 1) {
+        return text;
+    }
+    textList.forEach((line, index) => {
+        if (!line.trimStart().startsWith('>')) {
+            textList[index] = `>${line}`;
+        }
+    });
+    return textList.join('\n');
 }

@@ -85,13 +85,13 @@ export class WorkersImage extends WorkerBase implements ImageAgent {
     };
 
     @Log
-    readonly request = async (prompt: string, context: AgentUserConfig): Promise<ImageResult> => {
+    readonly request = async (prompt: string, context: AgentUserConfig, extraParams?: Record<string, any>): Promise<ImageResult> => {
         const id = context.CLOUDFLARE_ACCOUNT_ID;
         const token = context.CLOUDFLARE_TOKEN;
         if (!id || !token) {
             throw new Error('Cloudflare account ID or token is not set');
         }
-        const raw = await this.run(context.WORKERS_IMAGE_MODEL, { prompt }, id, token);
+        const raw = await this.run(context.WORKERS_IMAGE_MODEL, { prompt, ...extraParams }, id, token);
         if (isJsonResponse(raw)) {
             const { result } = await raw.json();
             const image = result?.image;
@@ -100,7 +100,7 @@ export class WorkersImage extends WorkerBase implements ImageAgent {
             }
             return { type: 'image', raw: [await base64StringToBlob(image)] };
         }
-        return { type: 'image', raw: [await raw.blob()] };
+        return { type: 'image', raw: [await raw.blob()], text: prompt };
     };
 }
 

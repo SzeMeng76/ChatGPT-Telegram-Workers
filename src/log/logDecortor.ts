@@ -31,7 +31,7 @@ export function Log(
                         if (this.type === 'tool') {
                             logs.tool.model = model;
                         } else {
-                            logs.chat.model.push(model);
+                            logs.chat.model = model;
                         }
 
                         const result: CompletionData = await initialValue.apply(this, args);
@@ -93,7 +93,7 @@ export function getLogSingleton(config: AgentUserConfig): Logs {
                 time: [],
             },
             chat: {
-                model: [],
+                model: '',
                 time: [],
             },
             tokens: [],
@@ -147,12 +147,7 @@ export function getLog(context: AgentUserConfig, onlyModel: boolean = false) {
 
     // chat
     if (logObj.chat.model.length > 0) {
-        const chatLogs = logObj.chat.model
-            .map((m, i) => {
-                const time = logObj.chat.time[i];
-                return `${m}${time ? ` ${time}s` : ''}`;
-            })
-            .join('|');
+        const chatLogs = logObj.chat.model + (logObj.chat.time.length > 0 ? ` ${logObj.chat.time.join('s ')}s` : '');
         logList.push(chatLogs);
     }
 
@@ -167,8 +162,8 @@ export function getLog(context: AgentUserConfig, onlyModel: boolean = false) {
         logList.push(`${logObj.tokens.join('|')}`);
     }
 
-    const formattedEntries = `${logList.filter(Boolean).map(entry => `>\`${entry}\``).join('\n')}\n`;
-    return formattedEntries;
+    const formattedEntries = `${logList.filter(Boolean).map(entry => `>\`${entry}\``).join('\n')}`;
+    return `LOGSTART\n${formattedEntries}LOGEND`;
 }
 
 export function clearLog(context: AgentUserConfig) {
@@ -196,7 +191,7 @@ interface Logs {
     functions: { name: string; arguments: any }[];
     functionTime: string[];
     tool: { model: string; time: string[] };
-    chat: { model: string[]; time: string[] };
+    chat: { model: string; time: string[] };
     tokens: string[];
     ongoingFunctions: { name: string; startTime: number }[];
     error: string;

@@ -133,7 +133,7 @@ function clearTimeoutID(timeoutID: any) {
         clearTimeout(timeoutID);
 }
 
-export async function streamHandler(stream: AsyncIterable<any>, contentExtractor: (data: any) => string | null, onStream: ChatStreamTextHandler, messageReferencer?: string[]): Promise<string> {
+export async function streamHandler(stream: AsyncIterable<any>, contentExtractor: (data: any) => string | null, onStream: ChatStreamTextHandler, messageReferencer?: string[], errorReferencer: boolean[] = [false]): Promise<string> {
     log.info(`start handle stream`);
 
     let contentFull = '';
@@ -175,14 +175,15 @@ export async function streamHandler(stream: AsyncIterable<any>, contentExtractor
         if (contentFull === '') {
             throw e;
         }
-        console.error((e as Error).message);
+        console.error((e as Error).message, (e as Error).stack);
         contentFull += `\n\n\`\`\`Error\n${(e as Error).message}\n\`\`\``;
+        errorReferencer[0] = true;
     }
 
     return contentFull;
 }
 
-export async function requestChatCompletionsV2(params: { model: LanguageModelV1; toolModel?: LanguageModelV1; prompt?: string; messages: CoreMessage[]; tools?: any; activeTools?: string[]; toolChoice?: ToolChoice[] | undefined; context: AgentUserConfig }, onStream: ChatStreamTextHandler | null, onResult: OnResult | null = null): Promise<{ messages: ResponseMessage[]; content: string }> {
+export async function requestChatCompletionsV2(params: { model: LanguageModelV1; toolModel?: LanguageModelV1; prompt?: string; messages: CoreMessage[]; tools?: any; activeTools?: string[]; toolChoice?: ToolChoice[] | undefined; context: AgentUserConfig }, onStream: ChatStreamTextHandler | null): Promise<{ messages: ResponseMessage[]; content: string }> {
     const messageReferencer = [] as string[];
     const middleware = AIMiddleware({
         config: params.context,
@@ -207,28 +208,37 @@ export async function requestChatCompletionsV2(params: { model: LanguageModelV1;
         activeTools: params.activeTools,
         onStepFinish: middleware.onStepFinish as (data: StepResult<any>) => void,
     };
+    let messages: ResponseMessage[] = [];
+    let contentFull = '';
+    let metadata = '';
+    let error = '';
+    const errorReferencer = [false];
+
     if (onStream !== null /* && params.model.modelId !== 'gpt-4o-audio-preview' */) {
         const stream = streamText({
             ...hander_params,
             onChunk: middleware.onChunk as (data: any) => void,
         });
-        const contentFull = await streamHandler(stream.textStream, t => t, onStream, messageReferencer);
-        onResult?.(contentFull);
-        const metadata = metaDataExtractor(await stream.experimental_providerMetadata, params.model.provider);
-        await manualRequestTool((await stream.response).messages, params.context);
-        return {
-            messages: (await stream.response).messages,
-            content: contentFull + metadata,
-        };
+        contentFull = await streamHandler(stream.textStream, t => t, onStream, messageReferencer, errorReferencer);
+        messages = errorReferencer[0] ? [{ role: 'assistant', content: contentFull }] : (await stream.response).messages;
+        metadata = errorReferencer[0] ? '' : metaDataExtractor(await stream.experimental_providerMetadata, params.model.provider);
     } else {
         const result = await generateText(hander_params);
-        onResult?.(result.text);
-        const metadata = metaDataExtractor(await result.experimental_providerMetadata, params.model.provider);
-
-        await manualRequestTool(result.response.messages, params.context);
-        return {
-            messages: result.response.messages,
-            content: result.text + metadata,
-        };
+        contentFull = result.text;
+        messages = result.response.messages;
+        metadata = metaDataExtractor(await result.experimental_providerMetadata, params.model.provider);
     }
+    try {
+        await manualRequestTool(messages, params.context);
+    } catch (e) {
+        if (contentFull.trim() === '') {
+            throw e;
+        }
+        error = `\n\n\`\`\`Error\n${(e as Error).message}\n\`\`\``;
+    }
+    metadata = metaDataExtractor(metadata, params.model.provider);
+    return {
+        messages,
+        content: contentFull + metadata + error,
+    };
 }

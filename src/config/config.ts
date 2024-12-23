@@ -166,10 +166,13 @@ export class EnvironmentConfig {
     STORE_TEXT_CHUNK_MESSAGE: boolean = false;
     // Audio text format
     AUDIO_TEXT_FORMAT: undefined | 'spoiler' | 'bold' | 'italic' | 'underline' | 'strikethrough' | 'code' | 'pre' = undefined;
-    // when message length exceeds this value, the message will be folded, set -1 to disable
-    FOLD_MESSAGE_LIMIT = -1;
-    // Fold message scope
-    FOLD_MESSAGE_SCOPE: string[] = ['group', 'supergroup'];
+    // when message length exceeds this value, the message will be set as quotation, with QUOTE_EXPANDABLE set to true to expand the message, set -1 to disable
+    ADD_QUOTE_LIMIT = -1;
+    // Fold message scope, support group supergroup private
+    ADD_QUOTE_SCOPE: string[] = ['group', 'supergroup'];
+
+    // If true, will expand the quote message; log always be expandable
+    QUOTE_EXPANDABLE = false;
 }
 
 // -- 通用配置 --
@@ -336,6 +339,8 @@ export class VertexConfig {
     VERTEX_VISION_MODEL = 'gemini-1.5-flash-002';
     // when use search grounding, do not use other tools at the same time, otherwise errors occur.
     SEARCH_GROUNDING = false;
+    // Vertex Image Model
+    VERTEX_IMAGE_MODEL = 'imagen-3.0-fast-generate-001';
 }
 
 export class XAIConfig {

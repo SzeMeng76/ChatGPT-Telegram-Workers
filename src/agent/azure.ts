@@ -1,10 +1,11 @@
 import type { CoreUserMessage } from 'ai';
 import type { AgentUserConfig } from '../config/env';
-import type { ChatAgent, ChatStreamTextHandler, ImageAgent, ImageResult, LLMChatParams, LLMChatRequestParams, ResponseMessage } from './types';
+import type { ChatAgent, ChatStreamTextHandler, GeneratedImage, ImageAgent, ImageResult, LLMChatParams, LLMChatRequestParams, ResponseMessage } from './types';
 import { createAzure } from '@ai-sdk/azure';
 import { warpLLMParams } from '.';
 import { requestText2Image } from './chat';
 import { requestChatCompletionsV2 } from './request';
+import { Log } from '../log/logDecortor';
 
 export class AzureChatAI implements ChatAgent {
     readonly name = 'azure';
@@ -53,7 +54,8 @@ export class AzureImageAI implements ImageAgent {
         return ctx.AZURE_IMAGE_MODEL || '';
     };
 
-    readonly request = async (prompt: string, context: AgentUserConfig): Promise<ImageResult> => {
+    @Log
+    readonly request = async (prompt: string, context: AgentUserConfig, extraParams?: Record<string, any>): Promise<ImageResult> => {
         const url = `https://${context.AZURE_RESOURCE_NAME}.openai.azure.com/openai/deployments/${context.AZURE_IMAGE_MODEL}/chat/completions?${context.AZURE_API_VERSION}`;
         if (!url || !context.AZURE_API_KEY) {
             throw new Error('Azure DALL-E API is not set');
@@ -62,12 +64,13 @@ export class AzureImageAI implements ImageAgent {
             'Content-Type': 'application/json',
             'api-key': context.AZURE_API_KEY,
         };
+        const { n = 1, size, style, quality } = extraParams || {};
         const body = {
             prompt,
-            n: 1,
-            size: context.DALL_E_IMAGE_SIZE,
-            style: context.DALL_E_IMAGE_STYLE,
-            quality: context.DALL_E_IMAGE_QUALITY,
+            n,
+            size: size || context.DALL_E_IMAGE_SIZE,
+            style: style || context.DALL_E_IMAGE_STYLE,
+            quality: quality || context.DALL_E_IMAGE_QUALITY,
         };
         const validSize = ['1792x1024', '1024x1024', '1024x1792'];
         if (!validSize.includes(body.size)) {
@@ -76,15 +79,15 @@ export class AzureImageAI implements ImageAgent {
         return requestText2Image(url, header, body, this.render);
     };
 
-    render = async (response: Response): Promise<ImageResult> => {
-        const resp = await response.json();
+    render = async (response: Response | GeneratedImage[], prompt: string): Promise<ImageResult> => {
+        const resp = await (response as Response).json();
         if (resp.error?.message) {
             throw new Error(resp.error.message);
         }
         return {
             type: 'image',
             url: resp?.data?.map((i: { url: any }) => i?.url),
-            text: resp?.data?.[0]?.revised_prompt || '',
+            text: resp?.data?.[0]?.revised_prompt || prompt,
         };
     };
 }

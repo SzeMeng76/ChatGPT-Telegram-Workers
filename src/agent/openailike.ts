@@ -1,6 +1,6 @@
 import type { CoreUserMessage } from 'ai';
 import type { AgentUserConfig } from '../config/env';
-import type { ASRAgent, ChatAgent, ChatStreamTextHandler, ImageAgent, ImageResult, LLMChatParams, LLMChatRequestParams, ResponseMessage } from './types';
+import type { ASRAgent, ChatAgent, ChatStreamTextHandler, GeneratedImage, ImageAgent, ImageResult, LLMChatParams, LLMChatRequestParams, ResponseMessage } from './types';
 import { createOpenAI } from '@ai-sdk/openai';
 import { Log } from '../log/logDecortor';
 import { log } from '../log/logger';
@@ -56,6 +56,7 @@ export class OpenAILikeImage extends OpenAILikeBase implements ImageAgent {
         return ctx.OAILIKE_IMAGE_MODEL;
     };
 
+    @Log
     request = async (prompt: string, context: AgentUserConfig): Promise<ImageResult> => {
         const url = `${context.OAILIKE_API_BASE}/image/generations`;
         const header = {
@@ -73,14 +74,15 @@ export class OpenAILikeImage extends OpenAILikeBase implements ImageAgent {
         return requestText2Image(url, header, body, this.render);
     };
 
-    render = async (response: Response): Promise<ImageResult> => {
-        if (response.status !== 200)
-            return { type: 'image', message: await response.text() };
-        const resp = await response.json();
-        if (resp.message) {
-            return { type: 'image', message: resp.message };
+    render = async (response: Response | GeneratedImage[], prompt: string): Promise<ImageResult> => {
+        const resp = response as Response;
+        if (!resp.ok)
+            return { type: 'image', message: await resp.text() };
+        const data = await resp.json();
+        if (data.message) {
+            return { type: 'image', message: data.message };
         }
-        return { type: 'image', url: (await resp?.images)?.map((i: { url: any }) => i?.url) };
+        return { type: 'image', url: data?.images?.map((i: { url: string }) => i?.url), text: prompt };
     };
 }
 

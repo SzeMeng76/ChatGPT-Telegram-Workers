@@ -145,14 +145,11 @@ export async function sendToolResult(toolResult: ToolResultPart[], sender: Messa
             return sender.sendRichText(toolResult.map(r => (r.result as ToolResult).result).join('\n'));
         case 'image': {
             const images = toolResult.map(r => (r.result as ToolResult).result).flat();
-            let text = `${images.map(r => r.text ?? '').join('\n-----\n')}`;
-            if (text.length > 500) {
-                text = `${text.substring(0, 500)}...`;
-            }
+            const type = images.some(r => r.raw) ? 'raw' : 'url';
             return sendImages({
                 type: 'image',
-                url: images.map(r => r.url).flat(),
-                text,
+                [type]: images.map(r => r.url || r.raw).flat(),
+                caption: images.map(r => r.text ?? ''),
             }, ENV.SEND_IMAGE_AS_FILE, sender, config);
         }
         default:

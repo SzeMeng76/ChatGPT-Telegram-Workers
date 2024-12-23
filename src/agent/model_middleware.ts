@@ -199,7 +199,7 @@ function recordModelLog(config: AgentUserConfig, model: LanguageModelV1, activeT
     if (activeTools.length > 0 && toolChoice?.type !== 'none') {
         logs.tool.model = model.modelId;
     } else {
-        logs.chat.model.push(model.modelId);
+        logs.chat.model = model.modelId;
     }
 }
 
