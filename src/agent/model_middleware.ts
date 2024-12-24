@@ -129,12 +129,10 @@ function warpMessages(params: LanguageModelV1CallOptions, tools: Record<string, 
         for (const [i, message] of messages.entries()) {
             switch (message.role) {
                 case 'system':
-                    if (activeTools.length > 0) {
-                        modifiedMessages.push({
-                            role: 'system',
-                            content: getSystemContent(),
-                        });
-                    }
+                    modifiedMessages.push({
+                        role: 'system',
+                        content: getSystemContent(),
+                    });
                     continue;
                 case 'assistant':
                     if (message.content.every(i => i.type !== 'tool-call')) {
@@ -167,7 +165,7 @@ function warpMessages(params: LanguageModelV1CallOptions, tools: Record<string, 
         return modifiedMessages;
     };
 
-    if (!activeTools.length) {
+    if (activeTools.length <= 0) {
         (mode as any).tools = undefined;
     }
     params.prompt = trimMessages(messages);

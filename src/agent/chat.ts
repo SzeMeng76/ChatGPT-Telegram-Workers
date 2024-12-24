@@ -66,6 +66,10 @@ export async function requestCompletionsFromLLM(params: LLMChatRequestParams | n
     const answer = await agent.request(llmParams, context.USER_CONFIG, onStream);
     const { messages: raw_messages } = answer;
 
+    if (answer.content.trim() === '' && raw_messages.at(-1)?.role === 'assistant') {
+        throw new Error('Response is empty');
+    }
+
     if (!historyDisable) {
         // only push valid chat history
         if (raw_messages.at(-1)?.role === 'assistant') {

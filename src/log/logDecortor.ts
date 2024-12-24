@@ -108,34 +108,38 @@ export function getLogSingleton(config: AgentUserConfig): Logs {
 export function getLog(context: AgentUserConfig, onlyModel: boolean = false, isParagraph = false) {
     if (!context.ENABLE_SHOWINFO)
         return '';
-
-    const showToken = context.ENABLE_SHOWTOKEN;
-    const logList: string[] = [];
     const logObj = logSingleton.get(context);
-
     if (!logObj)
         return '';
     if (onlyModel) {
         return logObj.chat.model?.at(-1) || logObj.tool.model || 'UNKNOWN';
     }
+    const logList: string[] = [];
+    const show = {
+        model: context.SHOW_PARTS.includes('model'),
+        model_time: context.SHOW_PARTS.includes('model_time'),
+        token: context.SHOW_PARTS.includes('token'),
+        tool: context.SHOW_PARTS.includes('tool'),
+        tool_time: context.SHOW_PARTS.includes('tool_time'),
+    };
 
     // tool
-    if (logObj.tool.model) {
-        let toolsLog = `${logObj.tool.model}`;
-        if (logObj.tool.time.length > 0) {
+    if (logObj.tool.model && show.model) {
+        let toolsLog = logObj.tool.model;
+        if (logObj.tool.time.length > 0 && show.model_time) {
             toolsLog += ` c_t: ${logObj.tool.time.join('s ')}s`;
         }
-        if (logObj.functionTime.length > 0) {
+        if (logObj.functionTime.length > 0 && show.tool_time) {
             toolsLog += ` f_t: ${logObj.functionTime.join('s ')}s`;
         }
         logList.push(toolsLog);
     }
 
     // function
-    if (logObj.functions.length > 0) {
+    if (logObj.functions.length > 0 && show.tool) {
         const functionLogs = logObj.functions.map((log) => {
             const args = Object.values(log.arguments).join(', ');
-            return `${log.name}: ${args}`.substring(0, 50);
+            return `${log.name}: ${args}`.substring(0, 80);
         });
         logList.push(...functionLogs);
     }
@@ -146,8 +150,8 @@ export function getLog(context: AgentUserConfig, onlyModel: boolean = false, isP
     }
 
     // chat
-    if (logObj.chat.model.length > 0) {
-        const chatLogs = logObj.chat.model + (logObj.chat.time.length > 0 ? ` ${logObj.chat.time.join('s ')}s` : '');
+    if (logObj.chat.model.length > 0 && show.model) {
+        const chatLogs = `${logObj.chat.model}${logObj.chat.time.length > 0 && show.model_time ? ` ${logObj.chat.time.join('s ')}s` : ''}`;
         logList.push(chatLogs);
     }
 
@@ -158,13 +162,13 @@ export function getLog(context: AgentUserConfig, onlyModel: boolean = false, isP
     });
 
     // token
-    if (logObj.tokens.length > 0 && showToken) {
+    if (logObj.tokens.length > 0 && show.token) {
         logList.push(`${logObj.tokens.join('|')}`);
     }
 
     return isParagraph
         ? logList.filter(Boolean).join()
-        : `LOGSTART\n${logList.filter(Boolean).map(entry => `>\`${entry}\``).join('\n')}LOGEND\n`;
+        : `LOGSTART\n${logList.filter(Boolean).map(entry => `>\`${entry}\``).join('\n')}LOGEND`;
 }
 
 export function clearLog(context: AgentUserConfig) {

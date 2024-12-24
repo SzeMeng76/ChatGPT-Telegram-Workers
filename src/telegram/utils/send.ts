@@ -125,10 +125,19 @@ export class MessageSender {
         let lastMessageResponse = null;
         let lastMessageRespJson = null;
         for (let i = 0; i < messages.length; i++) {
-            // 不再发送中间片段
+            // 不发送中间片段
             if (i > 0 && i < context.sentMessageIds.size - 1) {
                 continue;
             }
+            // 日志位置不在顶部时，不发送第一个消息
+            if (context.sentMessageIds.size > 1 && i === 0 && !ENV.LOG_POSITION_ON_TOP) {
+                continue;
+            }
+            // 不发送空消息
+            if (messages[i].trim() === '') {
+                continue;
+            }
+
             chatContext.message_id = [...context.sentMessageIds][i] ?? null;
             lastMessageResponse = await this.sendMessage(messages[i], chatContext);
             if (lastMessageResponse.status !== 200) {

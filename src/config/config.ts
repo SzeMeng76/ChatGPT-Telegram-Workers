@@ -173,6 +173,8 @@ export class EnvironmentConfig {
 
     // If true, will expand the quote message; log always be expandable
     QUOTE_EXPANDABLE = false;
+    // whether log position on top, default is true
+    LOG_POSITION_ON_TOP = true;
 }
 
 // -- 通用配置 --
@@ -364,10 +366,10 @@ export class ExtraUserConfig {
     // MAPPING_VALUE = "cson:claude-3-5-sonnet-20240620|haiku:claude-3-haiku-20240307|g4m:gpt-4o-mini|g4:gpt-4o|rp+:command-r-plus";
     // Whether to show model and time information in the message
     ENABLE_SHOWINFO = false;
-    // Whether to show token information in the message (if any)
-    ENABLE_SHOWTOKEN = false;
-    // Function to use, currently has duckduckgo and jina_reader
-    // '["duckduckgo", "jina_reader"]'
+    // enable Show info, which parts to show, support model, model_time, token, tool, tool_time
+    SHOW_PARTS = ['model', 'model_time', 'token', 'tool', 'tool_time'];
+    // Function to use, currently has duckduckgo, jina_reader, icloud_price, nf_price, iap_price, currency
+    //
     USE_TOOLS: string[] = [];
     JINA_API_KEY: string[] = [];
     // if starts with '{agent}:' perfix, the specified agent corresponds to the chat model,

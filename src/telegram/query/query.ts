@@ -52,7 +52,7 @@ export class AnswerChatInlineQuery implements answerInlineQuery {
             }, context.USER_CONFIG, isStream ? OnStream : null);
             const { content: answer } = resp;
             if (answer === '') {
-                return OnStream.end?.('No response');
+                return OnStream.end?.('Response is empty');
             }
             return OnStream.end?.(answer);
         } catch (e) {

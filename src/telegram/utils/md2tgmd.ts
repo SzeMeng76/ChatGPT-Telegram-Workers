@@ -25,7 +25,7 @@ const escapedChars = {
     '\\?': 'ESCAPEQUESTION',
 };
 const escapedRegexp = /\\[*_~|`\\()[\]{}>#+\-=.!]/g;
-const logRegexp = /^>?LOGSTART\n([\s\S]*?)LOGEND/;
+const logRegexp = /^>?LOGSTART\n([\s\S]*?)LOGEND$/m;
 const reverseCodeRegexp = /\\`\\`\\`([\s\S]+)\\`\\`\\`$/g;
 const inlineCodeRegexp = /`[^\n]*?`/g;
 const escapeRegexpMatch = [
@@ -237,8 +237,8 @@ function inlineCodeHandler(text: string) {
 
 export function addExpandable(text: string, quoteExpandable: boolean): string {
     if (!quoteExpandable) {
-        // fold first quote
-        text = text.replace(logRegexp, `$1`).replace(/(?:^>[^\n]*(\n|$))+/m, (match, p1) => `**${match.trimEnd()}||${p1}`);
+        // replace log data to expandable
+        text = text.replace(logRegexp, `**$1||`);
         log.debug(`addExpandable:\n${text}`);
         return text;
     }

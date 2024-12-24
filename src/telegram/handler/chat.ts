@@ -50,9 +50,6 @@ export async function chatWithLLM(
             await sendToolResult(answer.messages.at(-1)?.content as ToolResultPart[], streamSender.sender!, context.USER_CONFIG);
             return new Response('Success');
         }
-        if (answer.content === '') {
-            return answer.messages.at(-1)?.role === 'assistant' ? streamSender.end!('No response') : new Response('Success');
-        }
 
         if (isMiddle) {
             return answer.content;
@@ -278,7 +275,7 @@ export function OnStreamHander(sender: MessageSender | ChosenInlineSender, conte
                 return;
             }
 
-            const data = context ? `${getLog(context.USER_CONFIG)}\n${text}`.trimStart() : text;
+            const data = context ? mergeLogMessages(text, context.USER_CONFIG) : text;
             expandParams.addQuote = addQuotePrerequisites && data.length > ENV.ADD_QUOTE_LIMIT;
             log.info(`sent message ids: ${isMessageSender ? [...sender.context.sentMessageIds] : sender.context.inline_message_id}`);
             isMessageSender && sendAction(sender.api.token, sender.context.chat_id, 'typing');
@@ -311,7 +308,7 @@ export function OnStreamHander(sender: MessageSender | ChosenInlineSender, conte
         if (isSendTelegraph(text)) {
             return sendTelegraph(telegraphContext(true, false), question || 'Redo Question', text);
         }
-        const data = context && needLog ? `${getLog(context.USER_CONFIG)}\n${text}`.trimStart() : text;
+        const data = context && needLog ? mergeLogMessages(text, context.USER_CONFIG) : text;
         log.info(`sent message ids: ${isMessageSender ? [...sender.context.sentMessageIds] : sender.context.inline_message_id}`);
         expandParams.addQuote = addQuotePrerequisites && data.length > ENV.ADD_QUOTE_LIMIT;
         while (true) {
@@ -361,7 +358,7 @@ async function sendTelegraph(sendContext: {
     try {
         if ((telegraph_prefix + text + telegraph_suffix).length >= 10917 * 6) {
             const file = new File([text], 'answer.txt', { type: 'text/plain' });
-            return (textSender as MessageSender).sendDocument(file, getLog(context.USER_CONFIG, false), 'MarkdownV2');
+            return (textSender as MessageSender).sendDocument(file, getLog(context.USER_CONFIG), 'MarkdownV2');
         }
         const resp = await telegraphSender.send(
             'Daily Q&A',
@@ -379,7 +376,7 @@ async function sendTelegraph(sendContext: {
     } catch (error) {
         if (isEnd) {
             const file = new File([text], 'answer.txt', { type: 'text/plain' });
-            return (textSender as MessageSender).sendDocument(file, getLog(context.USER_CONFIG, false), 'MarkdownV2');
+            return (textSender as MessageSender).sendDocument(file, getLog(context.USER_CONFIG), 'MarkdownV2');
         }
     }
 }
@@ -481,7 +478,7 @@ async function handleAudio(
     context.MIDDLE_CONTEXT.history.push({ role: 'user', content: text });
     const sender = streamSender.sender!;
     if (handleKey === 'audio:text' || !ENV.HIDE_MIDDLE_MESSAGE) {
-        await sender.sendRichText(`${getLog(context.USER_CONFIG, false)}\n> \n${text}`.trimStart());
+        await sender.sendRichText(mergeLogMessages(text, context.USER_CONFIG, false));
     }
     if (handleKey.startsWith('stt')) {
         return new Response('audio handle done');
@@ -578,4 +575,11 @@ async function asr(audio: Blob, config: AgentUserConfig) {
         log.info(`transform audio time: ${((Date.now() - start) / 1000).toFixed(2)}s`);
     }
     return agent.request(audio, config);
+}
+
+function mergeLogMessages(text: string, config: AgentUserConfig, isParagraph = false) {
+    if (ENV.LOG_POSITION_ON_TOP) {
+        return `${getLog(config)}\n\n${text.trim()}`;
+    }
+    return `${text.trim()}\n${getLog(config)}`;
 }
