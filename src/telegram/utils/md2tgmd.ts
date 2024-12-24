@@ -238,7 +238,8 @@ function inlineCodeHandler(text: string) {
 export function addExpandable(text: string, quoteExpandable: boolean): string {
     if (!quoteExpandable) {
         // replace log data to expandable
-        text = text.replace(logRegexp, `**$1||`);
+        // can't replace log data directly, because there may be other quote marks after the log data, tg doesn't allow expandable quote to be continuous quote
+        text = text.replace(logRegexp, `$1`).replace(/(?:^>[^\n]*(\n|$))+/m, (match, p1) => `**${match.trimEnd()}||${p1}`);
         log.debug(`addExpandable:\n${text}`);
         return text;
     }
