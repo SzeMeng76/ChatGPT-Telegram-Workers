@@ -118,6 +118,7 @@ export async function manualRequestTool(messages: ResponseMessage[], config: Age
     if (!isToolCallResponse) {
         return;
     }
+
     const toolCallResult = messages.at(-1)?.content as ToolCallPart[];
     messages.push({
         role: 'tool',

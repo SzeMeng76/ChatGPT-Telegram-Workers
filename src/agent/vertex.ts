@@ -70,7 +70,7 @@ export class VertexImage extends VertexBase implements ImageAgent {
         return this.render(images, prompt);
     };
 
-    render = async (result: Response | GeneratedImage[], prompt: string): Promise<ImageResult> => {
+    readonly render = async (result: Response | GeneratedImage[] | string[], prompt: string): Promise<ImageResult> => {
         const images = result as GeneratedImage[];
         if (images.length === 0) {
             throw new Error(`Data is invalid: ${JSON.stringify(images)}`);

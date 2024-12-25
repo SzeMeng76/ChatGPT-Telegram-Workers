@@ -478,7 +478,7 @@ async function handleAudio(
     context.MIDDLE_CONTEXT.history.push({ role: 'user', content: text });
     const sender = streamSender.sender!;
     if (handleKey === 'audio:text' || !ENV.HIDE_MIDDLE_MESSAGE) {
-        await sender.sendRichText(mergeLogMessages(text, context.USER_CONFIG, false));
+        await sender.sendRichText(mergeLogMessages(text, context.USER_CONFIG));
     }
     if (handleKey.startsWith('stt')) {
         return new Response('audio handle done');
@@ -521,24 +521,23 @@ async function handleTextToAudio(
     throw new Error(`Failed to send voice message: ${resp.status} ${await resp.json().then(j => j.description)}`);
 }
 
-export async function sendImages(img: ImageResult, SEND_IMAGE_AS_FILE: boolean, sender: MessageSender, config: AgentUserConfig) {
+export async function sendImages(img: ImageResult, sendAsFile: boolean, sender: MessageSender, config: AgentUserConfig) {
     if (img.url?.length === 0 && img.raw?.length === 0) {
         return sender.sendPlainText('ERROR: No image found');
     }
-    const logText = getLog(config);
-    const caption = img.caption!.map((t, i) => `${i === 0 ? logText : ''}\n\n>${t}`.slice(0, 800).trim());
 
+    const caption = img.caption?.map(t => `>${t}`?.slice(0, 800)?.trim()) || [img.text || 'No prompt'];
     if (img.url?.length === 1 || img.raw?.length === 1) {
         return sender.editMessageMedia({
-            type: SEND_IMAGE_AS_FILE ? 'document' : 'photo',
+            type: sendAsFile ? 'document' : 'photo',
             media: img.url?.[0] || '',
-            caption: escape(caption, { quoteExpandable: false, addQuote: true }),
+            caption: escape(mergeLogMessages(caption[0], config).split('\n'), { quoteExpandable: false, addQuote: true }),
         }, ENV.DEFAULT_PARSE_MODE as Telegram.ParseMode, img.raw?.[0] && new File([img.raw[0]], 'image.png', { type: 'image/png' }));
     } else {
         const medias = (img.url || img.raw)!.map((media: string | Blob, index: number) => ({
-            type: (SEND_IMAGE_AS_FILE ? 'document' : 'photo'),
+            type: sendAsFile ? 'document' : 'photo',
             media: typeof media === 'string' ? media : '',
-            caption: escape(caption[index]?.split('\n') || [], { quoteExpandable: true, addQuote: true }),
+            caption: caption[index] && escape(mergeLogMessages(caption[index], config).split('\n'), { quoteExpandable: true, addQuote: true }),
             parse_mode: ENV.DEFAULT_PARSE_MODE as Telegram.ParseMode,
         })) as Telegram.InputMedia[];
 
@@ -577,9 +576,9 @@ async function asr(audio: Blob, config: AgentUserConfig) {
     return agent.request(audio, config);
 }
 
-function mergeLogMessages(text: string, config: AgentUserConfig, isParagraph = false) {
+function mergeLogMessages(text: string, config: AgentUserConfig) {
     if (ENV.LOG_POSITION_ON_TOP) {
-        return `${getLog(config)}\n\n${text.trim()}`;
+        return `${getLog(config)}\n\n${text.trim()}`.trim();
     }
     return `${text.trim()}\n${getLog(config)}`;
 }

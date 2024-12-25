@@ -79,7 +79,7 @@ export class AzureImageAI implements ImageAgent {
         return requestText2Image(url, header, body, this.render);
     };
 
-    render = async (response: Response | GeneratedImage[], prompt: string): Promise<ImageResult> => {
+    readonly render = async (response: Response | GeneratedImage[] | string[], prompt: string): Promise<ImageResult> => {
         const resp = await (response as Response).json();
         if (resp.error?.message) {
             throw new Error(resp.error.message);

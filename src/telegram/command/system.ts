@@ -2,13 +2,14 @@
 /* eslint-disable no-cond-assign */
 import type { CoreUserMessage } from 'ai';
 import type * as Telegram from 'telegram-bot-api-types';
-import type { HistoryItem } from '../../agent/types';
+import type { HistoryItem, ImageResult } from '../../agent/types';
 import type { WorkerContext } from '../../config/context';
 import type { AgentUserConfig } from '../../config/env';
 import type { MessageSender } from '../utils/send';
 import type { CommandHandler, InlineItem, ScopeType } from './types';
 import { authChecker } from '.';
 import { CHAT_AGENTS, customInfo, IMAGE_AGENTS, loadASRLLM, loadChatLLM, loadImageGen, loadTTSLLM } from '../../agent';
+import { KlingAI } from '../../agent/kling';
 import { ENV, ENV_KEY_MAPPER } from '../../config/env';
 import { ConfigMerger } from '../../config/merger';
 import { getLogSingleton } from '../../log/logDecortor';
@@ -19,7 +20,7 @@ import { createTelegramBotAPI } from '../api';
 import { chatWithLLM, OnStreamHander, sendImages } from '../handler/chat';
 import { escape } from '../utils/md2tgmd';
 import { checkIsNeedTagIds, sendAction } from '../utils/send';
-import { chunckArray, isCfWorker, isTelegramChatTypeGroup, UUIDv4, waitUntil } from '../utils/utils';
+import { chunckArray, isCfWorker, isTelegramChatTypeGroup, UUIDv4 } from '../utils/utils';
 
 export const COMMAND_AUTH_CHECKER = {
     default(chatType: string): string[] | null {
@@ -49,9 +50,6 @@ export class ImgCommandHandler implements CommandHandler {
         }
         try {
             const agent = loadImageGen(context.USER_CONFIG);
-            if (!agent) {
-                return sender.sendPlainText('ERROR: Image generator not found');
-            }
             sendAction(context.SHARE_CONTEXT.botToken, message.chat.id, 'upload_photo');
             await sender.sendPlainText('Please wait a moment...');
             const img = await agent.request(subcommand, context.USER_CONFIG);
@@ -59,11 +57,11 @@ export class ImgCommandHandler implements CommandHandler {
             const resp = await sendImages(img, ENV.SEND_IMAGE_AS_FILE, sender, context.USER_CONFIG);
 
             if (!resp.ok) {
-                return sender.sendPlainText(`ERROR: ${resp.statusText} ${await resp.text()}`);
+                return sender.sendPlainText(`\`\`\`Error\n${resp.statusText} ${await resp.text()}\n\`\`\``);
             }
             return resp;
         } catch (e) {
-            return sender.sendPlainText(`ERROR: ${(e as Error).message}`);
+            return sender.sendRichText(`\`\`\`Error\n${(e as Error).message}\n\`\`\``);
         }
     };
 }
@@ -287,11 +285,11 @@ export class SystemCommandHandler implements CommandHandler {
         const ttsAgent = loadTTSLLM(context.USER_CONFIG);
         const agent = {
             AI_PROVIDER: chatAgent?.name,
-            [chatAgent?.modelKey || 'AI_PROVIDER_NOT_FOUND']: chatAgent?.model(context.USER_CONFIG),
+            [chatAgent?.modelKey || 'AI_PROVIDER_NOT_FOUND']: chatAgent?.model ? chatAgent.model(context.USER_CONFIG) : 'AI_PROVIDER_NOT_FOUND',
             TOOL_MODEL: context.USER_CONFIG.TOOL_MODEL || 'same as chat model',
             AI_IMAGE_PROVIDER: imageAgent?.name,
-            [imageAgent?.modelKey || 'AI_IMAGE_PROVIDER_NOT_FOUND']: imageAgent?.model(context.USER_CONFIG),
-            [asrAgent?.modelKey || 'AI_ASR_PROVIDER_NOT_FOUND']: asrAgent?.model(context.USER_CONFIG),
+            [imageAgent?.modelKey || 'AI_IMAGE_PROVIDER_NOT_FOUND']: imageAgent?.model ? imageAgent.model(context.USER_CONFIG) : 'AI_IMAGE_PROVIDER_NOT_FOUND',
+            [asrAgent?.modelKey || 'AI_ASR_PROVIDER_NOT_FOUND']: asrAgent?.model ? asrAgent.model(context.USER_CONFIG) : 'AI_ASR_PROVIDER_NOT_FOUND',
             [ttsAgent?.modelKey || 'AI_TTS_PROVIDER_NOT_FOUND']: ttsAgent?.model(context.USER_CONFIG),
             VISION_MODEL: context.USER_CONFIG.OPENAI_VISION_MODEL,
             IMAGE_MODEL: context.USER_CONFIG.IMAGE_MODEL,
@@ -701,7 +699,7 @@ export class InlineCommandHandler implements CommandHandler {
 export class KlingAICommandHandler implements CommandHandler {
     command = '/kling';
     needAuth = COMMAND_AUTH_CHECKER.shareModeGroup;
-    handle = async (message: Telegram.Message, subcommand: string, context: WorkerContext, sender: MessageSender): Promise<Response> => {
+    handle = async (message: Telegram.Message, subcommand: string, context: WorkerContext, sender: MessageSender): Promise<ImageResult | Response> => {
         if (context.USER_CONFIG.KLINGAI_COOKIE.length === 0) {
             return sender.sendPlainText('KlingAI token is not set');
         }
@@ -709,92 +707,40 @@ export class KlingAICommandHandler implements CommandHandler {
             return sender.sendPlainText('Please input your prompt');
         }
         try {
-            return await this.generate(message, subcommand, context, sender);
+            let prompt = subcommand.trim();
+            let n = context.USER_CONFIG.KLINGAI_IMAGE_COUNT;
+            const match = /^\d+/.exec(prompt);
+            if (match) {
+                n = Number.parseInt(match[0]);
+                prompt = prompt.slice(match[0].length).trim();
+            }
+            const inputs = [];
+            const args = [];
+            let type = 'mmu_txt2img_aiweb';
+            if (['image', 'photo'].includes(context.MIDDLE_CONTEXT.messageInfo?.type) && context.MIDDLE_CONTEXT.messageInfo.id?.[0]) {
+                const COOKIES = context.USER_CONFIG.KLINGAI_COOKIE;
+                let cookie = '';
+                if (COOKIES.length > 0) {
+                    cookie = COOKIES[Math.floor(Math.random() * COOKIES.length)];
+                } else {
+                    throw new Error('No KlingAI cookie found');
+                }
+                const headers = {
+                    'Content-Type': 'application/json',
+                    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36',
+                    'Cookie': cookie,
+                };
+                const img_id = context.MIDDLE_CONTEXT.messageInfo.id?.[0];
+                const img_url = await this.getFileUrl(img_id, context, headers);
+                inputs.push({ name: 'input', url: img_url, inputType: 'URL' });
+                args.push({ name: 'fidelity', value: 0.5 });
+                type = 'mmu_img2img_aiweb';
+            }
+            await sender.sendPlainText('Please wait a moment...');
+            const data = await new KlingAI().request(prompt, context.USER_CONFIG, { inputs, args, type, n });
+            return sendImages(data, ENV.SEND_IMAGE_AS_FILE, sender, context.USER_CONFIG);
         } catch (e) {
             return sender.sendRichText(`<pre><code class="language-error">${(e as Error).message}</code></pre>`, 'HTML', 'tip');
-        }
-    };
-
-    generate = async (message: Telegram.Message, subcommand: string, context: WorkerContext, sender: MessageSender) => {
-        let prompt = subcommand.trim();
-        let number = context.USER_CONFIG.KLINGAI_IMAGE_COUNT;
-        const match = /^\d+/.exec(prompt);
-        if (match) {
-            number = Number.parseInt(match[0]);
-            prompt = prompt.slice(match[0].length);
-        }
-        const COOKIES = context.USER_CONFIG.KLINGAI_COOKIE;
-        let cookie = '';
-        if (COOKIES.length > 0) {
-            cookie = COOKIES[Math.floor(Math.random() * COOKIES.length)];
-        } else {
-            throw new Error('No KlingAI cookie found');
-        }
-        const headers = {
-            'Content-Type': 'application/json',
-            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36',
-            'Cookie': cookie,
-        };
-
-        const body = {
-            arguments: [
-                { name: 'prompt', value: prompt },
-                { name: 'style', value: '默认' },
-                { name: 'aspect_ratio', value: context.USER_CONFIG.KLINGAI_IMAGE_RATIO },
-                { name: 'imageCount', value: number },
-                { name: 'biz', value: 'klingai' },
-            ],
-            type: 'mmu_txt2img_aiweb',
-            inputs: [] as any[],
-        };
-
-        if (['image', 'photo'].includes(context.MIDDLE_CONTEXT.messageInfo?.type) && context.MIDDLE_CONTEXT.messageInfo.id?.[0]) {
-            const img_id = context.MIDDLE_CONTEXT.messageInfo.id?.[0];
-            const img_url = await this.getFileUrl(img_id, context, headers);
-            log.info(`Uploaded image url: ${img_url}`);
-            body.inputs.push({ name: 'input', url: img_url, inputType: 'URL' });
-            body.arguments.push({ name: 'fidelity', value: 0.5 });
-            body.type = 'mmu_img2img_aiweb';
-        }
-        const resp = await fetch(`https://klingai.com/api/task/submit`, {
-            method: 'POST',
-            headers,
-            body: JSON.stringify(body),
-        }).then(res => res.json());
-        const taskId = resp.data?.task?.id;
-        if (!taskId) {
-            console.error(JSON.stringify(resp));
-            throw new Error(resp.data?.message || 'Failed to get task id, see logs for more details');
-        }
-        sender.sendRichText('`Please wait a moment...`', 'MarkdownV2', 'tip');
-        return this.handleTask(taskId, headers, sender);
-    };
-
-    handleTask = async (taskId: string, headers: Record<string, string>, sender: MessageSender) => {
-        const MAX_WAIT_TIME = 600_000;
-        const startTime = Date.now();
-        while (true) {
-            const resp = await fetch(`https://klingai.com/api/task/status?taskId=${taskId}`, {
-                headers,
-            }).then(res => res.json());
-            if ([5, 98, 99].includes(resp.data?.status)) {
-                const pics = resp.data.works.map(({ resource }: { resource: { resource: string } }) => ({
-                    type: 'photo',
-                    media: resource.resource,
-                })).filter((i: { media: string }) => i.media);
-                if (pics.length > 0) {
-                    sender.api.deleteMessage({ chat_id: sender.context.chat_id, message_id: sender.context.message_id! });
-                    log.info(`KlingAI image urls: ${pics.map((i: { media: any }) => i.media).join(', ')}`);
-                    return sender.sendMediaGroup(pics);
-                }
-            } else if (resp.data?.status !== 10) {
-                log.error(JSON.stringify(resp));
-                throw new Error(`${resp.data?.message || resp.message || JSON.stringify(resp)}`);
-            }
-            if (Date.now() - startTime > MAX_WAIT_TIME) {
-                throw new Error(`KlingAI Task timeout`);
-            }
-            await waitUntil(Date.now() + 10_000);
         }
     };
 

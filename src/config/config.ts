@@ -309,11 +309,11 @@ export class OpenAILikeConfig {
     // oailike api model
     OAILIKE_CHAT_MODEL = '';
     // oailike image model
-    OAILIKE_IMAGE_MODEL = '';
+    OAILIKE_IMAGE_MODEL = 'black-forest-labs/FLUX.1-schnell';
     // oailike vision model
     OAILIKE_VISION_MODEL = '';
     // oailike image size
-    OAILIKE_IMAGE_SIZE = '';
+    OAILIKE_IMAGE_SIZE = '512x512';
     // oailike extra params
     OAILIKE_EXTRA_PARAMS: Record<string, any> = {};
     // oailike embedding model
@@ -393,7 +393,7 @@ export class ExtraUserConfig {
     // KlingAI Cookie
     KLINGAI_COOKIE: string[] = [];
     // KlingAI Image Count
-    KLINGAI_IMAGE_COUNT = 4;
+    KLINGAI_IMAGE_COUNT = 1;
     // KlingAI Image Ratio
     KLINGAI_IMAGE_RATIO = '1:1';
 

@@ -1,4 +1,4 @@
-import type { CoreMessage, LanguageModelV1, StepResult } from 'ai';
+import type { CoreMessage, LanguageModelV1, StepResult, ToolCallPart, ToolResultPart } from 'ai';
 import type { AgentUserConfig } from '../config/env';
 import type { ChatStreamTextHandler, OpenAIFuncCallData, ResponseMessage } from './types';
 import { generateText, streamText, experimental_wrapLanguageModel as wrapLanguageModel } from 'ai';
@@ -211,7 +211,6 @@ export async function requestChatCompletionsV2(params: { model: LanguageModelV1;
     let messages: ResponseMessage[] = [];
     let contentFull = '';
     let metadata = '';
-    let error = '';
     const errorReferencer = [false];
 
     if (onStream !== null /* && params.model.modelId !== 'gpt-4o-audio-preview' */) {
@@ -229,16 +228,31 @@ export async function requestChatCompletionsV2(params: { model: LanguageModelV1;
         metadata = metaDataExtractor(await result.experimental_providerMetadata, params.model.provider);
     }
     try {
+        // when last message is tool, avoid ai message not sent complete
+        if (contentFull.trim() !== '' && (messages.at(-1)?.content as (ToolCallPart | ToolResultPart)[]).some(c => c.type === 'tool-call') && onStream) {
+            await onStream.end?.(contentFull);
+        }
         await manualRequestTool(messages, params.context);
     } catch (e) {
         if (contentFull.trim() === '') {
             throw e;
         }
-        error = `\n\n\`\`\`Error\n${(e as Error).message}\n\`\`\``;
+        log.error((e as Error).message, (e as Error).stack);
+        messages.push({
+            role: 'tool',
+            content: [{
+                type: 'tool-result',
+                toolCallId: 'tool-call-id',
+                toolName: 'tool-name',
+                result: {
+                    result: `\`\`\`Error\n${(e as Error).message}\n\`\`\``,
+                },
+            }],
+        });
     }
     metadata = metaDataExtractor(metadata, params.model.provider);
     return {
         messages,
-        content: contentFull + metadata + error,
+        content: contentFull + metadata,
     };
 }

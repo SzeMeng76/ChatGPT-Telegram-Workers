@@ -65,11 +65,11 @@ export type ChatAgentRequest = (params: LLMChatParams, context: AgentUserConfig,
 
 export interface Agent<AgentRequest> {
     name: string;
-    modelKey: string;
+    modelKey?: string;
     enable: (context: AgentUserConfig) => boolean;
     request: AgentRequest;
-    model: (ctx: AgentUserConfig, params?: LLMChatRequestParams) => string;
-    render?: (result: Response | GeneratedImage[], prompt: string) => Promise<ImageResult>;
+    model?: (ctx: AgentUserConfig, params?: LLMChatRequestParams) => string;
+    render?: (result: Response | GeneratedImage[] | string[], prompt: string) => Promise<ImageResult>;
 }
 
 export interface ImageResult extends UnionData {

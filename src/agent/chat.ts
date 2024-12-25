@@ -81,7 +81,7 @@ export async function requestCompletionsFromLLM(params: LLMChatRequestParams | n
     return answer;
 }
 
-export async function requestText2Image(url: string, headers: Record<string, any>, body: any, render: (arg: Response | GeneratedImage[], prompt: string) => Promise<ImageResult>) {
+export async function requestText2Image(url: string, headers: Record<string, any>, body: any, render: (arg: Response | GeneratedImage[] | string[], prompt: string) => Promise<ImageResult>) {
     console.log('start generate image.');
     const resp = await fetch(url, {
         method: 'POST',
