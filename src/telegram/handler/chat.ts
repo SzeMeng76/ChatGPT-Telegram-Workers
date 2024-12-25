@@ -537,7 +537,7 @@ export async function sendImages(img: ImageResult, sendAsFile: boolean, sender: 
         const medias = (img.url || img.raw)!.map((media: string | Blob, index: number) => ({
             type: sendAsFile ? 'document' : 'photo',
             media: typeof media === 'string' ? media : '',
-            caption: caption[index] && escape(mergeLogMessages(caption[index], config).split('\n'), { quoteExpandable: true, addQuote: true }),
+            caption: caption[index] && escape((index === 0 ? mergeLogMessages(caption[index], config) : caption[index]).split('\n'), { quoteExpandable: true, addQuote: true }),
             parse_mode: ENV.DEFAULT_PARSE_MODE as Telegram.ParseMode,
         })) as Telegram.InputMedia[];
 
