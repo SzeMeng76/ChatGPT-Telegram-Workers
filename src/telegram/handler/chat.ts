@@ -531,13 +531,13 @@ export async function sendImages(img: ImageResult, sendAsFile: boolean, sender: 
         return sender.editMessageMedia({
             type: sendAsFile ? 'document' : 'photo',
             media: img.url?.[0] || '',
-            caption: escape(mergeLogMessages(caption[0], config).split('\n'), { quoteExpandable: false, addQuote: true }),
+            caption: escape(mergeLogMessages(caption[0], config), { quoteExpandable: false, addQuote: true }),
         }, ENV.DEFAULT_PARSE_MODE as Telegram.ParseMode, img.raw?.[0] && new File([img.raw[0]], 'image.png', { type: 'image/png' }));
     } else {
         const medias = (img.url || img.raw)!.map((media: string | Blob, index: number) => ({
             type: sendAsFile ? 'document' : 'photo',
             media: typeof media === 'string' ? media : '',
-            caption: caption[index] && escape((index === 0 ? mergeLogMessages(caption[index], config) : caption[index]).split('\n'), { quoteExpandable: true, addQuote: true }),
+            caption: caption[index] && escape((index === 0 ? mergeLogMessages(caption[index], config) : caption[index]), { quoteExpandable: true, addQuote: true }),
             parse_mode: ENV.DEFAULT_PARSE_MODE as Telegram.ParseMode,
         })) as Telegram.InputMedia[];
 

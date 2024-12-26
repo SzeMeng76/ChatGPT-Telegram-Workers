@@ -287,7 +287,7 @@ export class HandlerCallbackQuery implements CallbackQueryHandler<CallbackQueryC
             chat_id: message.chat.id,
             message_id: message.message_id,
             ...(message.chat.type === 'private' ? {} : { reply_to_message_id: message.message_id }),
-            text: escape(text.split('\n')),
+            text: escape(text),
             parse_mode: 'MarkdownV2',
             reply_markup: { inline_keyboard },
         });

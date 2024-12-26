@@ -25,9 +25,10 @@ const escapedChars = {
     '\\?': 'ESCAPEQUESTION',
 };
 const escapedRegexp = /\\[*_~|`\\()[\]{}>#+\-=.!]/g;
-const logRegexp = /^>?LOGSTART\n([\s\S]*?)LOGEND$/m;
+const logRegexp = /^>?LOGSTART\\>([\s\S]*?)LOGEND$/m;
 const reverseCodeRegexp = /\\`\\`\\`([\s\S]+)\\`\\`\\`$/g;
 const inlineCodeRegexp = /`[^\n]*?`/g;
+const linkRegexp = /\\\[([^\n]+)\\\]\\\((.+?)\\\)/g;
 const escapeRegexpMatch = [
     // bold
     {
@@ -55,10 +56,10 @@ const escapeRegexpMatch = [
         value: '||$1||',
     },
     // url
-    {
-        regex: /\\\[([^\n]+)\\\]\\\((.+?)\\\)/g,
-        value: '[$1]($2)',
-    },
+    // {
+    //     regex: /\\\[([^\n]+)\\\]\\\((.+?)\\\)/g,
+    //     value: '[$1]($2)',
+    // },
     // quote
     {
         regex: /^ *\\> *([^\n]*)$/gm,
@@ -78,7 +79,8 @@ const escapeRegexpMatch = [
 
 const escapedCharsReverseMap = new Map(Object.entries(escapedChars).map(([key, value]) => [value, key]));
 
-export function escape(lines: string[], expandParams: ExpandParams = { addQuote: false, quoteExpandable: false }): string {
+export function escape(text: string, expandParams: ExpandParams = { addQuote: false, quoteExpandable: false }): string {
+    const lines = text.split('\n');
     const codeStack: number[] = [];
     const result: string[] = [];
     let lineTrim = '';
@@ -128,12 +130,13 @@ function handleEscape(text: string, type: 'text' | 'code', { addQuote }: ExpandP
     }
     text = text.replace(escapedRegexp, match => escapedChars[match as keyof typeof escapedChars]);
     if (type === 'text') {
-        const { inlineCode } = inlineCodeHandler(text);
-        text = inlineCodeHandler(text).text;
+        const markd: Record<string, string> = {};
+        text = markData(text, markd).text;
         text = text.replace(escapeChars, match => `\\${match}`);
+        text = markData(text, markd, 'LINK').text;
 
         escapeRegexpMatch.forEach(item => text = text.replace(item.regex, item.value));
-        Object.entries(inlineCode).forEach(([key, value]) => {
+        Object.entries(markd).forEach(([key, value]) => {
             text = text.replace(key, value);
         });
     } else if (!addQuote) {
@@ -155,9 +158,9 @@ function handleEscape(text: string, type: 'text' | 'code', { addQuote }: ExpandP
         match => escapedCharsReverseMap.get(match) ?? match,
     );
 }
-
-export function chunkDocument(text: string, chunkSize: number = 4096): string[][] {
-    const textList = text.split('\n');
+export function chunkDocument(text: string, chunkSize: number = 4096): string[] {
+    const cleanText = text.replace(/\n\s+\n/g, '\n\n');
+    const textList = cleanText.split('\n');
     const chunks: string[][] = [[]];
     let chunkIndex = 0;
     const codeStack: string[] = [];
@@ -202,36 +205,30 @@ export function chunkDocument(text: string, chunkSize: number = 4096): string[][
     if (codeStack.length) {
         chunks[chunkIndex].push(...Array.from({ length: codeStack.length }).fill('```') as string[]);
     }
-    return chunks;
+    return chunks.map(c => c.join('\n'));
 }
 
 function chunkText(text: string, chunkSize: number): string[] {
     const chunks: string[] = [];
+    // remove extra whitespace
     for (let i = 0; i < text.length; i += chunkSize) {
         chunks.push(text.slice(i, i + chunkSize));
     }
     return chunks;
 }
 
-function inlineCodeHandler(text: string) {
-    const matches = text.matchAll(inlineCodeRegexp);
-    const inlineCode: Record<string, string> = {};
-    const perfix = 'INCODEDATA';
+function markData(text: string, markd: Record<string, string>, type: 'INCODE' | 'LINK' = 'INCODE') {
+    const isincode = type === 'INCODE';
+    const matches = text.matchAll(isincode ? inlineCodeRegexp : linkRegexp);
     let i = 0;
     for (const match of matches) {
-        inlineCode[`${perfix}${i}`] = match[0];
-        text = text.replace(match[0], `${perfix}${i}`);
+        markd[`${type} ${i}`] = isincode ? match[0] : `[${match[1]}](${match[2]})`;
+        text = text.replace(match[0], `${type} ${i}`);
         i++;
     }
-    // let match;
-    // while (match = regexp.exec(text)) {
-    //     inlineCode[`${perfix}${i}`] = match[0];
-    //     text = text.replace(match[0], `${perfix}${i}`);
-    //     i++;
-    // }
     return {
         text,
-        inlineCode,
+        markd,
     };
 }
 
@@ -239,15 +236,13 @@ export function addExpandable(text: string, quoteExpandable: boolean): string {
     if (!quoteExpandable) {
         // replace log data to expandable
         // can't replace log data directly, because there may be other quote marks after the log data, tg doesn't allow expandable quote to be continuous quote
-        text = text.replace(/^>?LOGSTART\n([\s\S]*?)LOGEND((?:\n>[^\n]*)*)$/m, `**$1$2||`);
+        text = text.replace(/^>?LOGSTART\\>([\s\S]*?)LOGEND((?:\n>[^\n]*)*)$/m, `**>$1$2||`);
         log.debug(`addExpandable:\n${text}`);
         return text;
     }
     // replace log data to expandable
-    text = text.replace(logRegexp, `$1`);
+    text = text.replace(logRegexp, `>$1`);
     text = text
-        // remove extra whitespace
-        .replace(/\n\s+\n/g, '\n\n')
         // fold quote
         // .replace(/((?:^>[^\n]+(?:\n|$))+)/gm, (match, p1) => `**${p1.trimEnd()}||\n`)
         .replace(/(?:^>[^\n]*(\n|$))+/gm, (match, p1) => `**${match.trimEnd()}||${p1}`);

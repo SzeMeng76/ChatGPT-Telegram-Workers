@@ -613,7 +613,7 @@ export class InlineCommandHandler implements CommandHandler {
         return createTelegramBotAPI(context.SHARE_CONTEXT.botToken).sendMessage({
             chat_id: message.chat.id,
             ...(message.chat.type === 'private' ? {} : { reply_to_message_id: message.message_id }),
-            text: escape(currentSettings.split('\n')),
+            text: escape(currentSettings),
             parse_mode: 'MarkdownV2',
             reply_markup: {
                 inline_keyboard: this.inlineKeyboard(context.USER_CONFIG, defaultInlineKeys),

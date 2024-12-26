@@ -1,8 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { escape } from './md2tgmd';
 
-const text1 = `LOGSTART
->\`gpt-4o 12.5s\`
+const text1 = `LOGSTART>\`gpt-4o 12.5s\`
 >\`search\`
 >\`110,12\`LOGEND
 
@@ -117,42 +116,42 @@ const tgmd3_expand = `**>\\\`\\\`\\\`ts
 
 describe('text1', () => {
     it('fold quote', () => {
-        const result = escape(text1.split('\n'), { addQuote: false, quoteExpandable: false });
+        const result = escape(text1, { addQuote: false, quoteExpandable: false });
         expect(result).toBe(tgmd1);
     });
     it('fold quote expandable', () => {
-        const result = escape(text1.split('\n'), { addQuote: true, quoteExpandable: true });
+        const result = escape(text1, { addQuote: true, quoteExpandable: true });
         expect(result).toBe(tgmd1_expand);
     });
 });
 
 describe('text2', () => {
     it('new inline code escape logic', () => {
-        const result = escape(text2.split('\n'));
+        const result = escape(text2);
         expect(result).toBe(tgmd2);
     });
     it('new inline code escape logic expandable', () => {
-        const result = escape(text2.split('\n'), { addQuote: true, quoteExpandable: true });
+        const result = escape(text2, { addQuote: true, quoteExpandable: true });
         expect(result).toBe(tgmd2_expand);
     });
 });
-// // escape(text2.split('\n'));
+// // escape(text2);
 
 describe('text3 code block', () => {
     it('code block', () => {
-        expect(escape(text3.split('\n'))).toBe(tgmd3);
+        expect(escape(text3)).toBe(tgmd3);
     });
     it('code block expandable', () => {
-        expect(escape(text3.split('\n'), { addQuote: true, quoteExpandable: true })).toBe(tgmd3_expand);
+        expect(escape(text3, { addQuote: true, quoteExpandable: true })).toBe(tgmd3_expand);
     });
 });
 
-// // escape(text3.split('\n'));
+// // escape(text3);
 
 // const result = quoteMessage(text1, 'group', true);
 // console.log(result);
 // console.log('quote expandable then escape--------------------------------');
-// escape(result.split('\n'), true);
+// escape(result, true);
 
 const text4 = `(\`test\`)
 
@@ -168,14 +167,14 @@ const tgmd4_expand = `**>\\(\`test\`\\)
 
 describe('text4', () => {
     it('inline code in inline code', () => {
-        expect(escape(text4.split('\n'))).toBe(tgmd4);
+        expect(escape(text4)).toBe(tgmd4);
     });
     it('inline code in inline code expandables', () => {
-        expect(escape(text4.split('\n'), { addQuote: true, quoteExpandable: true })).toBe(tgmd4_expand);
+        expect(escape(text4, { addQuote: true, quoteExpandable: true })).toBe(tgmd4_expand);
     });
 });
 
-// const result = escape(text2.split('\n'));
+// const result = escape(text2);
 // console.log(result);
 
 // const text = `>\`gemini-2.0-flash-exp 1.5s\`
@@ -186,12 +185,12 @@ describe('text4', () => {
 // >wowo`;
 // addExpandable(text, true);
 
-const text5 = `LOGSTART\n>\`gemini-2.0-flash-exp c_t: 4.3s\`
+const text5 = `LOGSTART>\`gemini-2.0-flash-exp c_t: 4.3s\`
 >\`imagen-3.0-fast-generate-001 6.5s\`
 >\`1240,307\`LOGEND
 A photo of a small, fluffy, white kitten sitting with a slight lean to the left, its legs together. Its head is turned approximately 20 degrees to the right, and its gaze is directed towards the upper right, giving it a pensive expression. Its fur is long and soft, with a naturally messy look, appearing slightly damp. Some strands fall over its forehead, partially obscuring its left eye, while the rest cascades over its shoulders and chest. It has soft facial features and fair skin, with thin, naturally shaped eyebrows`;
 
-// const data = escape(text5.split('\n'), { quoteExpandable: true, addQuote: true });
+// const data = escape(text5, { quoteExpandable: true, addQuote: true });
 
 const thmd5_noquote = `**>\`gemini-2.0-flash-exp c_t: 4.3s\`
 >\`imagen-3.0-fast-generate-001 6.5s\`
@@ -205,19 +204,19 @@ const thmd5_expand = `**>\`gemini-2.0-flash-exp c_t: 4.3s\`
 
 describe('text5', () => {
     it('log data no quote, no expandable', () => {
-        expect(escape(text5.split('\n'), { quoteExpandable: false, addQuote: false })).toBe(thmd5_noquote);
+        expect(escape(text5, { quoteExpandable: false, addQuote: false })).toBe(thmd5_noquote);
     });
     it('log data no quote, expandable', () => {
-        expect(escape(text5.split('\n'), { quoteExpandable: true, addQuote: false })).toBe(thmd5_noquote);
+        expect(escape(text5, { quoteExpandable: true, addQuote: false })).toBe(thmd5_noquote);
     });
     it('log data quote, expandable', () => {
-        expect(escape(text5.split('\n'), { quoteExpandable: true, addQuote: true })).toBe(thmd5_expand);
+        expect(escape(text5, { quoteExpandable: true, addQuote: true })).toBe(thmd5_expand);
     });
 });
 
 const text6 = `>A photo of a small, fluffy, white kitten sitting with a slight lean to the left, its legs together. Its head is turned approximately 20 degrees to the right, and its gaze is directed towards the upper right, giving it a pensive expression. Its fur is long and soft, with a naturally messy look, appearing slightly damp. Some strands fall over its forehead, partially obscuring its left eye, while the rest cascades over its shoulders and chest. It has soft facial features and fair skin, with thin, naturally shaped eyebrows.
 It's a photo.
-LOGSTART\n>\`gemini-2.0-flash-exp c_t: 4.3s\`
+LOGSTART>\`gemini-2.0-flash-exp c_t: 4.3s\`
 >\`imagen-3.0-fast-generate-001 6.5s\`
 >\`1240,307\`LOGEND`;
 
@@ -247,15 +246,33 @@ const tgmd6_quote_noexpand = `>A photo of a small, fluffy, white kitten sitting 
 
 describe('text6', () => {
     it('log data expandable no quote', () => {
-        expect(escape(text6.split('\n'), { quoteExpandable: true, addQuote: false })).toBe(tgmd6_noquote_expand);
+        expect(escape(text6, { quoteExpandable: true, addQuote: false })).toBe(tgmd6_noquote_expand);
     });
     it('log data quote expandable', () => {
-        expect(escape(text6.split('\n'), { quoteExpandable: true, addQuote: true })).toBe(tgmd6_quote_expand);
+        expect(escape(text6, { quoteExpandable: true, addQuote: true })).toBe(tgmd6_quote_expand);
     });
     it('log data no quote, no expandable', () => {
-        expect(escape(text6.split('\n'), { quoteExpandable: false, addQuote: false })).toBe(tgmd6_noquote_noexpand);
+        expect(escape(text6, { quoteExpandable: false, addQuote: false })).toBe(tgmd6_noquote_noexpand);
     });
     it('log data quote, no expandable', () => {
-        expect(escape(text6.split('\n'), { quoteExpandable: false, addQuote: true })).toBe(tgmd6_quote_noexpand);
+        expect(escape(text6, { quoteExpandable: false, addQuote: true })).toBe(tgmd6_quote_noexpand);
+    });
+});
+
+const text7 = `\`test code\`
+link_1: [link 1](https://google.com/test/link_1_2.html)
+link_2: [link 2](https://google.com/test/link_2_2.html)
+\`incode **not bold**, not link [link](https://google.com/test/link_2_2.html)\`
+`;
+
+const md7_linktest = `\`test code\`
+link\\_1: [link 1](https://google\\.com/test/link\\_1\\_2\\.html)
+link\\_2: [link 2](https://google\\.com/test/link\\_2\\_2\\.html)
+\`incode **not bold**, not link [link](https://google.com/test/link_2_2.html)\`
+`;
+
+describe('text7', () => {
+    it('link test', () => {
+        expect(escape(text7)).toBe(md7_linktest);
     });
 });

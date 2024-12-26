@@ -590,5 +590,5 @@ function renderMessage(parse_mode: Telegram.ParseMode | null, message: string, e
     if (parse_mode === 'MarkdownV2') {
         return chunkMessage.map(lines => escape(lines, expandParams));
     }
-    return chunkMessage.map(line => line.join('\n'));
+    return chunkMessage;
 }
