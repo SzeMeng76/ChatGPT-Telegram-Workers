@@ -22,6 +22,9 @@ export function AIMiddleware({ config, activeTools, onStream, toolChoice, messag
     let sendToolCall = false;
     let step = 0;
     let rawSystemPrompt: string | undefined;
+    const isThinking = chatModel.includes('thinking');
+    let thinkingEnd = false;
+    let isThinkingStart = true;
     return {
         wrapGenerate: async ({ doGenerate, params, model }) => {
             log.info('doGenerate called');
@@ -56,13 +59,26 @@ export function AIMiddleware({ config, activeTools, onStream, toolChoice, messag
             return params;
         },
 
-        onChunk: (data: any) => {
-            const { chunk } = data;
-            // log.debug(`chunk: ${JSON.stringify(chunk)}`);
+        onChunk: ({ chunk }: { chunk: any }) => {
             if (chunk.type === 'tool-call' && !sendToolCall) {
                 onStream?.send(`${messageReferencer.join('')}...\n` + `tool call will start: ${chunk.toolName}`);
                 sendToolCall = true;
                 log.info(`will start tool: ${chunk.toolName}`);
+            } else if (isThinking && chunk.type === 'text-delta' && !thinkingEnd) {
+                // ai sdk doesn't expose chunk's text property, so we need to handle it manually
+                if (isThinkingStart) {
+                    isThinkingStart = false;
+                    chunk.textDelta = `>**Thinking**\n${chunk.textDelta}`;
+                }
+                if (/\.\S/.test(chunk.textDelta)) {
+                    const [thinking, ...answer] = chunk.textDelta.split(/\.([^\\/'",\]!`*?])/);
+                    // chunk.textDelta = `${thinking.replace(/\n/g, '\n>')}.\n\n${answer.join('')}`;
+                    chunk.textDelta = `${thinking}.\n\n${answer.join('')}`;
+                    thinkingEnd = true;
+                }
+                // else {
+                //     chunk.textDelta = chunk.textDelta.replace(/\n/g, '\n>');
+                // }
             }
         },
 
