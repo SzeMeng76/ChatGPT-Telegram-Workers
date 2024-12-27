@@ -28,7 +28,7 @@ const escapedRegexp = /\\[*_~|`\\()[\]{}>#+\-=.!]/g;
 const logRegexp = /^>?LOGSTART\\>([\s\S]*?)LOGEND$/m;
 const reverseCodeRegexp = /\\`\\`\\`([\s\S]+)\\`\\`\\`$/g;
 const inlineCodeRegexp = /`[^\n]*?`/g;
-const linkRegexp = /\\\[([^\n]+)\\\]\\\((.+?)\\\)/g;
+const linkRegexp = /\\\[([^\n]+?)\\\]\\\((.+?)\\\)/g;
 const escapeRegexpMatch = [
     // bold
     {
