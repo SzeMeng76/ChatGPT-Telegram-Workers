@@ -229,7 +229,7 @@ export async function requestChatCompletionsV2(params: { model: LanguageModelV1;
     }
     try {
         // when last message is tool, avoid ai message not sent complete
-        if (contentFull.trim() !== '' && (messages.at(-1)?.content as (ToolCallPart | ToolResultPart)[]).some(c => c.type === 'tool-call') && onStream) {
+        if (contentFull.trim() !== '' && (messages.at(-1)?.content as (ToolCallPart | ToolResultPart)[])?.some(c => c.type === 'tool-call') && onStream) {
             await onStream.end?.(contentFull);
         }
         await manualRequestTool(messages, params.context);
