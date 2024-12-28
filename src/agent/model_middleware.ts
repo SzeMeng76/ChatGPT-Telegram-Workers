@@ -68,10 +68,10 @@ export function AIMiddleware({ config, activeTools, onStream, toolChoice, messag
                 // ai sdk doesn't expose chunk's text property, so we need to handle it manually
                 if (isThinkingStart) {
                     isThinkingStart = false;
-                    chunk.textDelta = `>**Thinking**\n${chunk.textDelta}`;
+                    chunk.textDelta = `**Thinking**\n${chunk.textDelta}`;
                 }
                 if (/\.\S/.test(chunk.textDelta)) {
-                    const [thinking, ...answer] = chunk.textDelta.split(/\.([^\\/'",\]!`*?])/);
+                    const [thinking, ...answer] = chunk.textDelta.split(/\.([a-z\u4E00-\u9FA5])/i);
                     // chunk.textDelta = `${thinking.replace(/\n/g, '\n>')}.\n\n${answer.join('')}`;
                     chunk.textDelta = `${thinking}.\n\n${answer.join('')}`;
                     thinkingEnd = true;
@@ -162,8 +162,8 @@ function warpMessages(params: LanguageModelV1CallOptions, tools: Record<string, 
                         const { toolCallId, toolName, result: { result } } = toolResultPart as LanguageModelV1ToolResultPart & { result: { result: any } };
                         toolNames.add(toolName);
                         let toolArgs = 'UNKNOWN';
-                        if (messages[i - 1].role === 'assistant' && (messages[i - 1].content as any[]).some(i => i.type === 'tool-call')) {
-                            toolArgs = JSON.stringify((messages[i - 1].content as LanguageModelV1ToolCallPart[]).find(i => i.toolCallId === toolCallId)?.args);
+                        if (messages[i - 1]?.role === 'assistant' && (messages[i - 1]?.content as any[])?.some(i => i.type === 'tool-call')) {
+                            toolArgs = JSON.stringify((messages[i - 1]?.content as LanguageModelV1ToolCallPart[])?.find(i => i.toolCallId === toolCallId)?.args);
                         }
                         text += `#### [tool ${toolName} with args ${toolArgs}]\nResult:\n${JSON.stringify(result)}\n\n`;
                     }
