@@ -1,7 +1,7 @@
 import type { CoreMessage, LanguageModelV1, StepResult, ToolCallPart, ToolResultPart } from 'ai';
 import type { AgentUserConfig } from '../config/env';
 import type { ChatStreamTextHandler, OpenAIFuncCallData, ResponseMessage } from './types';
-import { generateText, streamText, experimental_wrapLanguageModel as wrapLanguageModel } from 'ai';
+import { generateText, streamText, TypeValidationError, experimental_wrapLanguageModel as wrapLanguageModel } from 'ai';
 import { createLlmModel, type ToolChoice } from '.';
 import { ENV } from '../config/env';
 import { log } from '../log/logger';
@@ -176,7 +176,11 @@ export async function streamHandler(stream: AsyncIterable<any>, contentExtractor
             throw e;
         }
         console.error((e as Error).message, (e as Error).stack);
-        contentFull += `\n\n\`\`\`Error\n${(e as Error).message}\n\`\`\``;
+        let content: string | undefined;
+        if (e instanceof TypeValidationError) {
+            content = (e.value as any)?.choices?.[0]?.delta?.content;
+        }
+        contentFull += (content ?? `\n\n\`\`\`Error\n${(e as Error).message}\n\`\`\``);
         errorReferencer[0] = true;
     }
 
@@ -229,7 +233,8 @@ export async function requestChatCompletionsV2(params: { model: LanguageModelV1;
     }
     try {
         // when last message is tool, avoid ai message not sent complete
-        if (contentFull.trim() !== '' && (messages.at(-1)?.content as (ToolCallPart | ToolResultPart)[])?.some(c => c.type === 'tool-call') && onStream) {
+        const lastMessageContent = messages.at(-1)?.content;
+        if (contentFull.trim() !== '' && Array.isArray(lastMessageContent) && (lastMessageContent as (ToolCallPart | ToolResultPart)[]).some(c => c.type === 'tool-call') && onStream) {
             await onStream.end?.(contentFull);
         }
         await manualRequestTool(messages, params.context);
