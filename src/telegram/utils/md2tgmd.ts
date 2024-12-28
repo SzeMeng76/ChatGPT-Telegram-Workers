@@ -1,5 +1,3 @@
-import { log } from '../../log/logger';
-
 /* eslint-disable regexp/no-super-linear-backtracking */
 const escapeChars = /[_*[\]()\\~`>#+\-=|{}.!]/g;
 const escapedChars = {
@@ -152,45 +150,48 @@ function handleEscape(text: string, type: 'text' | 'code', { addQuote }: ExpandP
     } else {
         text = text.replace(escapeChars, match => `\\${match}`);
     }
-    addQuote && (text = quoteMessage(text));
+    text = quoteMessage(text, addQuote);
     return text.replace(
         new RegExp(Object.values(escapedChars).join('|'), 'g'),
         match => escapedCharsReverseMap.get(match) ?? match,
     );
 }
-export function chunkDocument(text: string, chunkSize: number = 4096): string[] {
+export function chunkDocument(text: string, chunkSize: number = 4000): string[] {
     const cleanText = text.replace(/\n\s+\n/g, '\n\n');
-    const textList = cleanText.split('\n');
+    const textList = lineSegment(cleanText);
     const chunks: string[][] = [[]];
     let chunkIndex = 0;
     const codeStack: string[] = [];
     for (const line of textList) {
-        if (chunks[chunkIndex].join('\n').length + line.length >= chunkSize) {
+        if (chunks[chunkIndex].join('\n').length + line.length > chunkSize) {
             chunkIndex++;
             chunks.push([]);
-            if (codeStack.length) {
+            if (codeStack.length > 0) {
+                // 如果插入结尾标记后超出长度限制
                 if (chunks[chunkIndex - 1].join('\n').length + codeStack.length * 4 >= chunkSize) {
-                    chunks[chunkIndex - 1].push(...chunks[chunkIndex - 1].slice(-codeStack.length));
+                    // 将上一个块中的末尾数据插入到新块开头
+                    chunks[chunkIndex].push(...chunks[chunkIndex - 1].slice(-codeStack.length));
+                    // 将上一个块中的末尾行取出
                     chunks[chunkIndex - 1].length -= codeStack.length;
                 }
+                // 插入结尾标记
                 chunks[chunkIndex - 1].push(...Array.from({ length: codeStack.length }).fill('```') as string[]);
-                chunks[chunkIndex].push(...codeStack);
+                // 插入开头标记
+                chunks[chunkIndex].unshift(...codeStack);
+                // 存在冗余, 不考虑以下情况: 新块代码行加line超出限制
+                // if (chunks[chunkIndex].join('\n').length + line.length > chunkSize) {
+                // // 插入结尾标记
+                //     chunks[chunkIndex].push(...Array.from({ length: codeStack.length }).fill('```') as string[]);
+                //     // 插入开头标记
+                //     chunkIndex++;
+                //     chunks[chunkIndex] = codeStack;
+                // }
             }
-            if (line.length > chunkSize) {
-                const lineSplit = chunkText(chunks[chunkIndex].join('\n') + line, chunkSize);
-                if (lineSplit.length > 1) {
-                    chunks.length -= 1;
-                    chunks.push(...lineSplit.map(item => item.split('\n')));
-                    chunkIndex = chunks.length - 1;
-                } else {
-                    chunks[chunkIndex].push(line);
-                }
-            } else {
-                chunks[chunkIndex].push(line);
-            }
+
+            chunks[chunkIndex].push(line);
             continue;
         }
-        if (/^```.+/.test(line.trim())) {
+        if (/^```.+/.test(line.trimStart())) {
             codeStack.push(line);
         } else if (line.trim() === '```') {
             if (codeStack.length) {
@@ -208,13 +209,27 @@ export function chunkDocument(text: string, chunkSize: number = 4096): string[] 
     return chunks.map(c => c.join('\n'));
 }
 
-function chunkText(text: string, chunkSize: number): string[] {
-    const chunks: string[] = [];
-    // remove extra whitespace
-    for (let i = 0; i < text.length; i += chunkSize) {
-        chunks.push(text.slice(i, i + chunkSize));
+function lineSegment(text: string, chunkSize: number = 4000): string[] {
+    const chunkText = (text: string) => {
+        const chunks: string[] = [];
+        for (let i = 0; i < text.length; i += chunkSize) {
+            // add quote
+            const isNeedAddQuote = i > 0 && text.trimStart().startsWith('>');
+            chunks.push((isNeedAddQuote ? '>' : '') + text.slice(i, i + chunkSize));
+        }
+        return chunks;
+    };
+
+    const newLines: string[] = [];
+    const lines = text.split('\n');
+    for (const line of lines) {
+        if (line.length > chunkSize) {
+            newLines.push(...chunkText(line));
+            continue;
+        }
+        newLines.push(line);
     }
-    return chunks;
+    return newLines;
 }
 
 function markData(text: string, markd: Record<string, string>, type: 'INCODE' | 'LINK' = 'INCODE') {
@@ -237,7 +252,8 @@ export function addExpandable(text: string, quoteExpandable: boolean): string {
         // replace log data to expandable
         // can't replace log data directly, because there may be other quote marks after the log data, tg doesn't allow expandable quote to be continuous quote
         text = text.replace(/^>?LOGSTART\\>([\s\S]*?)LOGEND((?:\n>[^\n]*)*)$/m, `**>$1$2||`);
-        log.debug(`addExpandable:\n${text}`);
+        // maybe split by log start and log end
+        text = text.replace(/^(>?)LOGSTART/m, '$1').replace(/LOGEND$/m, '');
         return text;
     }
     // replace log data to expandable
@@ -246,8 +262,8 @@ export function addExpandable(text: string, quoteExpandable: boolean): string {
         // fold quote
         // .replace(/((?:^>[^\n]+(?:\n|$))+)/gm, (match, p1) => `**${p1.trimEnd()}||\n`)
         .replace(/(?:^>[^\n]*(\n|$))+/gm, (match, p1) => `**${match.trimEnd()}||${p1}`);
-    // reverse escape chars
-    log.debug(`addExpandable:\n${text}`);
+    // maybe split by log start and log end
+    text = text.replace(/^(>?)LOGSTART/m, '$1').replace(/LOGEND$/m, '');
     return text;
 }
 
@@ -256,11 +272,11 @@ export interface ExpandParams {
     quoteExpandable: boolean;
 }
 
-function quoteMessage(text: string) {
-    const textList = text.split('\n');
-    if (textList.length <= 1) {
+function quoteMessage(text: string, addQuote: boolean) {
+    if (!addQuote) {
         return text;
     }
+    const textList = text.split('\n');
     textList.forEach((line, index) => {
         if (!line.trimStart().startsWith('>')) {
             textList[index] = `>${line}`;

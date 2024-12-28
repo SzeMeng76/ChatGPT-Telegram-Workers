@@ -277,7 +277,7 @@ export function OnStreamHander(sender: MessageSender | ChosenInlineSender, conte
 
             const data = context ? mergeLogMessages(text, context.USER_CONFIG) : text;
             expandParams.addQuote = addQuotePrerequisites && data.length > ENV.ADD_QUOTE_LIMIT;
-            log.info(`sent message ids: ${isMessageSender ? [...sender.context.sentMessageIds] : sender.context.inline_message_id}`);
+            log.info(`sent message ids: ${isMessageSender ? sender.context.sentMessageIds : sender.context.inline_message_id}`);
             isMessageSender && sendAction(sender.api.token, sender.context.chat_id, 'typing');
             sentPromise = sender.sendRichText(data, undefined, 'chat', expandParams);
             const resp = await sentPromise as Response;
@@ -304,12 +304,11 @@ export function OnStreamHander(sender: MessageSender | ChosenInlineSender, conte
     streamSender.end = async (text: string, needLog = true): Promise<any> => {
         log.info('--- start end ---');
         await sentPromise;
-        // await waitUntil((nextEnableTime || 0) + 10);
         if (isSendTelegraph(text)) {
             return sendTelegraph(telegraphContext(true, false), question || 'Redo Question', text);
         }
         const data = context && needLog ? mergeLogMessages(text, context.USER_CONFIG) : text;
-        log.info(`sent message ids: ${isMessageSender ? [...sender.context.sentMessageIds] : sender.context.inline_message_id}`);
+        log.info(`sent message ids: ${isMessageSender ? sender.context.sentMessageIds : sender.context.inline_message_id}`);
         expandParams.addQuote = addQuotePrerequisites && data.length > ENV.ADD_QUOTE_LIMIT;
         while (true) {
             const finalResp = await sender.sendRichText(data, undefined, 'chat', expandParams);
@@ -325,7 +324,7 @@ export function OnStreamHander(sender: MessageSender | ChosenInlineSender, conte
                 }
             }
             if (!finalResp.ok) {
-                (sender as MessageSender).context.sentMessageIds.clear();
+                (sender as MessageSender).context.sentMessageIds.length = 0;
                 log.error(`send message failed: ${finalResp.status} ${await finalResp.json().then(j => j.description)}`);
                 await sendTelegraph(telegraphContext(true, true), question || 'Redo Question', text);
                 return;
@@ -484,7 +483,7 @@ async function handleAudio(
         return new Response('audio handle done');
     }
     clearLog(context.USER_CONFIG);
-    !ENV.HIDE_MIDDLE_MESSAGE && sender.context.sentMessageIds.clear();
+    !ENV.HIDE_MIDDLE_MESSAGE && (sender.context.sentMessageIds.length = 0);
     const isMiddle = handleKey === 'audio:audio';
     const otherText = (params.content as TextPart[]).filter(c => c.type === 'text').map(c => c.text).join('\n').trim();
     const resp = await chatWithLLM(message, { role: 'user', content: `[AUDIO TRANSCRIPTION]: ${text}\n${otherText}` }, context, null, streamSender, isMiddle);
@@ -580,5 +579,5 @@ function mergeLogMessages(text: string, config: AgentUserConfig) {
     if (ENV.LOG_POSITION_ON_TOP) {
         return `${getLog(config)}\n\n${text.trim()}`.trim();
     }
-    return `${text.trim()}\n${getLog(config)}`;
+    return `${text.trim()}\n\n${getLog(config)}`;
 }

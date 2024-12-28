@@ -20,7 +20,7 @@ class MessageContext implements Record<string, any> {
     message_thread_id: number | null = null;
     chatType: string; // 聊天类型
     message: Telegram.Message; // 原始消息 用于标记需要删除的id
-    sentMessageIds: Set<number> = new Set();
+    sentMessageIds: number[] = [];
 
     constructor(message: Telegram.Message) {
         this.chat_id = message.chat.id;
@@ -125,26 +125,36 @@ export class MessageSender {
         let lastMessageResponse = null;
         let lastMessageRespJson = null;
         for (let i = 0; i < messages.length; i++) {
-            // 不发送中间片段
-            if (i > 0 && i < context.sentMessageIds.size - 1) {
+            if (ENV.LOG_POSITION_ON_TOP) {
+                // 不发送中间片段
+                if (i > 0 && i < context.sentMessageIds.length - 1) {
+                    continue;
+                }
+            } else if (context.sentMessageIds.length > 2 && i < context.sentMessageIds.length - 2) {
+                // 只发送最后两个: 由于日志原因可能被分割为两块
                 continue;
             }
-            // 日志位置不在顶部时，不发送第一个消息
-            if (context.sentMessageIds.size > 1 && i === 0 && !ENV.LOG_POSITION_ON_TOP) {
-                continue;
-            }
+
             // 不发送空消息
             if (messages[i].trim() === '') {
                 continue;
             }
 
-            chatContext.message_id = [...context.sentMessageIds][i] ?? null;
+            chatContext.message_id = context.sentMessageIds[i] ?? null;
+            log.info(`message id: ${chatContext.message_id}`);
+            // log.debug(`chunk:\n${messages[i]}`);
             lastMessageResponse = await this.sendMessage(messages[i], chatContext);
+            if (lastMessageResponse.status === 400) {
+                const message = (await lastMessageResponse.clone().json() as Telegram.ResponseError).description;
+                if (message.includes('not modified')) {
+                    continue;
+                }
+            }
             if (lastMessageResponse.status !== 200) {
                 break;
             }
             lastMessageRespJson = await lastMessageResponse.clone().json() as Telegram.ResponseWithMessage;
-            this.context.sentMessageIds.add(lastMessageRespJson.result.message_id);
+            this.context.sentMessageIds[i] = lastMessageRespJson.result.message_id;
             // 用于后续发送媒体编辑
             this.context.message_id = lastMessageRespJson.result.message_id;
         }
