@@ -35,7 +35,7 @@ export class Google implements ChatAgent {
 
 export function handleUrl(messages: CoreUserMessage): CoreUserMessage {
     if (typeof messages.content === 'string') {
-        const { data, text } = extractUrls(messages.content);
+        const { data = [], text } = extractUrls(messages.content);
         if (data.length > 0) {
             const newMessage: UserContent = [];
             newMessage.push({
@@ -53,7 +53,14 @@ export function handleUrl(messages: CoreUserMessage): CoreUserMessage {
     return messages;
 }
 
-function extractUrls(str: string): { data: { type: string; url: string; mimeType: string }[]; text: string } {
+function extractUrls(str: string): { data?: { type: string; url: string; mimeType: string }[]; text: string } {
+    str = str.trim();
+    if (!str.startsWith('L:')) {
+        return {
+            text: str,
+        };
+    }
+
     const urlRegex = /(https?:\/\/\S+)/g;
     const matches = str.match(urlRegex) || [];
     const supportTypes = {
@@ -78,6 +85,8 @@ function extractUrls(str: string): { data: { type: string; url: string; mimeType
         txt: 'text/plain',
         md: 'text/markdown',
     };
+    // remove L:
+    (matches.length > 0) && (str = str.substring(2));
     return {
         data: matches.map((i) => {
             const type = i.split('.').pop()?.replace(/\?.*$/, '') as keyof typeof supportTypes;
