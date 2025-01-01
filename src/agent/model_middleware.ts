@@ -22,13 +22,14 @@ export function AIMiddleware({ config, activeTools, onStream, toolChoice, messag
     let sendToolCall = false;
     let step = 0;
     let rawSystemPrompt: string | undefined;
-    const isThinking = chatModel.includes('thinking');
+    let isThinking = false;
     let thinkingEnd = false;
     let isThinkingStart = true;
     return {
         wrapGenerate: async ({ doGenerate, params, model }) => {
-            log.info('doGenerate called');
             warpModel(model, config, activeTools, (params.mode as any).toolChoice, chatModel);
+            log.info(`modelId: ${model.modelId}`);
+            isThinking = model.modelId.includes('thinking');
             recordModelLog(config, model, activeTools, (params.mode as any).toolChoice);
             const result = await doGenerate();
             log.debug(`doGenerate result: ${JSON.stringify(result)}`);
@@ -36,8 +37,9 @@ export function AIMiddleware({ config, activeTools, onStream, toolChoice, messag
         },
 
         wrapStream: async ({ doStream, params, model }) => {
-            log.info('doStream called');
             warpModel(model, config, activeTools, (params.mode as any).toolChoice, chatModel);
+            log.info(`modelId: ${model.modelId}`);
+            isThinking = model.modelId.includes('thinking');
             recordModelLog(config, model, activeTools, (params.mode as any).toolChoice);
             return doStream();
         },

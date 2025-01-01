@@ -95,6 +95,10 @@ export class GroupMention implements MessageHandler {
         // 非群组消息不作判断，交给下一个中间件处理
         if (!isTelegramChatTypeGroup(message.chat.type)) {
             this.mergeMessage(false, message);
+            const noneMessage = await this.noneMessage(message, context);
+            if (noneMessage instanceof Response) {
+                return noneMessage;
+            }
             return this.furtherChecker(message, context);
         }
 

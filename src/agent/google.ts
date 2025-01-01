@@ -1,4 +1,4 @@
-import type { CoreUserMessage } from 'ai';
+import type { CoreUserMessage, FilePart, ImagePart, UserContent } from 'ai';
 import type { AgentUserConfig } from '../config/env';
 import type { ChatAgent, ChatStreamTextHandler, LLMChatParams, LLMChatRequestParams, ResponseMessage } from './types';
 import { createLlmModel, warpLLMParams } from '.';
@@ -24,11 +24,69 @@ export class Google implements ChatAgent {
     };
 
     readonly request = async (params: LLMChatParams, context: AgentUserConfig, onStream: ChatStreamTextHandler | null): Promise<{ messages: ResponseMessage[]; content: string }> => {
-        const userMessage = params.messages.at(-1) as CoreUserMessage;
+        const userMessage = handleUrl(params.messages.at(-1) as CoreUserMessage);
         const languageModelV1 = await createLlmModel(this.model(context, userMessage), context);
         return requestChatCompletionsV2(await warpLLMParams({
             model: languageModelV1,
             messages: params.messages,
         }, context), onStream);
+    };
+}
+
+export function handleUrl(messages: CoreUserMessage): CoreUserMessage {
+    if (typeof messages.content === 'string') {
+        const { data, text } = extractUrls(messages.content);
+        if (data.length > 0) {
+            const newMessage: UserContent = [];
+            newMessage.push({
+                type: 'text',
+                text,
+            });
+            data.forEach(i => newMessage.push({
+                type: i.type as 'image' | 'file',
+                [i.type === 'image' ? 'url' : 'data']: i.url,
+                mimeType: i.mimeType,
+            } as unknown as FilePart | ImagePart));
+            messages.content = newMessage;
+        }
+    }
+    return messages;
+}
+
+function extractUrls(str: string): { data: { type: string; url: string; mimeType: string }[]; text: string } {
+    const urlRegex = /(https?:\/\/\S+)/g;
+    const matches = str.match(urlRegex) || [];
+    const supportTypes = {
+        pdf: 'application/pdf',
+        mp3: 'audio/mpeg',
+        aac: 'audio/aac',
+        flac: 'audio/flac',
+        ogg: 'audio/ogg',
+        wav: 'audio/wav',
+        mp4: 'video/mp4',
+        jpg: 'image/jpeg',
+        jpeg: 'image/jpeg',
+        png: 'image/png',
+        gif: 'image/gif',
+        js: 'text/javascript',
+        python: 'text/x-python',
+        html: 'text/html',
+        css: 'text/css',
+        xml: 'application/xml',
+        csv: 'text/csv',
+        rtf: 'text/rtf',
+        txt: 'text/plain',
+        md: 'text/markdown',
+    };
+    return {
+        data: matches.map((i) => {
+            const type = i.split('.').pop()?.replace(/\?.*$/, '') as keyof typeof supportTypes;
+            return {
+                mimeType: (type && supportTypes[type]) || 'text/html',
+                url: i,
+                type: supportTypes[type]?.startsWith('image') ? 'image' : 'file',
+            };
+        }),
+        text: str.replace(urlRegex, '').trim(),
     };
 }

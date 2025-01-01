@@ -142,9 +142,6 @@ export async function streamHandler(stream: AsyncIterable<any>, contentExtractor
     let lastChunk = '';
     const maxLength = 10_000;
 
-    const immediatePromise = Promise.resolve('[PROMISE DONE]');
-    let sendPromise: Promise<any> | null = null;
-
     try {
         for await (const part of stream) {
             const textPart = contentExtractor(part);
@@ -160,14 +157,9 @@ export async function streamHandler(stream: AsyncIterable<any>, contentExtractor
             lastChunk = textPart;
 
             if (lastChunk && lengthDelta > updateStep) {
-                // 已发送过消息且消息未发送完成
-                if (sendPromise && (await Promise.race([sendPromise, immediatePromise]) === '[PROMISE DONE]')) {
-                    continue;
-                }
-
                 lengthDelta = 0;
                 updateStep = Math.min(updateStep + 40, maxLength);
-                sendPromise = onStream.send(`${contentFull.trimEnd()}●`);
+                onStream.send(`${contentFull.trimEnd()}●`);
             }
         }
         contentFull += lastChunk;

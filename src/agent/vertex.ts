@@ -5,6 +5,7 @@ import { createVertex } from '@ai-sdk/google-vertex';
 import { experimental_generateImage as generateImage } from 'ai';
 import { createLlmModel, warpLLMParams } from '.';
 import { Log } from '../log/logDecortor';
+import { handleUrl } from './google';
 import { requestChatCompletionsV2 } from './request';
 
 class VertexBase {
@@ -29,7 +30,7 @@ export class Vertex extends VertexBase implements ChatAgent {
     readonly modelKey = 'VERTEX_CHAT_MODEL';
 
     readonly request = async (params: LLMChatParams, context: AgentUserConfig, onStream: ChatStreamTextHandler | null): Promise<{ messages: ResponseMessage[]; content: string }> => {
-        const userMessage = params.messages.at(-1) as CoreUserMessage;
+        const userMessage = handleUrl(params.messages.at(-1) as CoreUserMessage);
         const languageModelV1 = await createLlmModel(this.model(context, userMessage), context);
         return requestChatCompletionsV2(await warpLLMParams({
             model: languageModelV1,

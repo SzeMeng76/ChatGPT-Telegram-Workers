@@ -249,6 +249,8 @@ export function OnStreamHander(sender: MessageSender | ChosenInlineSender, conte
         };
     };
 
+    const immediatePromise = Promise.resolve('[PROMISE DONE]');
+
     const streamSender = {
         send: null as ((text: string, isEnd: boolean) => Promise<any>) | null,
         end: null as ((text: string) => Promise<any>) | null,
@@ -261,8 +263,10 @@ export function OnStreamHander(sender: MessageSender | ChosenInlineSender, conte
                 log.info(`Need await: ${(nextEnableTime || 0) - Date.now()}ms`);
                 return;
             }
-
-            await sentPromise;
+            // 防止最后可能存在两个sendPromise
+            if (sentPromise && (await Promise.race([sentPromise, immediatePromise]) === '[PROMISE DONE]')) {
+                return;
+            }
 
             // 设置最小流间隔
             if (sendInterval > 0) {
