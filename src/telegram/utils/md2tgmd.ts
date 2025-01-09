@@ -263,7 +263,7 @@ export function addExpandable(text: string, quoteExpandable: boolean): string {
         // .replace(/((?:^>[^\n]+(?:\n|$))+)/gm, (match, p1) => `**${p1.trimEnd()}||\n`)
         .replace(/(?:^>[^\n]*(\n|$))+/gm, (match, p1) => `**${match.trimEnd()}||${p1}`);
     // maybe split by log start and log end
-    text = text.replace(/^(>?)LOGSTART/m, '$1').replace(/LOGEND$/m, '');
+    text = text.replace(/^(>?)LOGSTART/m, '$1').replace(/LOGEND(\|\|)?$/m, '$1');
     return text;
 }
 
