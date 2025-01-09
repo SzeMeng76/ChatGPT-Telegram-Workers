@@ -6,7 +6,7 @@ FROM node:20-alpine as PROD
 
 WORKDIR /app
 COPY index.js package.json /app/
-RUN npm install --only=production --omit=dev && \
+RUN npm install --only=production && \
 apk add --no-cache sqlite && \
 npm cache clean --force
 EXPOSE 8787
@@ -25,14 +25,14 @@ const packageJson = `
     "start": "node index.js"
   },
   "dependencies": {
-    "@ai-sdk/anthropic": "^1.0.6",
+    "@ai-sdk/anthropic": "^1.0.7",
     "@ai-sdk/azure": "^1.0.17",
-    "@ai-sdk/cohere": "^1.0.6",
-    "@ai-sdk/google": "^1.0.12",
-    "@ai-sdk/google-vertex": "^2.0.12",
-    "@ai-sdk/mistral": "^1.0.6",
+    "@ai-sdk/cohere": "^1.0.7",
+    "@ai-sdk/google": "^1.0.13",
+    "@ai-sdk/google-vertex": "^2.0.14",
+    "@ai-sdk/mistral": "^1.0.7",
     "@ai-sdk/openai": "^1.0.15",
-    "@ai-sdk/provider": "^1.0.3",
+    "@ai-sdk/provider": "^1.0.4",
     "@ai-sdk/xai": "^1.0.15",
     "@ffmpeg.wasm/core-st": "^0.13.2",
     "@ffmpeg.wasm/main": "^0.13.1",
