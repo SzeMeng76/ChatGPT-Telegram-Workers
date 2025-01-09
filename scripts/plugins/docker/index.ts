@@ -2,11 +2,11 @@ import * as fs from 'node:fs/promises';
 import path from 'node:path';
 
 const dockerfile = `
-FROM node:alpine as PROD
+FROM node:20-alpine as PROD
 
 WORKDIR /app
 COPY index.js package.json /app/
-RUN npm install --only=production --omit=dev && \
+RUN npm install --only=production && \
 apk add --no-cache sqlite && \
 npm cache clean --force
 EXPOSE 8787
