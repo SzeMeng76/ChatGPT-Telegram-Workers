@@ -54,15 +54,6 @@ export function handleUrl(messages: CoreUserMessage): CoreUserMessage {
 }
 
 function extractUrls(str: string): { data?: { type: string; url: string; mimeType: string }[]; text: string } {
-    str = str.trim();
-    if (!str.startsWith('L:')) {
-        return {
-            text: str,
-        };
-    }
-
-    const urlRegex = /(https?:\/\/\S+)/g;
-    const matches = str.match(urlRegex) || [];
     const supportTypes = {
         pdf: 'application/pdf',
         mp3: 'audio/mpeg',
@@ -76,8 +67,7 @@ function extractUrls(str: string): { data?: { type: string; url: string; mimeTyp
         png: 'image/png',
         gif: 'image/gif',
         js: 'text/javascript',
-        python: 'text/x-python',
-        html: 'text/html',
+        py: 'text/x-python',
         css: 'text/css',
         xml: 'application/xml',
         csv: 'text/csv',
@@ -85,13 +75,14 @@ function extractUrls(str: string): { data?: { type: string; url: string; mimeTyp
         txt: 'text/plain',
         md: 'text/markdown',
     };
-    // remove L:
-    (matches.length > 0) && (str = str.substring(2));
+    const urlRegex = new RegExp(`https?://\\S+\\.(${Object.keys(supportTypes).join('|')})`, 'g');
+    const matches = urlRegex.exec(str) || [];
+
     return {
         data: matches.map((i) => {
-            const type = i.split('.').pop()?.replace(/\?.*$/, '') as keyof typeof supportTypes;
+            const type = i[1] as keyof typeof supportTypes;
             return {
-                mimeType: (type && supportTypes[type]) || 'text/html',
+                mimeType: supportTypes[type],
                 url: i,
                 type: supportTypes[type]?.startsWith('image') ? 'image' : 'file',
             };
