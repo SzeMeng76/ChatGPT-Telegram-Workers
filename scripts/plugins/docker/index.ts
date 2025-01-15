@@ -36,7 +36,7 @@ const packageJson = `
     "@ai-sdk/xai": "^1.0.18",
     "@ffmpeg.wasm/core-st": "^0.13.2",
     "@ffmpeg.wasm/main": "^0.13.1",
-    "ai": "^4.0.37",
+    "ai": "^4.0.38",
     "cf-worker-adapter": "^1.4.0",
     "node-cron": "^3.0.3"
   },
