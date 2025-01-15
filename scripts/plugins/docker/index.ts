@@ -33,10 +33,10 @@ const packageJson = `
     "@ai-sdk/mistral": "^1.0.8",
     "@ai-sdk/openai": "^1.0.19",
     "@ai-sdk/provider": "^1.0.4",
-    "@ai-sdk/xai": "^1.0.17",
+    "@ai-sdk/xai": "^1.0.18",
     "@ffmpeg.wasm/core-st": "^0.13.2",
     "@ffmpeg.wasm/main": "^0.13.1",
-    "ai": "^4.0.35",
+    "ai": "^4.0.36",
     "cf-worker-adapter": "^1.4.0",
     "node-cron": "^3.0.3"
   },
