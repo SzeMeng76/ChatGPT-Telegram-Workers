@@ -7,6 +7,7 @@ import { log, tagMessageIds } from '../../log';
 import { createTelegramBotAPI } from '../api';
 import md2node from './md2node';
 import { chunkDocument, escape } from './md2tgmd';
+import { validateMarkdownV2 } from './render_fallback';
 import { waitUntil } from './tg_utils';
 
 class MessageContext implements Record<string, any> {
@@ -177,13 +178,22 @@ export class MessageSender {
                 // log.debug(`chunk:\n${messages[i]}`);
                 lastMessageResponse = await this.sendMessage(messages[i], chatContext);
                 if (lastMessageResponse.status === 400) {
-                    const message = (await lastMessageResponse.clone().json() as Telegram.ResponseError).description;
-                    if (message.includes('not modified')) {
+                    const errorBody = (await lastMessageResponse.clone().json() as Telegram.ResponseError);
+                    const errorMessage = errorBody.description;
+                    if (errorMessage.includes('not modified')) {
                         continue;
                     }
+                    // Log the specific parse error for debugging
+                    log.error(`Render failed with 400 error: ${errorMessage}. Clearing sentMessageIds to allow fresh messages.`);
+
                     // Clear sentMessageIds on render error to prevent future messages from trying to edit failed messages
-                    log.error(`Render failed with 400 error: ${message}. Clearing sentMessageIds to allow fresh messages.`);
                     context.sentMessageIds.length = 0;
+
+                    // If it's a parse error, don't retry - the content is fundamentally broken
+                    // Let the caller handle fallback to HTML/plain text
+                    if (errorMessage.includes('parse entities') || errorMessage.includes('reserved') || errorMessage.includes('must be escaped')) {
+                        log.error('[Render] MarkdownV2 parse error detected, content needs fallback rendering');
+                    }
                     break;
                 }
                 if (lastMessageResponse.status !== 200) {
@@ -647,7 +657,23 @@ function renderMessage(parse_mode: Telegram.ParseMode | null, message: string, e
 
     const chunkMessage = chunkDocument(cleanedMessage);
     if (parse_mode === 'MarkdownV2') {
-        return chunkMessage.map(lines => escape(lines, expandParams));
+        return chunkMessage.map((lines) => {
+            const escaped = escape(lines, expandParams);
+
+            // Validate and auto-fix MarkdownV2 issues before sending
+            const validation = validateMarkdownV2(escaped);
+            if (!validation.valid) {
+                log.warn(`[Render] MarkdownV2 validation issues detected:\n${validation.issues.join('\n')}`);
+
+                // Use auto-fixed version if available
+                if (validation.fixed) {
+                    log.info('[Render] Applied auto-fix to MarkdownV2 content');
+                    return validation.fixed;
+                }
+            }
+
+            return escaped;
+        });
     }
     return chunkMessage;
 }

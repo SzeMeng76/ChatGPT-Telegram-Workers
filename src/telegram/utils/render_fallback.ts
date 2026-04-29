@@ -21,10 +21,80 @@ export interface RenderResult {
 }
 
 /**
+ * Auto-fix common MarkdownV2 issues
+ * Repairs unbalanced markers by removing unpaired ones to prevent parse errors
+ *
+ * Strategy: When markers are unbalanced, remove all instances of that marker type
+ * rather than trying to guess where to close them. This prevents incorrect formatting
+ * but ensures the message can still be sent.
+ */
+export function autoFixMarkdownV2(text: string): string {
+    let fixed = text;
+
+    // Fix unbalanced bold markers (**)
+    const boldMatches = fixed.match(/(?<!\\)\*\*/g) || [];
+    if (boldMatches.length % 2 !== 0) {
+        // Remove all bold markers instead of trying to fix
+        fixed = fixed.replace(/(?<!\\)\*\*/g, '');
+        console.warn('[AutoFix] Removed unbalanced bold markers (**)');
+    }
+
+    // Fix unbalanced italic markers (*)
+    // Exclude list markers at start of line
+    const textWithoutLists = fixed.replace(/^[\s]*\*\s+/gm, '');
+    const italicMatches = textWithoutLists.match(/(?<!\\)(?<!\*)\*(?!\*)/g) || [];
+    if (italicMatches.length % 2 !== 0) {
+        // Remove all italic markers (preserve list markers)
+        const lines = fixed.split('\n');
+        fixed = lines.map((line) => {
+            // Preserve list markers at start of line
+            if (/^[\s]*\*\s+/.test(line)) {
+                return line;
+            }
+            // Remove italic markers
+            return line.replace(/(?<!\\)(?<!\*)\*(?!\*)/g, '');
+        }).join('\n');
+        console.warn('[AutoFix] Removed unbalanced italic markers (*)');
+    }
+
+    // Fix unbalanced underline markers (__)
+    const underlineMatches = fixed.match(/(?<!\\)__/g) || [];
+    if (underlineMatches.length % 2 !== 0) {
+        fixed = fixed.replace(/(?<!\\)__/g, '');
+        console.warn('[AutoFix] Removed unbalanced underline markers (__)');
+    }
+
+    // Fix unbalanced code block markers (```)
+    const codeBlockMatches = fixed.match(/(?<!\\)```/g) || [];
+    if (codeBlockMatches.length % 2 !== 0) {
+        // Add closing ``` at the end for code blocks
+        fixed += '\n```';
+        console.warn('[AutoFix] Added closing code block marker (```)');
+    }
+
+    // Fix unbalanced inline code markers (`)
+    const inlineCodeMatches = fixed.match(/(?<!\\)`(?!``)/g) || [];
+    if (inlineCodeMatches.length % 2 !== 0) {
+        // For inline code, remove all markers as they're likely broken
+        fixed = fixed.replace(/(?<!\\)`(?!``)/g, '');
+        console.warn('[AutoFix] Removed unbalanced inline code markers (`)');
+    }
+
+    // Fix unbalanced spoiler markers (||)
+    const spoilerMatches = fixed.match(/(?<!\\)\|\|/g) || [];
+    if (spoilerMatches.length % 2 !== 0) {
+        fixed = fixed.replace(/(?<!\\)\|\|/g, '');
+        console.warn('[AutoFix] Removed unbalanced spoiler markers (||)');
+    }
+
+    return fixed;
+}
+
+/**
  * Validate MarkdownV2 format before sending
  * Detects common issues that cause rendering failures
  */
-export function validateMarkdownV2(text: string): { valid: boolean; issues: string[] } {
+export function validateMarkdownV2(text: string): { valid: boolean; issues: string[]; fixed?: string } {
     const issues: string[] = [];
 
     // Check for unbalanced bold markers
@@ -86,9 +156,16 @@ export function validateMarkdownV2(text: string): { valid: boolean; issues: stri
         }
     }
 
+    // If there are issues, auto-fix them
+    let fixed: string | undefined;
+    if (issues.length > 0) {
+        fixed = autoFixMarkdownV2(text);
+    }
+
     return {
         valid: issues.length === 0,
         issues,
+        fixed,
     };
 }
 
