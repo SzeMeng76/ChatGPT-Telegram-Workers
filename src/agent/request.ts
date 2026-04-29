@@ -408,6 +408,18 @@ function thinkingExtractor(messageInfo: MessageInfo) {
 }
 
 async function combineParams({ context, middleware, model, messages, activeTools, tools, prepareStepPre, onStepFinish, onChunk }: { context: AgentUserConfig; middleware: any; model: LLMModel; messages: ModelMessage[]; activeTools: string[]; tools: any; prepareStepPre: (middleware: (...args: any[]) => any) => any; onStepFinish: (data: StepResult<any, any>) => void; onChunk: (data: { chunk: TextStreamPart<any> }) => void }) {
+    // Extract system message from messages array
+    const systemMessageIndex = messages.findIndex(m => m.role === 'system');
+    let systemMessage: string | undefined;
+    let filteredMessages = messages;
+
+    if (systemMessageIndex !== -1) {
+        const sysMsg = messages[systemMessageIndex];
+        systemMessage = typeof sysMsg.content === 'string' ? sysMsg.content : undefined;
+        // Remove system message from messages array
+        filteredMessages = messages.filter((_, index) => index !== systemMessageIndex);
+    }
+
     // Build Anthropic provider options with cache control and tool streaming
     const anthropicOptions: Record<string, any> = {
         ...context.ANTHROPIC_PROVIDER_OPTIONS,
@@ -439,12 +451,10 @@ async function combineParams({ context, middleware, model, messages, activeTools
 
     // OpenAI Responses API (GPT-5/o1/o3/o4 series) requires stronger system prompts
     // Enhance system message with explicit instructions for better compliance
-    if (model.provider === 'openai.responses') {
-        const systemMessage = messages.find(m => m.role === 'system');
-        if (systemMessage && typeof systemMessage.content === 'string') {
-            // Strengthen system prompt with explicit directives
-            const originalPrompt = systemMessage.content;
-            systemMessage.content = `CRITICAL INSTRUCTIONS - YOU MUST FOLLOW THESE RULES STRICTLY:
+    if (model.provider === 'openai.responses' && systemMessage) {
+        // Strengthen system prompt with explicit directives
+        const originalPrompt = systemMessage;
+        systemMessage = `CRITICAL INSTRUCTIONS - YOU MUST FOLLOW THESE RULES STRICTLY:
 
 ${originalPrompt}
 
@@ -452,7 +462,6 @@ IMPORTANT REMINDERS:
 - Follow the above instructions precisely without deviation
 - Do not override these instructions with your own assumptions
 - Maintain consistency with the specified behavior throughout the conversation`;
-        }
     }
 
     const providerOptions = {
@@ -532,17 +541,9 @@ IMPORTANT REMINDERS:
             anthropicOptions.contextManagement = contextManagementConfig;
         }
 
-        // Cache Control - Mark messages and tools as cacheable
+        // Cache Control - Mark system message and tools as cacheable
         if (context.ANTHROPIC_ENABLE_CACHE_CONTROL) {
-            // Mark system message as cacheable
-            const systemMessage = messages.find(m => m.role === 'system');
-            if (systemMessage && !systemMessage.providerOptions) {
-                systemMessage.providerOptions = {
-                    anthropic: {
-                        cacheControl: { type: 'ephemeral' },
-                    },
-                };
-            }
+            // System message cache control will be handled by the system parameter
 
             // Mark tools as cacheable if tools exist
             if (tools && Object.keys(tools).length > 0) {
@@ -569,7 +570,8 @@ IMPORTANT REMINDERS:
             middleware,
         }),
         providerOptions,
-        messages,
+        system: systemMessage,
+        messages: filteredMessages,
         experimental_continueSteps: context.CONTINUE_STEP,
         maxRetries: context.MAX_RETRIES,
         temperature: (activeTools?.length || 0) > 0 ? context.FUNCTION_CALL_TEMPERATURE : context.CHAT_TEMPERATURE,
