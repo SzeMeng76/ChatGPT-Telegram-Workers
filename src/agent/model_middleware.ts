@@ -229,8 +229,8 @@ export async function AIMiddleware({ config, activeTools, onStream, toolChoice, 
                 record.tokens = {
                     prompt: usage.inputTokens,
                     completion: usage.outputTokens,
-                    reasoning: usage.reasoningTokens,
-                    cached: usage.cachedInputTokens,
+                    reasoning: usage.outputTokenDetails?.reasoningTokens,
+                    cached: usage.inputTokenDetails?.cacheReadTokens,
                 };
                 log.info(`tokens: ${JSON.stringify(usage)}`);
             } else {
