@@ -42,7 +42,7 @@
     "dependencies": {
         "@ai-sdk/anthropic": "^4.0.0-canary.54",
         "@ai-sdk/azure": "^4.0.0-canary.57",
-        "@ai-sdk/cohere": "^4.0.0-canary.43",
+        "@ai-sdk/cohere": "^4.0.0-canary.44",
         "@ai-sdk/google": "^4.0.0-canary.62",
         "@ai-sdk/google-vertex": "^5.0.0-canary.81",
         "@ai-sdk/mcp": "^2.0.0-canary.49",
@@ -50,17 +50,17 @@
         "@ai-sdk/openai": "^4.0.0-canary.57",
         "@ai-sdk/openai-compatible": "^3.0.0-canary.47",
         "@ai-sdk/black-forest-labs": "^2.0.0-canary.41",
-        "@ai-sdk/xai": "^4.0.0-canary.61",
+        "@ai-sdk/xai": "^4.0.0-canary.62",
         "@ffmpeg.wasm/core-st": "^0.13.2",
         "@ffmpeg.wasm/main": "^0.13.1",
-        "ai": "7.0.0-canary.137",
+        "ai": "7.0.0-canary.138",
         "cf-worker-adapter": "^1.4.0",
         "node-cron": "^4.2.1",
         "zod": "^4.4.3"
     },
     "devDependencies": {
         "@antfu/eslint-config": "^9.0.0",
-        "@cloudflare/workers-types": "^4.20260511.1",
+        "@cloudflare/workers-types": "^4.20260515.1",
         "@types/node": "^25.8.0",
         "@types/node-cron": "^3.0.11",
         "@types/react": "^19.2.14",
@@ -82,7 +82,7 @@
         "wrangler": "^4.91.0"
     },
     "overrides": {
-        "@ai-sdk/gateway": "4.0.0-canary.80",
+        "@ai-sdk/gateway": "4.0.0-canary.81",
         "@ai-sdk/provider": "4.0.0-canary.16",
         "@ai-sdk/provider-utils": "5.0.0-canary.40"
     }
