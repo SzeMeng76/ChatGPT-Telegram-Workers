@@ -77,7 +77,8 @@ export class BotToBotFilter implements MessageHandler<WorkerContextBase> {
             log.info(`[BOT-TO-BOT] Ignored self-message to prevent loop`);
             return new Response('success', { status: 200 });
         }
-        if (ENV.ALLOWED_BOT_IDS.length > 0 && !ENV.ALLOWED_BOT_IDS.includes(senderBotId)) {
+        const allowAll = ENV.ALLOWED_BOT_IDS.includes('*');
+        if (!allowAll && !ENV.ALLOWED_BOT_IDS.includes(senderBotId)) {
             log.info(`[BOT-TO-BOT] Bot ${message.from.username ?? senderBotId} not in ALLOWED_BOT_IDS`);
             return new Response('success', { status: 200 });
         }

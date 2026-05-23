@@ -233,6 +233,8 @@ AI: 根据你们的对话，今天天气不错，我推荐以下活动：
 | `MAX_HISTORY_LENGTH` | 最大历史条目 | `12` | 每个用户 |
 | `STREAM_MODE` | 启用流式输出 | `true` | 打字机效果 |
 | `EXTRA_MESSAGE_CONTEXT` | 包含引用消息 | `false` | 从回复中添加上下文 |
+| `ENABLE_BOT_TO_BOT` | 接受其他 bot 的消息 (Bot API 10.0) | `false` | 需在 @BotFather MiniApp 中开启 Bot-to-Bot Mode |
+| `ALLOWED_BOT_IDS` | 启用 `ENABLE_BOT_TO_BOT` 时允许的 bot 用户 ID 列表 | `[]` | 留空 = 拒绝所有 bot（安全默认）。使用 `["*"]` 允许所有 bot |
 
 ## 🤖 AI提供商配置
 

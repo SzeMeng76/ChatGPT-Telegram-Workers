@@ -109,7 +109,7 @@ export class EnvironmentConfig {
     ENABLE_REPLY_TO_MENTION = false;
     // Allow processing messages from other bots (Bot API 10.0 Bot-to-Bot communication). Must also enable Bot-to-Bot mode in @BotFather.
     ENABLE_BOT_TO_BOT = false;
-    // Whitelist of bot user ids allowed to interact (when ENABLE_BOT_TO_BOT is true). Empty = block all bots to prevent loops.
+    // Whitelist of bot user ids allowed to interact (when ENABLE_BOT_TO_BOT is true). Empty = block all bots (safe default). Use ["*"] to allow any bot.
     ALLOWED_BOT_IDS: string[] = [];
     // Ignore messages starting with specified text
     IGNORE_TEXT_PREFIX = '';

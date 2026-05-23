@@ -233,6 +233,8 @@ AI: Based on your conversation about the nice weather, I recommend these activit
 | `MAX_HISTORY_LENGTH` | Max history entries | `12` | Per user |
 | `STREAM_MODE` | Enable streaming output | `true` | Typewriter effect |
 | `EXTRA_MESSAGE_CONTEXT` | Include quoted messages | `false` | Adds context from replies |
+| `ENABLE_BOT_TO_BOT` | Accept messages from other bots (Bot API 10.0) | `false` | Requires Bot-to-Bot Mode enabled in @BotFather MiniApp |
+| `ALLOWED_BOT_IDS` | Bot user IDs allowed when `ENABLE_BOT_TO_BOT` is true | `[]` | Empty = block all bots (safe default). Use `["*"]` to allow any bot |
 
 ## 🤖 AI Provider Configuration
 

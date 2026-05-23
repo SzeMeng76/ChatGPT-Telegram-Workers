@@ -8,6 +8,11 @@
 ## [未发布]
 
 ### 新增
+- **🤝 Bot API 10.0 Bot-to-Bot 支持**: 可选的 Bot 间通讯模式
+  - 新增 `ENABLE_BOT_TO_BOT` 开关，允许处理其他 bot 的消息
+  - 新增 `ALLOWED_BOT_IDS` 白名单，防止死循环和滥用（强烈建议填写）
+  - `BotToBotFilter` 中间件：默认丢弃 bot 消息，拦截自循环，强制执行白名单
+  - 需在 @BotFather MiniApp 中开启 Bot-to-Bot Mode
 - **🎬 Google Veo 3.0 支持**: 升级视频生成，具备原生音频功能
   - 原生音频生成，包含同步音效、对话和音乐
   - 增强视频质量，支持8秒720p生成

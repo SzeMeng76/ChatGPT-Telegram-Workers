@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **🤝 Bot API 10.0 Bot-to-Bot Support**: Optional Bot-to-Bot communication mode
+  - New `ENABLE_BOT_TO_BOT` flag to accept messages from other bots
+  - New `ALLOWED_BOT_IDS` allowlist to prevent loops and abuse (strongly recommended)
+  - `BotToBotFilter` middleware: blocks bot messages by default, drops self-loops, enforces the allowlist
+  - Requires enabling Bot-to-Bot Mode in @BotFather MiniApp
 - **🎬 Google Veo 3.0 Support**: Upgraded video generation with native audio capabilities
   - Native audio generation with synchronized sound effects, dialogue, and music
   - Enhanced video quality with 8-second 720p generation
