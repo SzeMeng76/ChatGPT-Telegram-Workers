@@ -2,7 +2,7 @@ import type * as Telegram from 'telegram-bot-api-types';
 import type { MessageHandler } from './types';
 import { WorkerContextBase } from '../../config/context';
 import { log } from '../../log/logger';
-import { handleCallbackQuery, handleChosenInlineQuery, handleInlineQuery } from '../query';
+import { handleCallbackQuery, handleChosenInlineQuery, handleGuestMessage, handleInlineQuery } from '../query';
 import { ChatHandler } from './chat';
 import { GroupMention } from './group';
 import {
@@ -29,6 +29,8 @@ function loadMessage(body: Telegram.Update, isForwarding: boolean) {
     switch (true) {
         case !!body.message:
             return (token: string) => handleMessage(token, body.message!, isForwarding);
+        case !!(body as any).guest_message:
+            return (token: string) => handleGuestMessage(token, (body as any).guest_message);
         case !!body.inline_query:
             return (token: string) => handleInlineQuery(token, body.inline_query!);
         case !!body.callback_query:
