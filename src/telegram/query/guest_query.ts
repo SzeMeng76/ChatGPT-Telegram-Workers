@@ -51,14 +51,22 @@ export async function handleGuestMessage(token: string, guestMessage: Telegram.M
             return await answerGuestPlain(api, queryId, 'Agent not configured');
         }
 
-        // Apply MESSAGE_REPLACER trigger words before extracting text
+        // Strip @bot prefix BEFORE applying MESSAGE_REPLACER, since substituteMessage
+        // only matches trigger words at the start of message.text.
+        if (guestMessage.text) {
+            guestMessage.text = guestMessage.text.trim().replace(/^@\w+\s*/, '').trim();
+        } else if (guestMessage.caption) {
+            guestMessage.caption = guestMessage.caption.trim().replace(/^@\w+\s*/, '').trim();
+        }
+
+        // Apply MESSAGE_REPLACER trigger words
         if (USER_CONFIG.MESSAGE_REPLACER && (guestMessage.text || guestMessage.caption)) {
             substituteMessage(guestMessage, USER_CONFIG.MESSAGE_REPLACER);
         }
 
         // Extract base text + reply context (but don't fold them yet — /set runs first)
         const messageInfo = extractMessageInfo(guestMessage, botId);
-        let text = (guestMessage.text || guestMessage.caption || '').trim().replace(/^@\w+\s*/, '').trim();
+        let text = (guestMessage.text || guestMessage.caption || '').trim();
         const replyTo = guestMessage.reply_to_message;
         const replyText = (replyTo?.text || replyTo?.caption || '').trim();
         const replyAuthor = replyTo?.from?.username
