@@ -288,17 +288,9 @@ function extractKeyFromRequest(provider: string, url: RequestInfo | URL, options
         ? url
         : (url instanceof URL ? url.href : (url as Request).url);
 
-    // Google / Vertex: key 在 URL query string
-    if (provider === 'google' || provider === 'vertex') {
-        const m = urlStr.match(/[?&]key=([^&]+)/);
-        if (m) return decodeURIComponent(m[1]);
-    }
-
-    // 其他 provider: 从 Authorization / x-api-key header
     const headers = options?.headers;
-    if (!headers) return undefined;
-
     const get = (name: string): string | undefined => {
+        if (!headers) return undefined;
         if (headers instanceof Headers) return headers.get(name) ?? undefined;
         if (Array.isArray(headers)) {
             const found = headers.find(([k]) => k.toLowerCase() === name.toLowerCase());
@@ -307,6 +299,18 @@ function extractKeyFromRequest(provider: string, url: RequestInfo | URL, options
         const obj = headers as Record<string, string>;
         return obj[name] ?? obj[name.toLowerCase()] ?? obj[name.toUpperCase()];
     };
+
+    // Google / Vertex: key 可能在 URL query (`?key=`) 或 x-goog-api-key header。
+    // @ai-sdk/google v2+ 默认把 key 放在 x-goog-api-key header,不放 URL。
+    if (provider === 'google' || provider === 'vertex') {
+        const m = urlStr.match(/[?&]key=([^&]+)/);
+        if (m) return decodeURIComponent(m[1]);
+        const goog = get('x-goog-api-key');
+        if (goog) return goog;
+    }
+
+    // 其他 provider: 从 Authorization / x-api-key header
+    if (!headers) return undefined;
 
     const auth = get('Authorization');
     if (auth?.startsWith('Bearer ')) return auth.slice(7);
