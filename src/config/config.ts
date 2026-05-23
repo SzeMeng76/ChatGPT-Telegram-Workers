@@ -909,6 +909,16 @@ export class ExtraUserConfig {
     // 摘要目标比例
     CONTEXT_COMPRESSION_SUMMARY_RATIO = 0.20;
 
+    // 摘要生成 provider（可选）
+    // 留空则使用 AI_CHAT_PROVIDER（保持向后兼容，自动选择便宜模型）
+    // 可选值：openai, anthropic, google, xai, oailike, cohere, mistral, vertex, azure, workers
+    // 用途：将 summary 流量从主 provider 移开，避免 Google 误判 hijack / 节省主 key 配额
+    SUMMARY_PROVIDER?: string;
+    // 摘要生成模型（可选）
+    // 留空则按 SUMMARY_PROVIDER 自动选便宜模型（gpt-4o-mini / claude-haiku-4-5 / gemini-2.5-flash-lite / grok-4.1-fast）
+    // 支持的格式：直接模型名（如 gemini-2.5-flash-lite），或 provider:model（如 oailike:openai/gpt-4o-mini）
+    SUMMARY_MODEL?: string;
+
     // ===== 子代理委托配置 =====
     // 是否启用子代理委托（默认关闭，高级功能）
     // 适用场景：并行研究任务、复杂多步骤工作流、需要隔离上下文的任务

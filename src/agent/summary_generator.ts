@@ -20,27 +20,41 @@ export async function generateSummaryWithLLM(
         // 创建一个临时配置，使用更便宜的模型进行摘要
         const summaryContext = { ...context };
 
-        // 优先使用便宜的模型
-        // 你可以添加一个专门的配置项 SUMMARY_MODEL
-        // 这里我们尝试使用 GPT-3.5 或当前配置的模型
-        const originalProvider = summaryContext.AI_CHAT_PROVIDER;
-        const originalModel = summaryContext[`${originalProvider.toUpperCase()}_CHAT_MODEL`];
-
-        // 尝试使用更便宜的模型（基于 2026 年最新定价）
-        if (originalProvider === 'openai') {
-            // GPT-4o-mini: $0.15/$0.60 per million tokens
-            summaryContext.OPENAI_CHAT_MODEL = 'gpt-4o-mini';
-        } else if (originalProvider === 'anthropic') {
-            // Claude Haiku 4.5: $1/$5 per million tokens
-            summaryContext.ANTHROPIC_CHAT_MODEL = 'claude-haiku-4-5';
-        } else if (originalProvider === 'google') {
-            // Gemini 2.5 Flash-Lite: $0.075/$0.30 per million tokens (最便宜！)
-            summaryContext.GOOGLE_CHAT_MODEL = 'gemini-2.5-flash-lite';
-        } else if (originalProvider === 'xai') {
-            // Grok 4.1 Fast: $0.20/$0.50 per million tokens
-            summaryContext.XAI_CHAT_MODEL = 'grok-4.1-fast';
+        // 优先级 1：用户显式配置 SUMMARY_PROVIDER（彻底切换 provider，用于卸载流量）
+        if (summaryContext.SUMMARY_PROVIDER) {
+            summaryContext.AI_CHAT_PROVIDER = summaryContext.SUMMARY_PROVIDER;
         }
-        // 其他提供商使用默认模型
+
+        // 优先级 2：用户显式配置 SUMMARY_MODEL
+        // 支持两种格式：
+        //   - "gemini-2.5-flash-lite"        → 用当前 provider
+        //   - "oailike:openai/gpt-4o-mini"   → 同时切换 provider
+        if (summaryContext.SUMMARY_MODEL) {
+            const raw = summaryContext.SUMMARY_MODEL.trim();
+            const sep = raw.indexOf(':');
+            if (sep > 0 && sep < raw.length - 1) {
+                const providerPart = raw.slice(0, sep);
+                const modelPart = raw.slice(sep + 1);
+                summaryContext.AI_CHAT_PROVIDER = providerPart;
+                summaryContext[`${providerPart.toUpperCase()}_CHAT_MODEL`] = modelPart;
+            } else {
+                summaryContext[`${summaryContext.AI_CHAT_PROVIDER.toUpperCase()}_CHAT_MODEL`] = raw;
+            }
+        }
+
+        // 优先级 3：没有显式配置 → 旧的自动选便宜模型逻辑（向后兼容）
+        if (!summaryContext.SUMMARY_PROVIDER && !summaryContext.SUMMARY_MODEL) {
+            const originalProvider = summaryContext.AI_CHAT_PROVIDER;
+            if (originalProvider === 'openai') {
+                summaryContext.OPENAI_CHAT_MODEL = 'gpt-4o-mini';
+            } else if (originalProvider === 'anthropic') {
+                summaryContext.ANTHROPIC_CHAT_MODEL = 'claude-haiku-4-5';
+            } else if (originalProvider === 'google') {
+                summaryContext.GOOGLE_CHAT_MODEL = 'gemini-2.5-flash-lite';
+            } else if (originalProvider === 'xai') {
+                summaryContext.XAI_CHAT_MODEL = 'grok-4.1-fast';
+            }
+        }
 
         const agent = loadChatLLM(summaryContext);
         if (!agent) {
@@ -48,7 +62,8 @@ export async function generateSummaryWithLLM(
             return null;
         }
 
-        log.info(`[SUMMARY GENERATOR] Using ${summaryContext.AI_CHAT_PROVIDER} for summary generation`);
+        const usedModel = summaryContext[`${summaryContext.AI_CHAT_PROVIDER.toUpperCase()}_CHAT_MODEL`];
+        log.info(`[SUMMARY GENERATOR] Using ${summaryContext.AI_CHAT_PROVIDER}:${usedModel} for summary generation`);
 
         const messages: HistoryItem[] = [
             {
