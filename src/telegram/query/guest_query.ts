@@ -8,6 +8,8 @@ import { clearLog, log } from '../../log';
 import { createTelegramBotAPI } from '../api';
 import { catchError } from '../handler';
 import { fileUrlToBase64Message, OnStreamHander } from '../handler/chat';
+import { substituteMessage } from '../handler/msg_trimer';
+import { SetCommandHandler } from '../command/system';
 import { ChosenInlineContext, ChosenInlineSender } from '../utils/send';
 import { extractMessageInfo, getTelegramFile } from '../utils/tg_utils';
 
@@ -49,50 +51,19 @@ export async function handleGuestMessage(token: string, guestMessage: Telegram.M
             return await answerGuestPlain(api, queryId, 'Agent not configured');
         }
 
-        // Build user message (text + media)
+        // Apply MESSAGE_REPLACER trigger words before extracting text
+        if (USER_CONFIG.MESSAGE_REPLACER && (guestMessage.text || guestMessage.caption)) {
+            substituteMessage(guestMessage, USER_CONFIG.MESSAGE_REPLACER);
+        }
+
+        // Extract base text + reply context (but don't fold them yet — /set runs first)
         const messageInfo = extractMessageInfo(guestMessage, botId);
-        const text = (guestMessage.text || guestMessage.caption || '').trim().replace(/^@\w+\s*/, '').trim();
+        let text = (guestMessage.text || guestMessage.caption || '').trim().replace(/^@\w+\s*/, '').trim();
         const replyTo = guestMessage.reply_to_message;
         const replyText = (replyTo?.text || replyTo?.caption || '').trim();
         const replyAuthor = replyTo?.from?.username
             ? `@${replyTo.from.username}`
             : (replyTo?.from?.first_name || '');
-
-        let promptText = text;
-        if (replyText && !messageInfo.id) {
-            const quoted = replyAuthor ? `${replyAuthor}: ${replyText}` : replyText;
-            promptText = text
-                ? `Context (replied message):\n> ${quoted}\n\nUser asks: ${text}`
-                : `Please respond to this message:\n> ${quoted}`;
-        }
-
-        let userParams: UserModelMessage = {
-            role: 'user',
-            content: promptText || `Please explain the ${messageInfo.type}`,
-        };
-
-        if (messageInfo.id && messageInfo.id.length > 0) {
-            const urls = await getTelegramFile(messageInfo.id, token, 'url') as string[];
-            if (urls.length > 0) {
-                userParams.content = [{
-                    type: 'text',
-                    text: promptText || (messageInfo.type === 'voice' || messageInfo.type === 'audio'
-                        ? (USER_CONFIG.AUDIO_PROMPT || 'Please transcribe and respond to this audio')
-                        : `Please explain the ${messageInfo.type}`),
-                }];
-                userParams = await fileUrlToBase64Message({
-                    urls,
-                    type: messageInfo.type,
-                    params: userParams,
-                    text: promptText,
-                    AUDIO_HANDLE_TYPE: USER_CONFIG.AUDIO_HANDLE_TYPE,
-                });
-            }
-        }
-
-        if (!userParams.content || (Array.isArray(userParams.content) && userParams.content.length === 0)) {
-            return await answerGuestPlain(api, queryId, 'Please include a question after the mention.');
-        }
 
         // Send placeholder via answerGuestQuery to obtain inline_message_id
         const placeholderResp: any = await api.answerGuestQuery({
@@ -131,6 +102,54 @@ export async function handleGuestMessage(token: string, guestMessage: Telegram.M
         const onStream = OnStreamHander(sender as any, fakeContext, text);
 
         try {
+            // /set command support — runs BEFORE reply context is folded into prompt
+            if (text.startsWith('/set ')) {
+                const setMsg = { text } as unknown as Telegram.Message;
+                const setResp = await new SetCommandHandler().handle(setMsg, text.substring(5).trim(), fakeContext, sender as any);
+                if (setResp instanceof Response && !replyText) {
+                    // Config-only change with nothing else to do — response already sent via sender
+                    return setResp;
+                }
+                text = setMsg.text || '';
+            }
+
+            // Fold reply context into prompt
+            let promptText = text;
+            if (replyText && !messageInfo.id) {
+                const quoted = replyAuthor ? `${replyAuthor}: ${replyText}` : replyText;
+                promptText = text
+                    ? `Context (replied message):\n> ${quoted}\n\nUser asks: ${text}`
+                    : `Please respond to this message:\n> ${quoted}`;
+            }
+
+            let userParams: UserModelMessage = {
+                role: 'user',
+                content: promptText || `Please explain the ${messageInfo.type}`,
+            };
+
+            if (messageInfo.id && messageInfo.id.length > 0) {
+                const urls = await getTelegramFile(messageInfo.id, token, 'url') as string[];
+                if (urls.length > 0) {
+                    userParams.content = [{
+                        type: 'text',
+                        text: promptText || (messageInfo.type === 'voice' || messageInfo.type === 'audio'
+                            ? (USER_CONFIG.AUDIO_PROMPT || 'Please transcribe and respond to this audio')
+                            : `Please explain the ${messageInfo.type}`),
+                    }];
+                    userParams = await fileUrlToBase64Message({
+                        urls,
+                        type: messageInfo.type,
+                        params: userParams,
+                        text: promptText,
+                        AUDIO_HANDLE_TYPE: USER_CONFIG.AUDIO_HANDLE_TYPE,
+                    });
+                }
+            }
+
+            if (!userParams.content || (Array.isArray(userParams.content) && userParams.content.length === 0)) {
+                return await onStream.end!('Please include a question after the mention.');
+            }
+
             const messages = injectSystemMessage(
                 [userParams as ModelMessage],
                 USER_CONFIG.SYSTEM_INIT_MESSAGE,
