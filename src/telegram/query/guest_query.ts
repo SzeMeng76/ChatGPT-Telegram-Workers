@@ -273,19 +273,29 @@ async function handleGuestTts(
 
     let media: string;
     try {
+        log.info(`[GUEST] /tts staging voice to private chat ${fromId}...`);
         media = await stageVoiceToPrivate(token, fromId, audio);
+        log.info(`[GUEST] /tts staged voice file_id=${media}`);
     } catch (e) {
+        log.error(`[GUEST] /tts stageVoiceToPrivate failed: ${(e as Error).message}`);
         return await onStream.end!(`Failed to stage audio via private chat: ${(e as Error).message}\nMake sure you have started a private chat with the bot first (send /start to it in DM).`);
     }
 
     onStream.clearHeartbeat!();
     // InputMedia has no Voice variant; reuse the voice file_id with type:'audio'.
     // Telegram routes by the file_id's actual encoded type, so OGG/Opus bytes play correctly.
-    return await sender.editMessageMedia({
+    log.info(`[GUEST] /tts calling editMessageMedia...`);
+    const editResp = await sender.editMessageMedia({
         type: 'audio',
         media,
         caption: USER_CONFIG.AUDIO_CONTAINS_TEXT ? escape(text.slice(0, 800), { quoteExpandable: true, addQuote: true }) : undefined,
     } as Telegram.InputMedia, ENV.DEFAULT_PARSE_MODE as Telegram.ParseMode);
+    log.info(`[GUEST] /tts editMessageMedia status=${editResp.status}`);
+    if (!editResp.ok) {
+        const body = await editResp.clone().text();
+        log.error(`[GUEST] /tts editMessageMedia failed: ${body}`);
+    }
+    return editResp;
 }
 
 // Upload a photo Blob to the user's private chat with the bot to obtain a reusable
