@@ -11,6 +11,7 @@ import { authChecker } from '.';
 import { ASR_AGENTS, CHAT_AGENTS, customInfo, IMAGE_AGENTS, loadASRLLM, loadChatLLM, loadImageGen, loadTTSLLM, TTS_AGENTS } from '../../agent';
 import { loadHistory } from '../../agent/chat';
 import { KlingAI } from '../../agent/kling';
+import { getAllKeyStats, getKeyStats } from '../../agent/key-manager';
 import { updateModels } from '../../agent/models';
 import { ENV, ENV_KEY_MAPPER } from '../../config/env';
 import { ConfigMerger } from '../../config/merger';
@@ -359,6 +360,56 @@ export class SystemCommandHandler implements CommandHandler {
             addQuote: true,
             quoteExpandable: true,
         });
+    };
+}
+
+export class KeystatsCommandHandler implements CommandHandler {
+    command = '/keystats';
+    scopes: ScopeType[] = ['all_private_chats', 'all_chat_administrators'];
+    needAuth = COMMAND_AUTH_CHECKER.default;
+    handle = async (message: Telegram.Message, subcommand: string, context: WorkerContext, sender: MessageSender): Promise<Response> => {
+        const maskKey = (k: string): string => {
+            if (!k) return '(empty)';
+            if (k.length <= 10) return `${k.slice(0, 2)}***`;
+            return `${k.slice(0, 4)}…${k.slice(-4)}`;
+        };
+        const fmtMs = (ms: number): string => {
+            if (ms < 1000) return `${ms}ms`;
+            const s = Math.round(ms / 1000);
+            if (s < 60) return `${s}s`;
+            const m = Math.round(s / 60);
+            if (m < 60) return `${m}m`;
+            return `${Math.round(m / 60)}h`;
+        };
+        const now = Date.now();
+        const summary = getAllKeyStats();
+        const providers = Object.keys(summary).sort();
+
+        if (providers.length === 0) {
+            return sender.sendPlainText('No key states recorded yet. Make a request first.');
+        }
+
+        const filter = subcommand.trim().toLowerCase();
+        const lines: string[] = ['📊 API Key Pool Status', ''];
+
+        for (const provider of providers) {
+            if (filter && provider !== filter) continue;
+            const s = summary[provider];
+            lines.push(`▸ ${provider}  total=${s.total}  available=${s.available}  cooldown=${s.inCooldown}`);
+            const states = getKeyStats(provider) || [];
+            for (const st of states) {
+                const inCd = st.cooldownUntil && st.cooldownUntil > now;
+                const tag = inCd ? `❄️ ${fmtMs(st.cooldownUntil! - now)}` : '✅';
+                const used = st.lastUsed ? `${fmtMs(now - st.lastUsed)} ago` : 'never';
+                const err = st.errorCount > 0 ? ` errors=${st.errorCount}${st.lastError ? `(${st.lastError})` : ''}` : '';
+                lines.push(`   ${tag}  ${maskKey(st.key)}  used=${used}${err}`);
+            }
+            lines.push('');
+        }
+
+        const body = lines.join('\n');
+        const msg = `\`\`\`\n${body}\n\`\`\``;
+        return sender.sendRichText(msg, 'MarkdownV2', 'tip');
     };
 }
 
