@@ -7,7 +7,7 @@ import { ConfigMerger } from '../../config/merger';
 import { clearLog, log } from '../../log';
 import { createTelegramBotAPI } from '../api';
 import { catchError } from '../handler';
-import { fileUrlToBase64Message, OnStreamHander } from '../handler/chat';
+import { fileUrlToBase64Message, OnStreamHander, tts } from '../handler/chat';
 import { substituteMessage } from '../handler/msg_trimer';
 import { SetCommandHandler } from '../command/system';
 import { ChosenInlineContext, ChosenInlineSender } from '../utils/send';
@@ -118,7 +118,17 @@ export async function handleGuestMessage(token: string, guestMessage: Telegram.M
                 if (!prompt) {
                     return await onStream.end!(ENV.I18N.command.help.img);
                 }
-                return await handleGuestImg(prompt, messageInfo, token, sender, onStream, USER_CONFIG);
+                return await handleGuestImg(prompt, messageInfo, token, fromId!, sender, onStream, USER_CONFIG);
+            }
+
+            // /tts command — synthesize audio and replace the placeholder via editMessageMedia.
+            // Same constraint as /img: must stage the audio in the user's private chat to get a file_id.
+            if (text.startsWith('/tts ') || text === '/tts') {
+                const ttsText = text.slice(4).trim();
+                if (!ttsText) {
+                    return await onStream.end!('Please input your text after /tts');
+                }
+                return await handleGuestTts(ttsText, token, fromId!, sender, onStream, USER_CONFIG);
             }
 
             // /set command support — runs BEFORE reply context is folded into prompt
@@ -208,6 +218,7 @@ async function handleGuestImg(
     prompt: string,
     messageInfo: ReturnType<typeof extractMessageInfo>,
     token: string,
+    fromId: number,
     sender: ChosenInlineSender,
     onStream: ReturnType<typeof OnStreamHander>,
     USER_CONFIG: typeof ENV.USER_CONFIG,
@@ -223,14 +234,19 @@ async function handleGuestImg(
     const img = await agent.request(prompt, USER_CONFIG, extraParams);
     log.info(`[GUEST] /img generated: url=${JSON.stringify(img.url)} raw_count=${img.raw?.length || 0} text=${img.text}`);
 
-    const url = img.url?.[0];
-    if (!url) {
-        // Inline messages can't multipart-upload Blobs. If the agent only returned raw bytes,
-        // we can't deliver an image — surface a clear error instead of silently failing.
-        const msg = img.raw && img.raw.length > 0
-            ? `Image agent "${agent.name}" returned raw bytes; guest/inline mode requires a public URL. Configure a URL-returning provider (e.g. bfl, kling) for guest /img.`
-            : `${img.text || 'ERROR: No image found'}`;
-        return await onStream.end!(msg);
+    // Resolve a media reference: prefer the agent's URL, otherwise stage raw bytes
+    // through the user's private chat with the bot to obtain a file_id.
+    let media: string | undefined = img.url?.[0];
+    const raw = img.raw?.[0];
+    if (!media && raw) {
+        try {
+            media = await stagePhotoToPrivate(token, fromId, raw);
+        } catch (e) {
+            return await onStream.end!(`Failed to stage image via private chat: ${(e as Error).message}\nMake sure you have started a private chat with the bot first (send /start to it in DM).`);
+        }
+    }
+    if (!media) {
+        return await onStream.end!(`${img.text || 'ERROR: No image found'}`);
     }
 
     const captionRaw = (img.caption?.[0] || img.text || prompt).slice(0, 800);
@@ -239,7 +255,77 @@ async function handleGuestImg(
     onStream.clearHeartbeat!();
     return await sender.editMessageMedia({
         type: ENV.SEND_IMAGE_AS_FILE ? 'document' : 'photo',
-        media: url,
+        media,
         caption,
     } as Telegram.InputMedia, ENV.DEFAULT_PARSE_MODE as Telegram.ParseMode);
+}
+
+async function handleGuestTts(
+    text: string,
+    token: string,
+    fromId: number,
+    sender: ChosenInlineSender,
+    onStream: ReturnType<typeof OnStreamHander>,
+    USER_CONFIG: typeof ENV.USER_CONFIG,
+): Promise<Response> {
+    const audio = await tts(text, USER_CONFIG);
+    log.info(`[GUEST] /tts generated audio: ${(audio.size / 1024).toFixed(1)}KB type=${audio.type}`);
+
+    let media: string;
+    try {
+        media = await stageVoiceToPrivate(token, fromId, audio);
+    } catch (e) {
+        return await onStream.end!(`Failed to stage audio via private chat: ${(e as Error).message}\nMake sure you have started a private chat with the bot first (send /start to it in DM).`);
+    }
+
+    onStream.clearHeartbeat!();
+    // InputMedia has no Voice variant; reuse the voice file_id with type:'audio'.
+    // Telegram routes by the file_id's actual encoded type, so OGG/Opus bytes play correctly.
+    return await sender.editMessageMedia({
+        type: 'audio',
+        media,
+        caption: USER_CONFIG.AUDIO_CONTAINS_TEXT ? escape(text.slice(0, 800), { quoteExpandable: true, addQuote: true }) : undefined,
+    } as Telegram.InputMedia, ENV.DEFAULT_PARSE_MODE as Telegram.ParseMode);
+}
+
+// Upload a photo Blob to the user's private chat with the bot to obtain a reusable
+// file_id, then delete the staging message. Throws if the user has not started a
+// private conversation with the bot (Telegram returns 403 in that case).
+async function stagePhotoToPrivate(token: string, userId: number, photo: Blob): Promise<string> {
+    const api = createTelegramBotAPI(token);
+    const resp = await api.sendPhotoWithReturns({
+        chat_id: userId,
+        photo: new File([photo], 'image.png', { type: photo.type || 'image/png' }) as any,
+    });
+    if (!resp.ok) {
+        throw new Error(`${(resp as any).error_code || ''} ${(resp as any).description || 'sendPhoto failed'}`.trim());
+    }
+    const msg = resp.result;
+    const photos = (msg as any).photo as Telegram.PhotoSize[] | undefined;
+    if (!photos || photos.length === 0) {
+        throw new Error('sendPhoto returned no photo array');
+    }
+    // Largest size is last; reuse it.
+    const fileId = photos[photos.length - 1].file_id;
+    // Clean up the staging message in the user's private chat.
+    api.deleteMessage({ chat_id: userId, message_id: msg.message_id }).catch(e => log.warn(`[GUEST] staging photo cleanup failed: ${e}`));
+    return fileId;
+}
+
+async function stageVoiceToPrivate(token: string, userId: number, audio: Blob): Promise<string> {
+    const api = createTelegramBotAPI(token);
+    const resp = await api.sendVoiceWithReturns({
+        chat_id: userId,
+        voice: new File([audio], 'voice.ogg', { type: audio.type || 'audio/ogg' }) as any,
+    });
+    if (!resp.ok) {
+        throw new Error(`${(resp as any).error_code || ''} ${(resp as any).description || 'sendVoice failed'}`.trim());
+    }
+    const msg = resp.result;
+    const voice = (msg as any).voice as Telegram.Voice | undefined;
+    if (!voice?.file_id) {
+        throw new Error('sendVoice returned no voice.file_id');
+    }
+    api.deleteMessage({ chat_id: userId, message_id: msg.message_id }).catch(e => log.warn(`[GUEST] staging voice cleanup failed: ${e}`));
+    return voice.file_id;
 }

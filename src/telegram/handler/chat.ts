@@ -680,7 +680,25 @@ export async function tts(text: string, config: AgentUserConfig): Promise<Blob> 
     if (!agent) {
         throw new Error(`TTS agent ${config.AI_TTS_PROVIDER} not found, available: ${TTS_AGENTS.map(a => a.name).join(', ')}`);
     }
-    return agent.request(text, config);
+    return agent.request(stripReasoningBlock(text), config);
+}
+
+/**
+ * Remove the reasoning blockquote that request.ts prepends to assistant output.
+ * Shape (both streaming and non-streaming paths):
+ *   >`Thought for N seconds`        (or `Thinking...` if not finalized)
+ *   >reasoning line 1
+ *   >reasoning line 2
+ *   >✹                              (optional separator)
+ *   <actual answer follows>
+ * Without this, TTS reads the meta header and the entire chain of thought aloud.
+ */
+function stripReasoningBlock(text: string): string {
+    if (!text) return text;
+    // Match an optional leading "**" (expandable variant), the Thought/Thinking header line,
+    // any number of consecutive `>`-prefixed lines, and an optional `>✹` terminator.
+    const reasoningBlock = /^\*{0,2}>`(?:Thought for [^`]*|Thinking\.\.\.)`\n(?:>[^\n]*\n)*(?:>✹\n?)?/;
+    return text.replace(reasoningBlock, '').trimStart();
 }
 
 async function asr(audio: Blob, config: AgentUserConfig) {
