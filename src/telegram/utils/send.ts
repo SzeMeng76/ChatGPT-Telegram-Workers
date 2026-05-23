@@ -585,7 +585,7 @@ export async function checkIsNeedTagIds(context: { chatType: string; message: Te
 //     }
 // }
 
-class ChosenInlineContext {
+export class ChosenInlineContext {
     result_id: string;
     inline_message_id?: string;
     query: string;
@@ -599,6 +599,19 @@ class ChosenInlineContext {
         if (ENV.TELEGRAPH_NUM_LIMIT > 0) {
             this.telegraphAccessTokenKey = `telegraph_access_token:${result.from.id}`;
         }
+    }
+
+    static forGuest(inlineMessageId: string, query: string, fromId: number): ChosenInlineContext {
+        const ctx = Object.create(ChosenInlineContext.prototype) as ChosenInlineContext;
+        ctx.result_id = 'guest';
+        ctx.inline_message_id = inlineMessageId;
+        ctx.query = query;
+        ctx.parse_mode = null;
+        ctx.chatType = 'private';
+        if (ENV.TELEGRAPH_NUM_LIMIT > 0) {
+            ctx.telegraphAccessTokenKey = `telegraph_access_token:${fromId}`;
+        }
+        return ctx;
     }
 }
 

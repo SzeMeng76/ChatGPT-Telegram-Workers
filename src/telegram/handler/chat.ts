@@ -736,7 +736,7 @@ function getMediaType(url: string, defaultType: string): string {
 
 // v5: Breaking change in file type extraction logic.
 // Manual download and explicit MIME type specification are now required.
-async function fileUrlToBase64Message({ urls, type, params, AUDIO_HANDLE_TYPE = 'chat', text }: { urls: string[]; type: string; params: UserModelMessage; AUDIO_HANDLE_TYPE: string; text: string }): Promise<any> {
+export async function fileUrlToBase64Message({ urls, type, params, AUDIO_HANDLE_TYPE = 'chat', text }: { urls: string[]; type: string; params: UserModelMessage; AUDIO_HANDLE_TYPE: string; text: string }): Promise<any> {
     async function urlToBase64Message(type = 'image') {
         log.info(`[urlToBase64Message] type: ${type}, urls: ${JSON.stringify(urls)}`);
         const responses = await Promise.all(urls.map(url => fetch(url))).then(r => r.filter(r => r.ok));
