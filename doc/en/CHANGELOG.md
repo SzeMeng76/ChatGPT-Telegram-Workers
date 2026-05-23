@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **👻 Bot API 10.0 Guest Mode Support**: Reply in chats the bot is not a member of
+  - New `handleGuestMessage` for `update.guest_message` updates
+  - Streams responses via `answerGuestQuery` + `editMessageText` against the returned `inline_message_id`, matching in-group chat UX (Thought block, model/token info, fold)
+  - Multimodal input (photo/voice/audio) via shared `extractMessageInfo` + `fileUrlToBase64Message`
+  - `MESSAGE_REPLACER` trigger words and `/set` flags work the same as in-group chat
+  - Folds `reply_to_message` content into the prompt so the AI can act on the replied message
+  - Requires enabling Guest Mode in @BotFather MiniApp
+  - Limitation: Telegram forces the reply to be attached to the summoning `@bot` message; the API has no parameter to retarget it
 - **🤝 Bot API 10.0 Bot-to-Bot Support**: Optional Bot-to-Bot communication mode
   - New `ENABLE_BOT_TO_BOT` flag to accept messages from other bots
   - New `ALLOWED_BOT_IDS` allowlist to prevent loops and abuse (strongly recommended)

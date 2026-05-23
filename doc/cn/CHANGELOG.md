@@ -8,6 +8,14 @@
 ## [未发布]
 
 ### 新增
+- **👻 Bot API 10.0 Guest Mode 支持**: 在 bot 不是成员的群里也能响应
+  - 新增 `handleGuestMessage` 处理 `update.guest_message`
+  - 通过 `answerGuestQuery` + `editMessageText`（基于返回的 `inline_message_id`）实现流式输出，体验与群内聊天一致（Thought 块、model/token 信息、长消息折叠）
+  - 支持多模态输入（图片/语音/音频），复用 `extractMessageInfo` + `fileUrlToBase64Message`
+  - 支持 `MESSAGE_REPLACER` 触发词和 `/set` 参数，行为与群内一致
+  - 自动把 `reply_to_message` 内容注入 prompt，让 AI 针对被回复的消息回答
+  - 需在 @BotFather MiniApp 中开启 Guest Mode
+  - 限制：Telegram 强制让回复绑定到召唤 bot 的 `@bot` 消息，API 没有参数可改变这个行为
 - **🤝 Bot API 10.0 Bot-to-Bot 支持**: 可选的 Bot 间通讯模式
   - 新增 `ENABLE_BOT_TO_BOT` 开关，允许处理其他 bot 的消息
   - 新增 `ALLOWED_BOT_IDS` 白名单，防止死循环和滥用（强烈建议填写）

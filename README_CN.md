@@ -47,6 +47,8 @@
 - **实时流式输出**: 优化的消息发送机制，几乎零延迟
 - **智能模型切换**: 根据对话内容自动调整使用的AI模型
 - **内联查询**: 支持Telegram内联消息功能
+- **Guest Mode** (Bot API 10.0): 在 bot 不是成员的群里也能通过 `@mention` 响应，支持流式、多模态输入、`MESSAGE_REPLACER`/`/set`
+- **Bot-to-Bot 通讯** (Bot API 10.0): 可选的多 agent 协作模式，带白名单防死循环
 - **插件系统**: 可自定义插件，支持模板插值
 - **MCP支持**: 集成Model Context Protocol
 - **网页爬虫**: 基于模式的HTML提取，支持动态内容
