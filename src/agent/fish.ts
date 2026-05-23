@@ -29,7 +29,7 @@ export class FishTTS implements TTSAgent {
                 text,
                 reference_id,
                 format: 'opus',
-                opus_bitrate: 64,
+                opus_bitrate: -1000,
                 ...context.FISH_TTS_EXTRA_PARAMS,
             }),
         });

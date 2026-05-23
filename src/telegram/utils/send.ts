@@ -651,7 +651,13 @@ export class ChosenInlineSender {
         });
     }
 
-    editMessageMedia(media: Telegram.InputMedia, parse_mode?: Telegram.ParseMode): Promise<Response> {
+    editMessageMedia(media: Telegram.InputMedia, parse_mode?: Telegram.ParseMode, file?: File): Promise<Response> {
+        // Inline messages (guest/inline mode) cannot multipart-upload media — Telegram
+        // requires media to be a URL or existing file_id. Surface a clear error so callers
+        // (e.g. sendImages with raw Blob) know to fall back to a text response.
+        if (file) {
+            throw new Error('inline_message_id mode does not support multipart media upload; provide a URL via media.media instead');
+        }
         return this.api.editMessageMedia({
             inline_message_id: this.context.inline_message_id,
             media: {

@@ -1,6 +1,6 @@
 import type { ModelMessage, UserModelMessage } from 'ai';
 import type * as Telegram from 'telegram-bot-api-types';
-import { loadChatLLM } from '../../agent';
+import { loadChatLLM, loadImageGen } from '../../agent';
 import { injectSystemMessage } from '../../agent/chat';
 import { ENV } from '../../config/env';
 import { ConfigMerger } from '../../config/merger';
@@ -11,6 +11,7 @@ import { fileUrlToBase64Message, OnStreamHander } from '../handler/chat';
 import { substituteMessage } from '../handler/msg_trimer';
 import { SetCommandHandler } from '../command/system';
 import { ChosenInlineContext, ChosenInlineSender } from '../utils/send';
+import { escape } from '../utils/md2tgmd';
 import { extractMessageInfo, getTelegramFile } from '../utils/tg_utils';
 
 export async function handleGuestMessage(token: string, guestMessage: Telegram.Message): Promise<Response | null> {
@@ -110,6 +111,16 @@ export async function handleGuestMessage(token: string, guestMessage: Telegram.M
         const onStream = OnStreamHander(sender as any, fakeContext, text);
 
         try {
+            // /img command — generate an image and replace the placeholder via editMessageMedia.
+            // Inline messages cannot multipart-upload, so the image agent MUST return a public URL.
+            if (text.startsWith('/img ') || text === '/img') {
+                const prompt = text.slice(4).trim();
+                if (!prompt) {
+                    return await onStream.end!(ENV.I18N.command.help.img);
+                }
+                return await handleGuestImg(prompt, messageInfo, token, sender, onStream, USER_CONFIG);
+            }
+
             // /set command support — runs BEFORE reply context is folded into prompt
             if (text.startsWith('/set ')) {
                 const setMsg = { text } as unknown as Telegram.Message;
@@ -191,4 +202,44 @@ async function answerGuestPlain(api: ReturnType<typeof createTelegramBotAPI>, qu
     const r = await api.answerGuestQuery({ guest_query_id: queryId, result }).then(r => r.json());
     log.info(`[GUEST] answerGuestQuery resp: ${JSON.stringify(r)}`);
     return new Response('success', { status: 200 });
+}
+
+async function handleGuestImg(
+    prompt: string,
+    messageInfo: ReturnType<typeof extractMessageInfo>,
+    token: string,
+    sender: ChosenInlineSender,
+    onStream: ReturnType<typeof OnStreamHander>,
+    USER_CONFIG: typeof ENV.USER_CONFIG,
+): Promise<Response> {
+    const agent = loadImageGen(USER_CONFIG);
+    const extraParams: Record<string, any> = {};
+    if (['google', 'vertex', 'openai', 'xai', 'bfl'].includes(agent.name)
+        && ['image', 'photo'].includes(messageInfo.type)
+        && (messageInfo.id?.length || 0) > 0) {
+        extraParams.referenceImages = await getTelegramFile(messageInfo.id!, token, ENV.TELEGRAM_IMAGE_TRANSFER_MODE as any);
+    }
+
+    const img = await agent.request(prompt, USER_CONFIG, extraParams);
+    log.info(`[GUEST] /img generated: url=${JSON.stringify(img.url)} raw_count=${img.raw?.length || 0} text=${img.text}`);
+
+    const url = img.url?.[0];
+    if (!url) {
+        // Inline messages can't multipart-upload Blobs. If the agent only returned raw bytes,
+        // we can't deliver an image — surface a clear error instead of silently failing.
+        const msg = img.raw && img.raw.length > 0
+            ? `Image agent "${agent.name}" returned raw bytes; guest/inline mode requires a public URL. Configure a URL-returning provider (e.g. bfl, kling) for guest /img.`
+            : `${img.text || 'ERROR: No image found'}`;
+        return await onStream.end!(msg);
+    }
+
+    const captionRaw = (img.caption?.[0] || img.text || prompt).slice(0, 800);
+    const caption = escape(captionRaw, { quoteExpandable: true, addQuote: true });
+
+    onStream.clearHeartbeat!();
+    return await sender.editMessageMedia({
+        type: ENV.SEND_IMAGE_AS_FILE ? 'document' : 'photo',
+        media: url,
+        caption,
+    } as Telegram.InputMedia, ENV.DEFAULT_PARSE_MODE as Telegram.ParseMode);
 }
