@@ -191,7 +191,16 @@ export async function handleGuestMessage(token: string, guestMessage: Telegram.M
             }, USER_CONFIG, ENV.STREAM_MODE ? onStream : null);
 
             const answer = resp.content || 'Empty response';
-            return await onStream.end!(answer);
+            // If the user is asking about someone else's reply, prefix @ that author so
+            // the group sees whose message is being addressed. Only when the replied-to
+            // user has a real @username (first_name can't be pinged) and isn't the
+            // asker themselves.
+            const repliedUsername = replyTo?.from?.username;
+            const repliedUserId = replyTo?.from?.id;
+            const finalAnswer = (repliedUsername && repliedUserId !== fromId && repliedUserId !== botId)
+                ? `@${repliedUsername} ${answer}`
+                : answer;
+            return await onStream.end!(finalAnswer);
         } catch (e) {
             onStream.clearHeartbeat!();
             const filtered = (e as Error).message.replace(token, '[REDACTED]');
