@@ -8,6 +8,7 @@ import { clearLog, log } from '../../log';
 import { createTelegramBotAPI } from '../api';
 import { catchError } from '../handler';
 import { fileUrlToBase64Message, OnStreamHander, tts } from '../handler/chat';
+import { convertAudio } from '../../utils/others/audio';
 import { substituteMessage } from '../handler/msg_trimer';
 import { SetCommandHandler } from '../command/system';
 import { ChosenInlineContext, ChosenInlineSender } from '../utils/send';
@@ -273,17 +274,15 @@ async function handleGuestTts(
 
     let media: string;
     try {
-        log.info(`[GUEST] /tts staging voice to private chat ${fromId}...`);
-        media = await stageVoiceToPrivate(token, fromId, audio);
-        log.info(`[GUEST] /tts staged voice file_id=${media}`);
+        log.info(`[GUEST] /tts transcoding ogg→mp3 + staging audio to private chat ${fromId}...`);
+        media = await stageAudioToPrivate(token, fromId, audio);
+        log.info(`[GUEST] /tts staged audio file_id=${media}`);
     } catch (e) {
-        log.error(`[GUEST] /tts stageVoiceToPrivate failed: ${(e as Error).message}`);
+        log.error(`[GUEST] /tts stageAudioToPrivate failed: ${(e as Error).message}`);
         return await onStream.end!(`Failed to stage audio via private chat: ${(e as Error).message}\nMake sure you have started a private chat with the bot first (send /start to it in DM).`);
     }
 
     onStream.clearHeartbeat!();
-    // InputMedia has no Voice variant; reuse the voice file_id with type:'audio'.
-    // Telegram routes by the file_id's actual encoded type, so OGG/Opus bytes play correctly.
     log.info(`[GUEST] /tts calling editMessageMedia...`);
     const editResp = await sender.editMessageMedia({
         type: 'audio',
@@ -322,20 +321,28 @@ async function stagePhotoToPrivate(token: string, userId: number, photo: Blob): 
     return fileId;
 }
 
-async function stageVoiceToPrivate(token: string, userId: number, audio: Blob): Promise<string> {
+// Stage TTS output in the user's private chat: transcode OGG/Opus to MP3 (so it can
+// be sent via sendAudio), upload, capture the audio file_id, delete the staging
+// message. The audio file_id is reusable with InputMedia type:'audio' — sendVoice's
+// voice file_id is rejected by editMessageMedia with MEDIA_NEW_INVALID since
+// InputMedia has no Voice variant.
+async function stageAudioToPrivate(token: string, userId: number, audio: Blob): Promise<string> {
+    // Most TTS providers (fish, openai) return OGG/Opus or other non-MP3 formats.
+    // sendAudio only accepts MP3/M4A, so transcode first.
+    const mp3 = await convertAudio({ file: audio, target: 'blob', inputType: 'ogg', outputType: 'mp3' }) as Blob;
     const api = createTelegramBotAPI(token);
-    const resp = await api.sendVoiceWithReturns({
+    const resp = await api.sendAudioWithReturns({
         chat_id: userId,
-        voice: new File([audio], 'voice.ogg', { type: audio.type || 'audio/ogg' }) as any,
+        audio: new File([mp3], 'audio.mp3', { type: 'audio/mpeg' }) as any,
     });
     if (!resp.ok) {
-        throw new Error(`${(resp as any).error_code || ''} ${(resp as any).description || 'sendVoice failed'}`.trim());
+        throw new Error(`${(resp as any).error_code || ''} ${(resp as any).description || 'sendAudio failed'}`.trim());
     }
     const msg = resp.result;
-    const voice = (msg as any).voice as Telegram.Voice | undefined;
-    if (!voice?.file_id) {
-        throw new Error('sendVoice returned no voice.file_id');
+    const audioInfo = (msg as any).audio as Telegram.Audio | undefined;
+    if (!audioInfo?.file_id) {
+        throw new Error('sendAudio returned no audio.file_id');
     }
-    api.deleteMessage({ chat_id: userId, message_id: msg.message_id }).catch(e => log.warn(`[GUEST] staging voice cleanup failed: ${e}`));
-    return voice.file_id;
+    api.deleteMessage({ chat_id: userId, message_id: msg.message_id }).catch(e => log.warn(`[GUEST] staging audio cleanup failed: ${e}`));
+    return audioInfo.file_id;
 }
