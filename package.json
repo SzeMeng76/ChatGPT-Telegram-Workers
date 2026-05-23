@@ -40,11 +40,11 @@
         "clean": "rm -rf dist"
     },
     "dependencies": {
-        "@ai-sdk/anthropic": "^4.0.0-canary.57",
+        "@ai-sdk/anthropic": "^4.0.0-canary.59",
         "@ai-sdk/azure": "^4.0.0-canary.63",
         "@ai-sdk/cohere": "^4.0.0-canary.47",
         "@ai-sdk/google": "^4.0.0-canary.72",
-        "@ai-sdk/google-vertex": "^5.0.0-canary.91",
+        "@ai-sdk/google-vertex": "^5.0.0-canary.93",
         "@ai-sdk/mcp": "^2.0.0-canary.53",
         "@ai-sdk/mistral": "^4.0.0-canary.49",
         "@ai-sdk/openai": "^4.0.0-canary.63",
@@ -53,25 +53,25 @@
         "@ai-sdk/xai": "^4.0.0-canary.66",
         "@ffmpeg.wasm/core-st": "^0.13.2",
         "@ffmpeg.wasm/main": "^0.13.1",
-        "ai": "7.0.0-canary.150",
+        "ai": "7.0.0-canary.152",
         "cf-worker-adapter": "^1.4.0",
         "node-cron": "^4.2.1",
         "zod": "^4.4.3"
     },
     "devDependencies": {
         "@antfu/eslint-config": "^9.0.0",
-        "@cloudflare/workers-types": "^4.20260522.1",
+        "@cloudflare/workers-types": "^4.20260523.1",
         "@types/node": "^25.9.1",
         "@types/node-cron": "^3.0.11",
         "@types/react": "^19.2.15",
         "@types/react-dom": "^19.2.3",
         "@types/ws": "^8.18.1",
-        "@vercel/node": "^5.8.3",
+        "@vercel/node": "^5.8.4",
         "eslint": "^10.4.0",
         "eslint-plugin-format": "^2.0.1",
         "rollup-plugin-cleanup": "^3.2.1",
         "rollup-plugin-node-externals": "^8.1.2",
-        "telegram-bot-api-types": "^9.6.0",
+        "telegram-bot-api-types": "^10.0.0",
         "toml": "^4.1.1",
         "tsx": "^4.22.3",
         "typescript": "^6.0.3",
@@ -79,10 +79,10 @@
         "vite-plugin-checker": "^0.13.0",
         "vite-plugin-dts": "^5.0.1",
         "vitest": "^4.1.7",
-        "wrangler": "^4.93.1"
+        "wrangler": "^4.94.0"
     },
     "overrides": {
-        "@ai-sdk/gateway": "4.0.0-canary.89",
+        "@ai-sdk/gateway": "4.0.0-canary.91",
         "@ai-sdk/provider": "4.0.0-canary.17",
         "@ai-sdk/provider-utils": "5.0.0-canary.43"
     }

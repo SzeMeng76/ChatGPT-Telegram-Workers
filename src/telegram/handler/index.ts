@@ -7,6 +7,7 @@ import { ChatHandler } from './chat';
 import { GroupMention } from './group';
 import {
     BlocklistFilter,
+    BotToBotFilter,
     CheckForwarding,
     ChunkMessageHandler,
     CommandHandler,
@@ -57,6 +58,8 @@ async function handleMessage(token: string, message: Telegram.Message, isForward
     const SHARE_HANDLER: MessageHandler<any>[] = [
         // 检查环境是否准备好: DATABASE
         new EnvChecker(),
+        // 过滤其他 bot 消息 (Bot API 10.0 Bot-to-Bot)，防止死循环
+        new BotToBotFilter(),
         // 过滤非白名单群组/用户, 提前过滤减少KV消耗
         new WhiteListFilter(),
         // 过滤不支持的消息 抽离文件ID

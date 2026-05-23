@@ -30,7 +30,7 @@ class MessageContext implements Record<string, any> {
         if (message.chat.type === 'group' || message.chat.type === 'supergroup') {
             // 是否回复被回复的消息
             if (message?.reply_to_message && ENV.EXTRA_MESSAGE_CONTEXT && !message.is_topic_message
-                && ENV.ENABLE_REPLY_TO_MENTION && !message.reply_to_message.from?.is_bot) {
+                && ENV.ENABLE_REPLY_TO_MENTION && (ENV.ENABLE_BOT_TO_BOT || !message.reply_to_message.from?.is_bot)) {
                 this.reply_to_message_id = message.reply_to_message.message_id;
             } else {
                 this.reply_to_message_id = message.message_id;

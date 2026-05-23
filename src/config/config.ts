@@ -107,6 +107,10 @@ export class EnvironmentConfig {
     SUPPORT_FORMAT: string[] = ['text', 'photo', 'voice', 'audio', 'image'];
     // In group chats, the reply object is the trigger object by default, and when enabled, it is prioritized as the object to be replied to
     ENABLE_REPLY_TO_MENTION = false;
+    // Allow processing messages from other bots (Bot API 10.0 Bot-to-Bot communication). Must also enable Bot-to-Bot mode in @BotFather.
+    ENABLE_BOT_TO_BOT = false;
+    // Whitelist of bot user ids allowed to interact (when ENABLE_BOT_TO_BOT is true). Empty = block all bots to prevent loops.
+    ALLOWED_BOT_IDS: string[] = [];
     // Ignore messages starting with specified text
     IGNORE_TEXT_PREFIX = '';
     // When multiple processes, whether to hide intermediate step information

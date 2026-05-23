@@ -63,6 +63,28 @@ export class EnvChecker implements MessageHandler<WorkerContextBase> {
     };
 }
 
+export class BotToBotFilter implements MessageHandler<WorkerContextBase> {
+    handle = async (message: Telegram.Message, context: WorkerContextBase): Promise<Response | null> => {
+        if (!message.from?.is_bot) {
+            return null;
+        }
+        if (!ENV.ENABLE_BOT_TO_BOT) {
+            log.info(`[BOT-TO-BOT] Ignored message from bot ${message.from.username ?? message.from.id} (disabled)`);
+            return new Response('success', { status: 200 });
+        }
+        const senderBotId = `${message.from.id}`;
+        if (`${message.from.id}` === `${context.SHARE_CONTEXT.botId}`) {
+            log.info(`[BOT-TO-BOT] Ignored self-message to prevent loop`);
+            return new Response('success', { status: 200 });
+        }
+        if (ENV.ALLOWED_BOT_IDS.length > 0 && !ENV.ALLOWED_BOT_IDS.includes(senderBotId)) {
+            log.info(`[BOT-TO-BOT] Bot ${message.from.username ?? senderBotId} not in ALLOWED_BOT_IDS`);
+            return new Response('success', { status: 200 });
+        }
+        return null;
+    };
+}
+
 export class WhiteListFilter implements MessageHandler<WorkerContextBase> {
     handle = async (message: Telegram.Message, context: WorkerContextBase): Promise<Response | null> => {
         if (ENV.I_AM_A_GENEROUS_PERSON) {
