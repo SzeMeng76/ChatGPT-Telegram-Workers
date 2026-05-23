@@ -1,5 +1,5 @@
 import type { AgentUserConfig } from '../../config/types';
-import { selectKey } from '../../agent/key-manager';
+import { applyVerdict, classifyApiError, markKeySuccess, selectKey } from '../../agent/key-manager';
 
 export default {
     schema: {
@@ -86,6 +86,11 @@ async function generateMusic({
 
     if (!resp.ok) {
         const detail = await resp.json();
+        applyVerdict('google', apiKey, classifyApiError({
+            statusCode: resp.status,
+            responseBody: JSON.stringify(detail),
+            provider: 'google',
+        }));
         console.error(`Google Lyria generation failed: ${detail.error?.message || 'Unknown error'}`);
         return {
             content: [{
@@ -96,6 +101,7 @@ async function generateMusic({
     }
 
     const result = await resp.json();
+    markKeySuccess('google', apiKey);
     console.log('Lyria response received');
 
     // Parse the response

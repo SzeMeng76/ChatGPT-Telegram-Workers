@@ -1,5 +1,5 @@
 import type { AgentUserConfig } from '../../config/types';
-import { selectKey } from '../../agent/key-manager';
+import { applyVerdict, classifyApiError, markKeySuccess, selectKey } from '../../agent/key-manager';
 
 export default {
     schema: {
@@ -113,6 +113,11 @@ async function generateVideo({
     
     if (!resp.ok) {
         const detail = await resp.json();
+        applyVerdict('google', apiKey, classifyApiError({
+            statusCode: resp.status,
+            responseBody: JSON.stringify(detail),
+            provider: 'google',
+        }));
         console.error(`Google veo operation failed: ${detail.error.message}`);
         return {
             content: [{ type: 'text', text: `Google veo operation failed: ${detail.error.message}` }],
@@ -120,6 +125,7 @@ async function generateVideo({
     }
 
     const { name: op_name } = await resp.json();
+    markKeySuccess('google', apiKey);
     console.log(`Google veo operation name: ${op_name}`);
     const operationUrl = `${config.GOOGLE_API_BASE}/${op_name}?key=${apiKey}`;
     

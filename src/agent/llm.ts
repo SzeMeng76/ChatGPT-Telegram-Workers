@@ -11,7 +11,7 @@ import { createOpenAI } from '@ai-sdk/openai';
 import { OpenAICompatibleChatLanguageModel } from '@ai-sdk/openai-compatible';
 import { createXai } from '@ai-sdk/xai';
 import { isCfWorker } from '../telegram/utils/tg_utils';
-import { selectKey } from './key-manager';
+import { applyVerdict, classifyApiError, markKeySuccess, selectKey } from './key-manager';
 
 export async function createLlmModel(model: string, context: AgentUserConfig): Promise<LLMModel> {
     let [agent, model_id] = model.includes(':') ? model.trim().split(':') : [context.AI_CHAT_PROVIDER, model];
@@ -283,13 +283,69 @@ function mockParams({ modelId, config, provider, options }: MockParams) {
     return paramsModifier(modelId, options, modifier, extraParams);
 }
 
+function extractKeyFromRequest(provider: string, url: RequestInfo | URL, options?: RequestInit): string | undefined {
+    const urlStr = typeof url === 'string'
+        ? url
+        : (url instanceof URL ? url.href : (url as Request).url);
+
+    // Google / Vertex: key 在 URL query string
+    if (provider === 'google' || provider === 'vertex') {
+        const m = urlStr.match(/[?&]key=([^&]+)/);
+        if (m) return decodeURIComponent(m[1]);
+    }
+
+    // 其他 provider: 从 Authorization / x-api-key header
+    const headers = options?.headers;
+    if (!headers) return undefined;
+
+    const get = (name: string): string | undefined => {
+        if (headers instanceof Headers) return headers.get(name) ?? undefined;
+        if (Array.isArray(headers)) {
+            const found = headers.find(([k]) => k.toLowerCase() === name.toLowerCase());
+            return found?.[1];
+        }
+        const obj = headers as Record<string, string>;
+        return obj[name] ?? obj[name.toLowerCase()] ?? obj[name.toUpperCase()];
+    };
+
+    const auth = get('Authorization');
+    if (auth?.startsWith('Bearer ')) return auth.slice(7);
+
+    const xkey = get('x-api-key');
+    if (xkey) return xkey;
+
+    return undefined;
+}
+
 function mockFetch(modelId: string, context: AgentUserConfig, provider: string) {
-    return (url: RequestInfo | URL, options?: RequestInit) => {
+    return async (url: RequestInfo | URL, options?: RequestInit) => {
         const body = JSON.parse(options?.body as string) || {};
         mockParams({ modelId, config: context, provider, options: body });
-        return fetch(url, {
+        const response = await fetch(url, {
             ...options,
             body: JSON.stringify(body),
         });
+
+        // 失败检测：把本次请求的成功/失败反馈到 key-manager
+        const key = extractKeyFromRequest(provider, url, options);
+        if (key) {
+            if (!response.ok) {
+                let bodyText = '';
+                try {
+                    bodyText = await response.clone().text();
+                } catch {
+                    // 忽略 clone/读取失败 — 还是会用 statusCode 判断
+                }
+                applyVerdict(provider, key, classifyApiError({
+                    statusCode: response.status,
+                    responseBody: bodyText,
+                    provider,
+                }));
+            } else {
+                markKeySuccess(provider, key);
+            }
+        }
+
+        return response;
     };
 }

@@ -11,7 +11,7 @@ import { authChecker } from '.';
 import { ASR_AGENTS, CHAT_AGENTS, customInfo, IMAGE_AGENTS, loadASRLLM, loadChatLLM, loadImageGen, loadTTSLLM, TTS_AGENTS } from '../../agent';
 import { loadHistory } from '../../agent/chat';
 import { KlingAI } from '../../agent/kling';
-import { getAllKeyStats, getKeyStats } from '../../agent/key-manager';
+import { getAllKeyStats, getKeyStats, reviveKey } from '../../agent/key-manager';
 import { updateModels } from '../../agent/models';
 import { ENV, ENV_KEY_MAPPER } from '../../config/env';
 import { ConfigMerger } from '../../config/merger';
@@ -389,23 +389,41 @@ export class KeystatsCommandHandler implements CommandHandler {
             return sender.sendPlainText('No key states recorded yet. Make a request first.');
         }
 
+        // 子命令：/keystats revive <prefix> — 手动恢复被永久停用的 key
+        const args = subcommand.trim().split(/\s+/).filter(Boolean);
+        if (args[0] === 'revive' && args[1]) {
+            for (const provider of providers) {
+                const revived = reviveKey(provider, args[1]);
+                if (revived) {
+                    return sender.sendPlainText(`✅ Revived ${provider} key ${maskKey(revived.key)}`);
+                }
+            }
+            return sender.sendPlainText(`No disabled key matched prefix "${args[1]}".`);
+        }
+
         const filter = subcommand.trim().toLowerCase();
         const lines: string[] = ['📊 API Key Pool Status', ''];
 
         for (const provider of providers) {
             if (filter && provider !== filter) continue;
             const s = summary[provider];
-            lines.push(`▸ ${provider}  total=${s.total}  available=${s.available}  cooldown=${s.inCooldown}`);
+            lines.push(`▸ ${provider}  total=${s.total}  available=${s.available}  cooldown=${s.inCooldown}  dead=${s.disabled}`);
             const states = getKeyStats(provider) || [];
             for (const st of states) {
-                const inCd = st.cooldownUntil && st.cooldownUntil > now;
-                const tag = inCd ? `❄️ ${fmtMs(st.cooldownUntil! - now)}` : '✅';
+                const inCd = !st.disabled && st.cooldownUntil && st.cooldownUntil > now;
+                const tag = st.disabled
+                    ? `☠️ ${st.disabledReason || 'disabled'}`
+                    : inCd
+                        ? `❄️ ${fmtMs(st.cooldownUntil! - now)}`
+                        : '✅';
                 const used = st.lastUsed ? `${fmtMs(now - st.lastUsed)} ago` : 'never';
                 const err = st.errorCount > 0 ? ` errors=${st.errorCount}${st.lastError ? `(${st.lastError})` : ''}` : '';
                 lines.push(`   ${tag}  ${maskKey(st.key)}  used=${used}${err}`);
             }
             lines.push('');
         }
+
+        lines.push('Tip: /keystats revive <prefix> to recover a disabled key');
 
         const body = lines.join('\n');
         const msg = `\`\`\`\n${body}\n\`\`\``;

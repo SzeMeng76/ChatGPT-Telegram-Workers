@@ -4,7 +4,7 @@ import type { ChatAgent, ChatStreamTextHandler, GeneratedImage, ImageAgent, Imag
 import { getLogSingleton, withLogger } from '../log';
 import { base64StringToBlob } from '../utils/image';
 import { convertAudio } from '../utils/others/audio';
-import { selectKey } from './key-manager';
+import { applyVerdict, classifyApiError, markKeySuccess, selectKey } from './key-manager';
 import { createLlmModel } from './llm';
 import { warpLLMParams } from './model_middleware';
 import { requestChatCompletionsV2 } from './request';
@@ -58,7 +58,8 @@ export class GoogleImage extends GoogleBase implements ImageAgent {
         }
 
         const { referenceImages } = extraParams || {};
-        const url = `${context.GOOGLE_API_BASE}/models/${this.model(context)}:generateContent?key=${this.apikey(context)}`;
+        const apiKey = this.apikey(context);
+        const url = `${context.GOOGLE_API_BASE}/models/${this.model(context)}:generateContent?key=${apiKey}`;
 
         // Build generation config with Gemini 3 Pro Image support
         const generationConfig: any = {
@@ -137,9 +138,15 @@ export class GoogleImage extends GoogleBase implements ImageAgent {
         });
         if (!response.ok) {
             const resp = await response.text();
+            applyVerdict('google', apiKey, classifyApiError({
+                statusCode: response.status,
+                responseBody: resp,
+                provider: 'google',
+            }));
             throw new Error(`${response.status} ${response.statusText}\n${resp}`);
         }
         const result = await response.json();
+        markKeySuccess('google', apiKey);
         const data = result.candidates?.[0]?.content?.parts || [];
         if (data.length === 0) {
             throw new Error(`Data is null:\n${JSON.stringify(result)}`);
@@ -179,7 +186,8 @@ export class GoogleTTS extends GoogleBase {
     };
 
     readonly request = async (text: string, context: AgentUserConfig): Promise<Blob> => {
-        const url = `${context.GOOGLE_API_BASE}/models/${this.model(context)}:generateContent?key=${this.apikey(context)}`;
+        const apiKey = this.apikey(context);
+        const url = `${context.GOOGLE_API_BASE}/models/${this.model(context)}:generateContent?key=${apiKey}`;
         const speech_config: { voice_config?: { prebuilt_voice_config: { voice_name: string } }; multi_speaker_voice_config?: Record<string, any> } = {
             voice_config: {
                 prebuilt_voice_config: { voice_name: context.GOOGLE_TTS_VOICE },
@@ -208,6 +216,7 @@ export class GoogleTTS extends GoogleBase {
         });
         if (resp.ok) {
             const result = await resp.json();
+            markKeySuccess('google', apiKey);
             const { data, mimeType } = result.candidates?.[0]?.content?.parts?.[0]?.inlineData || {};
             if (!data || !mimeType) {
                 throw new Error(`Data is not complete:\n${JSON.stringify(result)}`);
@@ -236,7 +245,13 @@ export class GoogleTTS extends GoogleBase {
             const audio = await convertAudio({ file: new Blob([Buffer.from(data, 'base64')]), target: 'blob', inputType: 'raw', outputType: 'oga', command }) as Blob;
             return audio;
         } else {
-            throw new Error(`${resp.status} ${resp.statusText}\n\n${await resp.text()}`);
+            const errText = await resp.text();
+            applyVerdict('google', apiKey, classifyApiError({
+                statusCode: resp.status,
+                responseBody: errText,
+                provider: 'google',
+            }));
+            throw new Error(`${resp.status} ${resp.statusText}\n\n${errText}`);
         }
     };
 }
