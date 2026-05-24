@@ -12,7 +12,7 @@ import { createTelegramBotAPI } from '../api';
 import { handleCommandMessage } from '../command';
 import { isAuthorized } from '../query';
 import { MessageSender } from '../utils/send';
-import { extractMessageInfo, isTelegramChatTypeGroup } from '../utils/tg_utils';
+import { extractMessageInfo, isAnonymousGroupSender, isTelegramChatTypeGroup } from '../utils/tg_utils';
 import { HandleChunkMessage, HandleMediaGroupMessage, substituteMessage } from './msg_trimer';
 import { recordUserActivity } from '../../utils/stats';
 
@@ -66,6 +66,10 @@ export class EnvChecker implements MessageHandler<WorkerContextBase> {
 export class BotToBotFilter implements MessageHandler<WorkerContextBase> {
     handle = async (message: Telegram.Message, context: WorkerContextBase): Promise<Response | null> => {
         if (!message.from?.is_bot) {
+            return null;
+        }
+        // 群匿名管理员: from 是 GroupAnonymousBot 但其实是真人在群里发言, 必须放行
+        if (isAnonymousGroupSender(message)) {
             return null;
         }
         if (!ENV.ENABLE_BOT_TO_BOT) {

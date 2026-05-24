@@ -1,6 +1,7 @@
 import type * as Telegram from 'telegram-bot-api-types';
 import { ENV } from '../../config/env';
 import { createTelegramBotAPI } from '../api';
+import { isAnonymousGroupSender } from '../utils/tg_utils';
 
 export async function loadChatRoleWithContext(message: Telegram.Message, context: any, isCallbackQuery: boolean = false): Promise<string | null> {
     const { groupAdminsKey } = context.SHARE_CONTEXT;
@@ -10,6 +11,13 @@ export async function loadChatRoleWithContext(message: Telegram.Message, context
 
     if (!groupAdminsKey) {
         return null;
+    }
+
+    // 匿名管理员/owner: from 是 GroupAnonymousBot, 在 getChatAdministrators 里查不到.
+    // Telegram 规则: 只有被授予 is_anonymous 权限的管理员/owner 才能匿名发言,
+    // 因此匿名身份本身就等同于至少 administrator 级别.
+    if (!isCallbackQuery && isAnonymousGroupSender(message)) {
+        return 'administrator';
     }
 
     let groupAdmin: Telegram.ChatMember[] | null = null;

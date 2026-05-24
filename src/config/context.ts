@@ -66,14 +66,19 @@ export class ShareContext {
         switch (message.chat.type) {
             case 'group':
             case 'supergroup':
-                if (!ENV.GROUP_CHAT_BOT_SHARE_MODE && message.from?.id) {
-                    historyKey += `:${message.from.id}`;
-                    configStoreKey += `:${message.from.id}`;
-                }
-                this.groupAdminsKey = `group_admin:${id}`;
-                if (message.from?.id) {
-                    chunkMessageKey = chunkMessageKey ? `${chunkMessageKey}:${message.from.id}` : undefined;
-                    storeMediaMessageKey = storeMediaMessageKey ? `${storeMediaMessageKey}:${message.from.id}` : undefined;
+                // 匿名管理员/以频道身份发言时, message.from.id 是固定的 fake bot id,
+                // 不能用来区分用户; 用 sender_chat.id 作为发言主体身份
+                {
+                    const speakerId = message.sender_chat?.id ?? message.from?.id;
+                    if (!ENV.GROUP_CHAT_BOT_SHARE_MODE && speakerId) {
+                        historyKey += `:${speakerId}`;
+                        configStoreKey += `:${speakerId}`;
+                    }
+                    this.groupAdminsKey = `group_admin:${id}`;
+                    if (speakerId) {
+                        chunkMessageKey = chunkMessageKey ? `${chunkMessageKey}:${speakerId}` : undefined;
+                        storeMediaMessageKey = storeMediaMessageKey ? `${storeMediaMessageKey}:${speakerId}` : undefined;
+                    }
                 }
                 break;
             default:

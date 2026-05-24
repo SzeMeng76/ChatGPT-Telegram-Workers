@@ -8,6 +8,19 @@ export function isTelegramChatTypeGroup(type: string): boolean {
     return type === 'group' || type === 'supergroup';
 }
 
+// 群匿名管理员: message.from 是 fake bot, sender_chat 指向群本身
+export function isAnonymousGroupSender(message: Telegram.Message): boolean {
+    return !!message.from?.is_bot
+        && !!message.sender_chat
+        && message.sender_chat.id === message.chat.id;
+}
+
+// 代表某个 chat 发言 (匿名管理员 / 频道身份 / 关联频道自动转发)
+// 真正的发言主体在 sender_chat,不在 from
+export function isOnBehalfOfChat(message: Telegram.Message): boolean {
+    return !!message.sender_chat;
+}
+
 type MsgType = 'text' | 'photo' | 'voice' | 'image' | 'audio' | 'document' | 'sticker' | 'video' | 'animation' | 'unknown' | 'unsupported';
 export interface UnionData {
     type: MsgType;
