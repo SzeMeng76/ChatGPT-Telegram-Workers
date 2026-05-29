@@ -128,6 +128,9 @@ export async function AIMiddleware({ config, activeTools, onStream, toolChoice, 
         },
 
         onChunk: ({ chunk }: { chunk: TextStreamPart<any> }) => {
+            if (!record) {
+                return;
+            }
             if (!hasRecordFirstChunkTime) {
                 record.first_chunk_time = Date.now() - record.start_time;
                 hasRecordFirstChunkTime = true;
