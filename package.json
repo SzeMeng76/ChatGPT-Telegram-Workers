@@ -40,33 +40,33 @@
         "clean": "rm -rf dist"
     },
     "dependencies": {
-        "@ai-sdk/anthropic": "^4.0.0-canary.62",
-        "@ai-sdk/azure": "^4.0.0-canary.69",
-        "@ai-sdk/cohere": "^4.0.0-canary.49",
-        "@ai-sdk/google": "^4.0.0-canary.78",
-        "@ai-sdk/google-vertex": "^5.0.0-canary.103",
-        "@ai-sdk/mcp": "^2.0.0-canary.58",
-        "@ai-sdk/mistral": "^4.0.0-canary.51",
-        "@ai-sdk/openai": "^4.0.0-canary.68",
-        "@ai-sdk/openai-compatible": "^3.0.0-canary.53",
-        "@ai-sdk/black-forest-labs": "^2.0.0-canary.47",
-        "@ai-sdk/xai": "^4.0.0-canary.70",
+        "@ai-sdk/anthropic": "^4.0.0-canary.64",
+        "@ai-sdk/azure": "^4.0.0-canary.72",
+        "@ai-sdk/cohere": "^4.0.0-canary.50",
+        "@ai-sdk/google": "^4.0.0-canary.79",
+        "@ai-sdk/google-vertex": "^5.0.0-canary.105",
+        "@ai-sdk/mcp": "^2.0.0-canary.59",
+        "@ai-sdk/mistral": "^4.0.0-canary.52",
+        "@ai-sdk/openai": "^4.0.0-canary.71",
+        "@ai-sdk/openai-compatible": "^3.0.0-canary.54",
+        "@ai-sdk/black-forest-labs": "^2.0.0-canary.48",
+        "@ai-sdk/xai": "^4.0.0-canary.71",
         "@ffmpeg.wasm/core-st": "^0.13.2",
         "@ffmpeg.wasm/main": "^0.13.1",
-        "ai": "7.0.0-canary.164",
+        "ai": "7.0.0-canary.168",
         "cf-worker-adapter": "^1.4.0",
         "node-cron": "^4.2.1",
         "zod": "^4.4.3"
     },
     "devDependencies": {
         "@antfu/eslint-config": "^9.0.0",
-        "@cloudflare/workers-types": "^4.20260604.1",
-        "@types/node": "^25.9.1",
+        "@cloudflare/workers-types": "^4.20260610.1",
+        "@types/node": "^25.9.2",
         "@types/node-cron": "^3.0.11",
-        "@types/react": "^19.2.16",
+        "@types/react": "^19.2.17",
         "@types/react-dom": "^19.2.3",
         "@types/ws": "^8.18.1",
-        "@vercel/node": "^5.8.12",
+        "@vercel/node": "^5.8.15",
         "eslint": "^10.4.1",
         "eslint-plugin-format": "^2.0.1",
         "rollup-plugin-cleanup": "^3.2.1",
@@ -79,11 +79,11 @@
         "vite-plugin-checker": "^0.14.1",
         "vite-plugin-dts": "^5.0.2",
         "vitest": "^4.1.8",
-        "wrangler": "^4.98.0"
+        "wrangler": "^4.99.0"
     },
     "overrides": {
-        "@ai-sdk/gateway": "4.0.0-canary.98",
-        "@ai-sdk/provider": "4.0.0-canary.17",
-        "@ai-sdk/provider-utils": "5.0.0-canary.45"
+        "@ai-sdk/gateway": "4.0.0-canary.102",
+        "@ai-sdk/provider": "4.0.0-canary.18",
+        "@ai-sdk/provider-utils": "5.0.0-canary.46"
     }
 }
