@@ -234,8 +234,8 @@ export class EnvironmentConfig {
     AUDIO_TEXT_FORMAT: undefined | 'spoiler' | 'bold' | 'italic' | 'underline' | 'strikethrough' | 'code' | 'pre' = undefined;
     // when message length exceeds this value, the message will be set as quotation, with QUOTE_EXPANDABLE set to true to expand the message, set -1 to disable
     ADD_QUOTE_LIMIT = -1;
-    // Fold message scope, support group supergroup private
-    ADD_QUOTE_SCOPE: string[] = ['group', 'supergroup'];
+    // Fold message scope, support group supergroup private inline
+    ADD_QUOTE_SCOPE: string[] = ['group', 'supergroup', 'inline'];
 
     // If true, will expand the quote message; log always be expandable
     QUOTE_EXPANDABLE = false;

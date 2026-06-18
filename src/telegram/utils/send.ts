@@ -591,7 +591,7 @@ export class ChosenInlineContext {
     query: string;
     parse_mode: Telegram.ParseMode | null = null;
     telegraphAccessTokenKey?: string;
-    chatType = 'private';
+    chatType = 'inline';
     constructor(result: Telegram.ChosenInlineResult) {
         this.result_id = result.result_id;
         this.inline_message_id = result.inline_message_id;
@@ -607,7 +607,7 @@ export class ChosenInlineContext {
         ctx.inline_message_id = inlineMessageId;
         ctx.query = query;
         ctx.parse_mode = null;
-        ctx.chatType = 'private';
+        ctx.chatType = 'inline';
         if (ENV.TELEGRAPH_NUM_LIMIT > 0) {
             ctx.telegraphAccessTokenKey = `telegraph_access_token:${fromId}`;
         }
