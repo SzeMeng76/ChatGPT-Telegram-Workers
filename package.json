@@ -40,27 +40,27 @@
         "clean": "rm -rf dist"
     },
     "dependencies": {
-        "@ai-sdk/anthropic": "^4.0.0-beta.69",
-        "@ai-sdk/azure": "^4.0.0-beta.79",
-        "@ai-sdk/cohere": "^4.0.0-beta.54",
-        "@ai-sdk/google": "^4.0.0-beta.85",
-        "@ai-sdk/google-vertex": "^5.0.0-beta.113",
-        "@ai-sdk/mcp": "^2.0.0-beta.67",
-        "@ai-sdk/mistral": "^4.0.0-beta.56",
-        "@ai-sdk/openai": "^4.0.0-beta.77",
-        "@ai-sdk/openai-compatible": "^3.0.0-beta.58",
-        "@ai-sdk/black-forest-labs": "^2.0.0-beta.53",
-        "@ai-sdk/xai": "^4.0.0-beta.76",
+        "@ai-sdk/anthropic": "^4.0.0",
+        "@ai-sdk/azure": "^4.0.0",
+        "@ai-sdk/cohere": "^4.0.0",
+        "@ai-sdk/google": "^4.0.0",
+        "@ai-sdk/google-vertex": "^5.0.0",
+        "@ai-sdk/mcp": "^2.0.0",
+        "@ai-sdk/mistral": "^4.0.0",
+        "@ai-sdk/openai": "^4.0.0",
+        "@ai-sdk/openai-compatible": "^3.0.0",
+        "@ai-sdk/black-forest-labs": "^2.0.0",
+        "@ai-sdk/xai": "^4.0.0",
         "@ffmpeg.wasm/core-st": "^0.13.2",
         "@ffmpeg.wasm/main": "^0.13.1",
-        "ai": "7.0.0-beta.187",
+        "ai": "^7.0.2",
         "cf-worker-adapter": "^1.4.0",
         "node-cron": "^4.5.0",
         "zod": "^4.4.3"
     },
     "devDependencies": {
         "@antfu/eslint-config": "^9.1.0",
-        "@cloudflare/workers-types": "^4.20260625.1",
+        "@cloudflare/workers-types": "^4.20260626.1",
         "@types/node": "^26.0.1",
         "@types/node-cron": "^3.0.11",
         "@types/react": "^19.2.17",
@@ -79,11 +79,11 @@
         "vite-plugin-checker": "^0.14.4",
         "vite-plugin-dts": "^5.0.3",
         "vitest": "^4.1.9",
-        "wrangler": "^4.104.0"
+        "wrangler": "^4.105.0"
     },
     "overrides": {
-        "@ai-sdk/gateway": "4.0.0-beta.114",
-        "@ai-sdk/provider": "4.0.0-beta.20",
-        "@ai-sdk/provider-utils": "5.0.0-beta.50"
+        "@ai-sdk/gateway": "4.0.2",
+        "@ai-sdk/provider": "4.0.0",
+        "@ai-sdk/provider-utils": "5.0.0"
     }
 }
