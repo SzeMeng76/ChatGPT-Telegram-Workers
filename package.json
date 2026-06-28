@@ -40,33 +40,33 @@
         "clean": "rm -rf dist"
     },
     "dependencies": {
-        "@ai-sdk/anthropic": "^4.0.0",
-        "@ai-sdk/azure": "^4.0.1",
-        "@ai-sdk/cohere": "^4.0.0",
-        "@ai-sdk/google": "^4.0.1",
-        "@ai-sdk/google-vertex": "^5.0.1",
-        "@ai-sdk/mcp": "^2.0.2",
-        "@ai-sdk/mistral": "^4.0.0",
-        "@ai-sdk/openai": "^4.0.1",
-        "@ai-sdk/openai-compatible": "^3.0.0",
-        "@ai-sdk/black-forest-labs": "^2.0.0",
-        "@ai-sdk/xai": "^4.0.1",
+        "@ai-sdk/anthropic": "^4.0.1",
+        "@ai-sdk/azure": "^4.0.2",
+        "@ai-sdk/cohere": "^4.0.1",
+        "@ai-sdk/google": "^4.0.2",
+        "@ai-sdk/google-vertex": "^5.0.2",
+        "@ai-sdk/mcp": "^2.0.3",
+        "@ai-sdk/mistral": "^4.0.1",
+        "@ai-sdk/openai": "^4.0.2",
+        "@ai-sdk/openai-compatible": "^3.0.1",
+        "@ai-sdk/black-forest-labs": "^2.0.1",
+        "@ai-sdk/xai": "^4.0.2",
         "@ffmpeg.wasm/core-st": "^0.13.2",
         "@ffmpeg.wasm/main": "^0.13.1",
-        "ai": "^7.0.3",
+        "ai": "^7.0.4",
         "cf-worker-adapter": "^1.4.0",
         "node-cron": "^4.5.0",
         "zod": "^4.4.3"
     },
     "devDependencies": {
         "@antfu/eslint-config": "^9.1.0",
-        "@cloudflare/workers-types": "^4.20260627.1",
+        "@cloudflare/workers-types": "^4.20260628.1",
         "@types/node": "^26.0.1",
         "@types/node-cron": "^3.0.11",
         "@types/react": "^19.2.17",
         "@types/react-dom": "^19.2.3",
         "@types/ws": "^8.18.1",
-        "@vercel/node": "^5.8.21",
+        "@vercel/node": "^5.8.22",
         "eslint": "^10.6.0",
         "eslint-plugin-format": "^2.0.1",
         "rollup-plugin-cleanup": "^3.2.1",
@@ -82,8 +82,8 @@
         "wrangler": "^4.105.0"
     },
     "overrides": {
-        "@ai-sdk/gateway": "4.0.3",
+        "@ai-sdk/gateway": "4.0.4",
         "@ai-sdk/provider": "4.0.0",
-        "@ai-sdk/provider-utils": "5.0.0"
+        "@ai-sdk/provider-utils": "5.0.1"
     }
 }
