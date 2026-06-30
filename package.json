@@ -84,6 +84,6 @@
     "overrides": {
         "@ai-sdk/gateway": "4.0.5",
         "@ai-sdk/provider": "4.0.0",
-        "@ai-sdk/provider-utils": "5.0.1"
+        "@ai-sdk/provider-utils": "5.0.2"
     }
 }
