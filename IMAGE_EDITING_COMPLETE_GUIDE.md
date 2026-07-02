@@ -46,6 +46,9 @@ GOOGLE_IMAGE_SIZE=4K
 
 # Optional: Enable Google Search grounding (real-time data: weather, stocks, news)
 GOOGLE_IMAGE_ENABLE_GOOGLE_SEARCH=true
+
+# Optional: Thinking depth for gemini-3.1-flash-image ("minimal", "high")
+GOOGLE_IMAGE_THINKING_LEVEL=high
 ```
 
 ### Features
@@ -117,8 +120,9 @@ Example prompts:
 
 #### Thinking Mode
 - Model performs a "thinking" process
-- Generates intermediate "thinking images" (visible in backend, not billed)
+- Generates intermediate "thinking images" (visible in backend, not billed, automatically excluded from the returned result)
 - Optimizes final high-quality output
+- Control the depth with `GOOGLE_IMAGE_THINKING_LEVEL=minimal` (default, fastest) or `high` (deeper reasoning, higher latency) — gemini-3.1-flash-image only
 
 #### More Reference Images
 - Supports up to **14 reference images**

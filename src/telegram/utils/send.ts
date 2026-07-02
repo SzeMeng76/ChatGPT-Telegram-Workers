@@ -15,6 +15,8 @@ class MessageContext implements Record<string, any> {
     message_id: number | null = null; // 当前发送的消息，用于后续编辑
     reply_to_message_id: number | null;
     parse_mode: Telegram.ParseMode | null = null;
+    // 使用 Rich Message (Bot API 10.1+) 代替 MarkdownV2 转义发送，由 sendRichText 按 ENV.USE_RICH_MESSAGE 计算
+    richMessage = false;
     allow_sending_without_reply: boolean | null = null;
     disable_web_page_preview: boolean | null = ENV.DISABLE_WEB_PREVIEW;
     message_thread_id: number | null = null;
@@ -87,7 +89,36 @@ export class MessageSender {
         let resp: Response;
 
         try {
-            if (context?.message_id) {
+            if (context.richMessage) {
+                const richMessage: Telegram.InputRichMessage = { markdown: message };
+                if (context?.message_id) {
+                    const params: Telegram.EditMessageTextParams = {
+                        chat_id: context.chat_id,
+                        message_id: context.message_id,
+                        rich_message: richMessage,
+                    };
+                    if (context.disable_web_page_preview) {
+                        params.link_preview_options = {
+                            is_disabled: true,
+                        };
+                    }
+                    resp = await this.api.editMessageText(params);
+                } else {
+                    const params: Telegram.SendRichMessageParams = {
+                        chat_id: context.chat_id,
+                        message_thread_id: context.message_thread_id || undefined,
+                        rich_message: richMessage,
+                    };
+                    if (context.reply_to_message_id) {
+                        params.reply_parameters = {
+                            message_id: context.reply_to_message_id,
+                            chat_id: context.chat_id,
+                            allow_sending_without_reply: context.allow_sending_without_reply || undefined,
+                        };
+                    }
+                    resp = await this.api.sendRichMessage(params);
+                }
+            } else if (context?.message_id) {
                 const params: Telegram.EditMessageTextParams = {
                     chat_id: context.chat_id,
                     message_id: context.message_id,
@@ -150,7 +181,7 @@ export class MessageSender {
 
     private async sendLongMessage(message: string, context: MessageContext, expandParams?: ExpandParams): Promise<Response> {
         const chatContext = { ...context };
-        const messages = renderMessage(context.parse_mode, message, expandParams);
+        const messages = renderMessage(context.richMessage ? null : context.parse_mode, message, expandParams);
         let lastMessageResponse = null;
         let lastMessageRespJson = null;
 
@@ -229,6 +260,7 @@ export class MessageSender {
         return checkIsNeedTagIds(this.context, this.sendLongMessage(message, {
             ...this.context,
             parse_mode: parseMode,
+            richMessage: ENV.USE_RICH_MESSAGE && parseMode === 'MarkdownV2',
         }, expandParams), type);
     }
 
