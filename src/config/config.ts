@@ -491,6 +491,8 @@ export class GeminiConfig {
     GOOGLE_IMAGE_SIZE: string | null = null;
     // Enable Google Search grounding for real-time data (weather, stocks, current events)
     GOOGLE_IMAGE_ENABLE_GOOGLE_SEARCH = false;
+    // Thinking level for gemini-3.1-flash-image: "minimal" (default) or "high"
+    GOOGLE_IMAGE_THINKING_LEVEL: string | null = null;
 
     // available voices: https://ai.google.dev/gemini-api/docs/speech-generation#voices
     GOOGLE_TTS_VOICE = 'Zephyr';

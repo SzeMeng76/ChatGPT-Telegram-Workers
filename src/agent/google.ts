@@ -61,20 +61,25 @@ export class GoogleImage extends GoogleBase implements ImageAgent {
         const apiKey = this.apikey(context);
         const url = `${context.GOOGLE_API_BASE}/models/${this.model(context)}:generateContent?key=${apiKey}`;
 
-        // Build generation config with Gemini 3 Pro Image support
+        // Build generation config with Gemini 3 image model support
         const generationConfig: any = {
-            response_modalities: ['TEXT', 'IMAGE'],
+            responseModalities: ['TEXT', 'IMAGE'],
         };
 
-        // Add imageConfig for Gemini 3 Pro Image (aspect ratio and resolution)
+        // Add responseFormat.image for aspect ratio and resolution (Gemini 3 image models)
         if (context.GOOGLE_IMAGE_ASPECT_RATIO || context.GOOGLE_IMAGE_SIZE) {
-            generationConfig.image_config = {};
+            generationConfig.responseFormat = { image: {} };
             if (context.GOOGLE_IMAGE_ASPECT_RATIO) {
-                generationConfig.image_config.aspect_ratio = context.GOOGLE_IMAGE_ASPECT_RATIO;
+                generationConfig.responseFormat.image.aspectRatio = context.GOOGLE_IMAGE_ASPECT_RATIO;
             }
             if (context.GOOGLE_IMAGE_SIZE) {
-                generationConfig.image_config.image_size = context.GOOGLE_IMAGE_SIZE;
+                generationConfig.responseFormat.image.imageSize = context.GOOGLE_IMAGE_SIZE;
             }
+        }
+
+        // Thinking level for gemini-3.1-flash-image: "minimal" (default) or "high"
+        if (context.GOOGLE_IMAGE_THINKING_LEVEL) {
+            generationConfig.thinkingConfig = { thinkingLevel: context.GOOGLE_IMAGE_THINKING_LEVEL };
         }
 
         const body = {
@@ -83,8 +88,8 @@ export class GoogleImage extends GoogleBase implements ImageAgent {
                     text: prompt,
                 }],
             }],
-            generation_config: generationConfig,
-            safety_settings: [
+            generationConfig,
+            safetySettings: [
                 { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
                 { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
                 { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
@@ -93,28 +98,28 @@ export class GoogleImage extends GoogleBase implements ImageAgent {
             ],
         } as any;
 
-        // Add Google Search grounding tool for Gemini 3 Pro Image
+        // Add Google Search grounding tool for Gemini 3 image models
         if (context.GOOGLE_IMAGE_ENABLE_GOOGLE_SEARCH) {
-            // Build Google Search configuration with new API
+            // Build Google Search configuration
             const searchConfig: any = {};
 
             // Configure search types (web and/or image search)
             const searchTypes: any = {};
             if (context.GOOGLE_SEARCH_ENABLE_WEB_SEARCH) {
-                searchTypes.web_search = {};
+                searchTypes.webSearch = {};
             }
             if (context.GOOGLE_SEARCH_ENABLE_IMAGE_SEARCH) {
-                searchTypes.image_search = {};
+                searchTypes.imageSearch = {};
             }
             if (Object.keys(searchTypes).length > 0) {
-                searchConfig.search_types = searchTypes;
+                searchConfig.searchTypes = searchTypes;
             }
 
             // Configure time range filter if provided
             if (context.GOOGLE_SEARCH_TIME_RANGE_FILTER.startTime && context.GOOGLE_SEARCH_TIME_RANGE_FILTER.endTime) {
-                searchConfig.time_range_filter = {
-                    start_time: context.GOOGLE_SEARCH_TIME_RANGE_FILTER.startTime,
-                    end_time: context.GOOGLE_SEARCH_TIME_RANGE_FILTER.endTime,
+                searchConfig.timeRangeFilter = {
+                    startTime: context.GOOGLE_SEARCH_TIME_RANGE_FILTER.startTime,
+                    endTime: context.GOOGLE_SEARCH_TIME_RANGE_FILTER.endTime,
                 };
             }
 
@@ -151,7 +156,8 @@ export class GoogleImage extends GoogleBase implements ImageAgent {
         if (data.length === 0) {
             throw new Error(`Data is null:\n${JSON.stringify(result)}`);
         }
-        const images = data.filter((i: any) => i.inlineData !== undefined);
+        // Exclude interim "thought" images generated during the model's thinking process
+        const images = data.filter((i: any) => i.inlineData !== undefined && !i.thought);
         const text = data.map((i: any) => i.text || '').join('');
         if (images.length === 0) {
             throw new Error(`No images found:\n${text || JSON.stringify(data)}`);
