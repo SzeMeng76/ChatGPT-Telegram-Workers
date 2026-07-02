@@ -343,3 +343,36 @@ function quoteMessage(text: string, addQuote: boolean) {
     });
     return textList.join('\n');
 }
+
+/**
+ * 将内部使用的 MarkdownV2 风格文本（单个 \n 视为硬换行）转换为标准 GFM 语义
+ * （单个 \n 是软换行，会被渲染器合并为空格），供 Rich Message 的 markdown 字段使用。
+ * - 引用块（连续 > 开头的行）内部用单独的 "> " 行代替空行，保持引用块不被打断
+ * - 非引用块的单个换行转为空行，形成独立段落
+ * - SEGMENTATION_MARK 转换为分段边界（空行），而非直接删除
+ */
+export function toRichMarkdown(text: string): string {
+    const lines = text.split('\n');
+    const result: string[] = [];
+    for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        if (line === SEGMENTATION_MARK) {
+            if (result.length > 0 && result.at(-1) !== '') {
+                result.push('');
+            }
+            continue;
+        }
+        result.push(line);
+        const isQuoteLine = /^\*{0,2}>/.test(line);
+        const nextLine = lines[i + 1];
+        const nextIsBlankOrEnd = nextLine === undefined || nextLine === '' || nextLine === SEGMENTATION_MARK;
+        if (isQuoteLine && !nextIsBlankOrEnd && !/^\*{0,2}>/.test(nextLine) && nextLine.trim() !== '') {
+            // 引用块内部换行：插入单独的 "> " 行代替空行，避免打断引用块
+            result.push('>');
+        } else if (!isQuoteLine && !nextIsBlankOrEnd) {
+            // 普通文本换行：转为空行分段
+            result.push('');
+        }
+    }
+    return result.join('\n');
+}

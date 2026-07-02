@@ -6,7 +6,7 @@ import { ENV } from '../../config/env';
 import { log, tagMessageIds } from '../../log';
 import { createTelegramBotAPI } from '../api';
 import md2node from './md2node';
-import { chunkDocument, escape } from './md2tgmd';
+import { chunkDocument, escape, toRichMarkdown } from './md2tgmd';
 import { validateMarkdownV2 } from './render_fallback';
 import { waitUntil } from './tg_utils';
 
@@ -181,7 +181,7 @@ export class MessageSender {
 
     private async sendLongMessage(message: string, context: MessageContext, expandParams?: ExpandParams): Promise<Response> {
         const chatContext = { ...context };
-        const messages = renderMessage(context.richMessage ? null : context.parse_mode, message, expandParams);
+        const messages = renderMessage(context.parse_mode, message, expandParams, context.richMessage);
         let lastMessageResponse = null;
         let lastMessageRespJson = null;
 
@@ -700,13 +700,18 @@ export class ChosenInlineSender {
     }
 }
 
-function renderMessage(parse_mode: Telegram.ParseMode | null, message: string, expandParams?: ExpandParams): string[] {
+function renderMessage(parse_mode: Telegram.ParseMode | null, message: string, expandParams?: ExpandParams, richMessage = false): string[] {
     // Remove Grok rendering tags (xAI web UI internal tags that may leak into API responses)
     // These tags like <grok:render type="renderinlinecitation"> are used in Grok web interface
     // but should not appear in bot responses
     const cleanedMessage = message.replace(/<grok:[^>]*>/g, '').replace(/<\/grok:[^>]*>/g, '');
 
     const chunkMessage = chunkDocument(cleanedMessage);
+    if (richMessage) {
+        // Rich Message's markdown field follows GFM semantics (lone \n is a soft break);
+        // convert internal MarkdownV2-style hard newlines to GFM paragraph/quote breaks.
+        return chunkMessage.map(toRichMarkdown);
+    }
     if (parse_mode === 'MarkdownV2') {
         return chunkMessage.map((lines) => {
             const escaped = escape(lines, expandParams);
