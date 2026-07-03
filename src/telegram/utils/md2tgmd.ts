@@ -385,5 +385,42 @@ export function toRichMarkdown(text: string): string {
             result.push('');
         }
     }
-    return result.join('\n');
+    let output = result.join('\n');
+
+    // Convert expandable blockquote syntax (**>...||) to HTML <details> for Rich Message
+    output = convertExpandableBlockquoteToDetails(output);
+
+    return output;
 }
+
+/**
+ * Convert MarkdownV2 expandable blockquote syntax (**>...||) to Rich Message <details> tag
+ */
+function convertExpandableBlockquoteToDetails(text: string): string {
+    // Match expandable blockquote blocks: **>...||
+    const expandablePattern = /\*\*>((?:[^\n]*\n)*?[^\n]*?)\|\|/gm;
+
+    return text.replace(expandablePattern, (match, content) => {
+        // Extract lines and remove leading '>'
+        const lines = content.split('\n')
+            .map((line: string) => line.replace(/^>?\s*/, '').trim())
+            .filter((line: string) => line !== '');
+
+        if (lines.length === 0) {
+            return ''; // Empty block
+        }
+
+        // First line = summary, rest = details content
+        const firstLine = lines[0];
+        const restLines = lines.slice(1);
+
+        if (restLines.length > 0) {
+            return `<details><summary>${firstLine}</summary>\n\n${restLines.join('\n')}\n\n</details>`;
+        } else {
+            // Only summary, no content - return as plain blockquote instead
+            // This avoids RICH_MESSAGE_EMPTY error for short messages
+            return `>${firstLine}`;
+        }
+    });
+}
+

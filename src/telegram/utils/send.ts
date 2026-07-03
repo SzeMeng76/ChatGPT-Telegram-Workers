@@ -6,7 +6,7 @@ import { ENV } from '../../config/env';
 import { log, tagMessageIds } from '../../log';
 import { createTelegramBotAPI } from '../api';
 import md2node from './md2node';
-import { chunkDocument, escape, toRichMarkdown } from './md2tgmd';
+import { chunkDocument, escape, toRichMarkdown, SEGMENTATION_MARK } from './md2tgmd';
 import { validateMarkdownV2 } from './render_fallback';
 import { waitUntil } from './tg_utils';
 
@@ -710,7 +710,44 @@ function renderMessage(parse_mode: Telegram.ParseMode | null, message: string, e
     if (richMessage) {
         // Rich Message's markdown field follows GFM semantics (lone \n is a soft break);
         // convert internal MarkdownV2-style hard newlines to GFM paragraph/quote breaks.
-        return chunkMessage.map(toRichMarkdown);
+        // Also handle quote wrapping and expandable blocks
+        return chunkMessage.map((lines) => {
+            let processed = lines;
+
+            // Step 1: Handle SEGMENTATION_MARK and add quote marks if needed
+            if (expandParams?.addQuote) {
+                const textList = processed.split('\n');
+                textList.forEach((line, index) => {
+                    if (line === SEGMENTATION_MARK) {
+                        textList[index] = '';
+                    } else {
+                        !line.startsWith('>') && (textList[index] = `>${line}`);
+                    }
+                });
+                processed = textList.join('\n');
+            } else {
+                // Remove SEGMENTATION_MARK
+                processed = processed.replace(new RegExp(`^${SEGMENTATION_MARK}(?:\n([^>]))?`, 'gm'), '$1');
+            }
+
+            // Step 2: Add expandable markers if needed
+            if (expandParams?.quoteExpandable) {
+                processed = processed.replace(/^((?:\*\*)?>[^\n]*(?:\n>[^\n]*)*)(\n|$)/gm, (match, content, lineEnd) => {
+                    const isExpandable = content.trimStart().startsWith('**>');
+                    if (content.trimEnd().endsWith('||')) {
+                        return match;
+                    }
+                    if (isExpandable) {
+                        return `${content.trimEnd()}||${lineEnd}`;
+                    } else {
+                        return `**${content.trimEnd()}||${lineEnd}`;
+                    }
+                });
+            }
+
+            // Step 3: Convert to GFM format and convert **>...|| to <details>
+            return toRichMarkdown(processed);
+        });
     }
     if (parse_mode === 'MarkdownV2') {
         return chunkMessage.map((lines) => {

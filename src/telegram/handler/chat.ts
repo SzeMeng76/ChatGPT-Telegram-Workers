@@ -317,7 +317,9 @@ export function OnStreamHander(sender: MessageSender | ChosenInlineSender, conte
             }
 
             const data = mergeLogMessages(text, context?.USER_CONFIG);
-            expandParams.addQuote = addQuotePrerequisites && data.length > ENV.ADD_QUOTE_LIMIT;
+            // For Rich Message: judge addQuote based on actual content length, not total with log
+            // This prevents short messages like '...' from being wrapped in empty <details> tags
+            expandParams.addQuote = addQuotePrerequisites && text.length > ENV.ADD_QUOTE_LIMIT;
 
             // Validate MarkdownV2 format and log warnings
             const validation = validateMarkdownV2(data);
@@ -374,7 +376,8 @@ export function OnStreamHander(sender: MessageSender | ChosenInlineSender, conte
         }
         const data = context && needLog ? mergeLogMessages(text, context.USER_CONFIG) : text;
         log.info(`sent message ids: ${isMessageSender ? sender.context.sentMessageIds : sender.context.inline_message_id}`);
-        expandParams.addQuote = addQuotePrerequisites && data.length > ENV.ADD_QUOTE_LIMIT;
+        // For Rich Message: judge addQuote based on actual content length, not total with log
+        expandParams.addQuote = addQuotePrerequisites && text.length > ENV.ADD_QUOTE_LIMIT;
         let maxFetchFailedTimes = 3;
         while (true) {
             try {
