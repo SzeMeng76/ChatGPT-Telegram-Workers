@@ -21,8 +21,8 @@ export class EnvironmentConfig {
     TELEGRAM_AVAILABLE_TOKENS: string[] = [];
     // 默认消息模式
     DEFAULT_PARSE_MODE = 'MarkdownV2';
-    // 使用 Telegram Bot API 10.1+ 的 Rich Message（服务端解析 Markdown，无需手动转义），默认关闭
-    USE_RICH_MESSAGE = false;
+    // 使用 Telegram Bot API 10.1+ 的 Rich Message（服务端解析 Markdown，无需手动转义），默认开启
+    USE_RICH_MESSAGE = true;
     // 最小stream模式消息间隔，小于等于0则不限制 单位：ms
     TELEGRAM_MIN_STREAM_INTERVAL = 0;
     // 图片尺寸偏移 0为第一位，-1为最后一位, 越靠后的图片越大。PS: 图片过大可能导致token消耗过多，或者workers超时或内存不足

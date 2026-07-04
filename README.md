@@ -49,6 +49,7 @@ This is a significantly refactored ChatGPT Telegram bot project that supports mu
 - **Inline Queries**: Support for Telegram inline message functionality
 - **Guest Mode** (Bot API 10.0): Respond in groups the bot is not a member of via `@mention` — streams, multimodal input, `MESSAGE_REPLACER`/`/set` all work
 - **Bot-to-Bot Communication** (Bot API 10.0): Optional multi-agent flow with allowlist-based loop protection
+- **Rich Message** (Bot API 10.1, `USE_RICH_MESSAGE`, default on): Server-side Markdown parsing with no manual escaping, including expandable quote blocks
 - **Plugin System**: Customizable plugins with template interpolation
 - **MCP Support**: Model Context Protocol integration
 - **Web Crawler**: Pattern-based HTML extraction with dynamic content support

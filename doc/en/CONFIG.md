@@ -156,7 +156,7 @@ To preserve conversation history, user configs, and group message cache, configu
 | `TELEGRAM_AVAILABLE_TOKENS` | Bot tokens (comma-separated) | `''` | **Required** |
 | `TELEGRAM_BOT_NAME` | Bot names (comma-separated) | `''` | Must match token order |
 | `DEFAULT_PARSE_MODE` | Message parsing mode | `Markdown` | `Markdown`, `MarkdownV2`, `HTML` |
-| `USE_RICH_MESSAGE` | Send messages via Telegram Bot API 10.1+ Rich Message (server-side Markdown parsing, no manual escaping needed); only takes effect when `DEFAULT_PARSE_MODE=MarkdownV2` | `false` | `true`, `false` |
+| `USE_RICH_MESSAGE` | Send messages via Telegram Bot API 10.1+ Rich Message (server-side Markdown parsing, no manual escaping needed); only takes effect when `DEFAULT_PARSE_MODE=MarkdownV2`. Supports quote folding and expandable blockquotes | `true` | `true`, `false` |
 | `I_AM_A_GENEROUS_PERSON` | Allow everyone to use | `false` | Set `true` to allow all users |
 
 ### Access Control
@@ -649,7 +649,7 @@ GOOGLE_RETRIEVAL_CONFIG='{"latLng": {"latitude": 39.9042, "longitude": 116.4074}
 | `GOOGLE_IMAGE_ASPECT_RATIO` | Image aspect ratio | `null` | `1:1`, `2:3`, `3:2`, `3:4`, `4:3`, `4:5`, `5:4`, `9:16`, `16:9`, `21:9` |
 | `GOOGLE_IMAGE_SIZE` | Image resolution | `null` | `1K`, `2K`, `4K` |
 | `GOOGLE_IMAGE_ENABLE_GOOGLE_SEARCH` | Enable Google Search grounding | `false` | - |
-| `GOOGLE_IMAGE_THINKING_LEVEL` | Thinking depth for gemini-3.1-flash-image | `null` | `minimal`, `high` |
+| `GOOGLE_IMAGE_THINKING_LEVEL` | Thinking depth for gemini-3.1-flash-image | `minimal` | `minimal`, `high` |
 
 ### xAI Server-Side Tools
 

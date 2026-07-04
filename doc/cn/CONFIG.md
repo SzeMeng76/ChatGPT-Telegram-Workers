@@ -156,7 +156,7 @@
 | `TELEGRAM_AVAILABLE_TOKENS` | 机器人令牌(逗号分隔) | `''` | **必需** |
 | `TELEGRAM_BOT_NAME` | 机器人名称(逗号分隔) | `''` | 必须与令牌顺序匹配 |
 | `DEFAULT_PARSE_MODE` | 消息解析模式 | `Markdown` | `Markdown`, `MarkdownV2`, `HTML` |
-| `USE_RICH_MESSAGE` | 使用 Telegram Bot API 10.1+ 的 Rich Message 发送消息（服务端解析 Markdown，无需手动转义），仅在 `DEFAULT_PARSE_MODE=MarkdownV2` 时生效 | `false` | `true`, `false` |
+| `USE_RICH_MESSAGE` | 使用 Telegram Bot API 10.1+ 的 Rich Message 发送消息（服务端解析 Markdown，无需手动转义），仅在 `DEFAULT_PARSE_MODE=MarkdownV2` 时生效，支持引用折叠与可展开引用块 | `true` | `true`, `false` |
 | `I_AM_A_GENEROUS_PERSON` | 允许所有人使用 | `false` | 设为`true`允许所有用户 |
 
 ### 访问控制
@@ -649,7 +649,7 @@ GOOGLE_RETRIEVAL_CONFIG='{"latLng": {"latitude": 39.9042, "longitude": 116.4074}
 | `GOOGLE_IMAGE_ASPECT_RATIO` | 图像宽高比 | `null` | `1:1`, `2:3`, `3:2`, `3:4`, `4:3`, `4:5`, `5:4`, `9:16`, `16:9`, `21:9` |
 | `GOOGLE_IMAGE_SIZE` | 图像分辨率 | `null` | `1K`, `2K`, `4K` |
 | `GOOGLE_IMAGE_ENABLE_GOOGLE_SEARCH` | 启用Google搜索增强 | `false` | - |
-| `GOOGLE_IMAGE_THINKING_LEVEL` | gemini-3.1-flash-image 的思考深度 | `null` | `minimal`, `high` |
+| `GOOGLE_IMAGE_THINKING_LEVEL` | gemini-3.1-flash-image 的思考深度 | `minimal` | `minimal`, `high` |
 
 ### xAI Server-Side Tools
 

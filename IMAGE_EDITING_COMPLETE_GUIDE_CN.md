@@ -47,7 +47,7 @@ GOOGLE_IMAGE_SIZE=4K
 # 可选：启用 Google Search grounding（实时数据：天气、股票、新闻）
 GOOGLE_IMAGE_ENABLE_GOOGLE_SEARCH=true
 
-# 可选：gemini-3.1-flash-image 的思考深度（"minimal", "high"）
+# 可选：gemini-3.1-flash-image 的思考深度（默认 "minimal", 或 "high"）
 GOOGLE_IMAGE_THINKING_LEVEL=high
 ```
 
@@ -122,7 +122,7 @@ GOOGLE_SEARCH_TIME_RANGE_FILTER='{"startTime": "2025-01-01T00:00:00Z", "endTime"
 - 模型会进行"思考"过程
 - 生成中间"思考图像"（后端可见，不计费，已自动从返回结果中排除）
 - 优化最终高质量输出
-- 可通过 `GOOGLE_IMAGE_THINKING_LEVEL=minimal`（默认，最快）或 `high`（更深推理，延迟更高）控制思考深度，仅 gemini-3.1-flash-image 支持
+- 可通过 `GOOGLE_IMAGE_THINKING_LEVEL=minimal`（默认，最快）或 `high`（更深推理，延迟更高）控制思考深度，仅 gemini-3.1-flash-image 支持（稳定版，取代此前的 `gemini-3.1-flash-image-preview`）
 
 #### 更多参考图像
 - 支持最多 **14 张参考图像**
