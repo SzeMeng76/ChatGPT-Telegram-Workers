@@ -401,10 +401,20 @@ function convertExpandableBlockquoteToDetails(text: string): string {
     const expandablePattern = /\*\*>((?:[^\n]*\n)*?[^\n]*?)\|\|/gm;
 
     return text.replace(expandablePattern, (match, content) => {
-        // Extract lines and remove leading '>'
+        // Strip leading '>' from each line, but KEEP internal blank lines —
+        // toRichMarkdown() inserts them as paragraph/block separators (e.g. before
+        // a "sources:" line), and dropping them here merges separate blocks back
+        // into one soft-wrapped line in GFM.
         const lines = content.split('\n')
-            .map((line: string) => line.replace(/^>?\s*/, '').trim())
-            .filter((line: string) => line !== '');
+            .map((line: string) => line.replace(/^>?\s*/, ''));
+
+        // Only trim blank lines at the very start/end of the block
+        while (lines.length && lines[0].trim() === '') {
+            lines.shift();
+        }
+        while (lines.length && lines[lines.length - 1].trim() === '') {
+            lines.pop();
+        }
 
         if (lines.length === 0) {
             return ''; // Empty block
