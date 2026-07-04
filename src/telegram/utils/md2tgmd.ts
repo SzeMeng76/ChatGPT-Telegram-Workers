@@ -351,11 +351,25 @@ function quoteMessage(text: string, addQuote: boolean) {
  * - 非引用块的单个换行转为空行，形成独立段落
  * - SEGMENTATION_MARK 转换为分段边界（空行），结束引用块或段落
  */
+// A table row after stripping an optional leading "**>"/">" quote prefix.
+// GFM breaks a table at the first blank line (see GFM spec example 201),
+// so consecutive table rows must stay contiguous with no separator between
+// them, even when they live inside a blockquote (each row still starts
+// with '>', but the pipe-table content right after it must not be split).
+const tableRowRegexp = /^(?:\*\*)?>?\s*\|.*\|\s*$/;
+const codeFenceRegexp = /^\s*```/;
+
 export function toRichMarkdown(text: string): string {
     const lines = text.split('\n');
     const result: string[] = [];
+    let inCodeFence = false;
     for (let i = 0; i < lines.length; i++) {
         const line = lines[i];
+
+        if (codeFenceRegexp.test(line)) {
+            inCodeFence = !inCodeFence;
+        }
+
         if (line === SEGMENTATION_MARK) {
             // 分隔标记转为空行(段落/引用块边界)
             if (result.length > 0 && result.at(-1) !== '') {
@@ -364,9 +378,22 @@ export function toRichMarkdown(text: string): string {
             continue;
         }
         result.push(line);
+
+        if (inCodeFence) {
+            // 代码块内部: 保持原样,绝不插入任何分隔符(会破坏代码格式)
+            continue;
+        }
+
         const nextLine = lines[i + 1];
         if (nextLine === undefined || nextLine === '' || nextLine === SEGMENTATION_MARK) {
             // 已到末尾/空行/标记,不插入任何分隔
+            continue;
+        }
+        // 表格行之间必须紧挨,不能插入任何分隔符(哪怕是引用块内的裸 ">"),
+        // 否则 GFM 会在第一个分隔处截断表格,整表退化为纯文本
+        const isTableRow = tableRowRegexp.test(line);
+        const nextIsTableRow = tableRowRegexp.test(nextLine);
+        if (isTableRow && nextIsTableRow) {
             continue;
         }
         const isQuoteLine = /^\*{0,2}>/.test(line);
