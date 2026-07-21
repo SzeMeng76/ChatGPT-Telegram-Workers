@@ -43,24 +43,24 @@
         "@ai-sdk/anthropic": "^4.0.16",
         "@ai-sdk/azure": "^4.0.17",
         "@ai-sdk/cohere": "^4.0.11",
-        "@ai-sdk/google": "^4.0.18",
-        "@ai-sdk/google-vertex": "^5.0.22",
+        "@ai-sdk/google": "^4.0.19",
+        "@ai-sdk/google-vertex": "^5.0.23",
         "@ai-sdk/mcp": "^2.0.15",
         "@ai-sdk/mistral": "^4.0.13",
         "@ai-sdk/openai": "^4.0.16",
-        "@ai-sdk/openai-compatible": "^3.0.12",
+        "@ai-sdk/openai-compatible": "^3.0.13",
         "@ai-sdk/black-forest-labs": "^2.0.11",
-        "@ai-sdk/xai": "^4.0.16",
+        "@ai-sdk/xai": "^4.0.17",
         "@ffmpeg.wasm/core-st": "^0.13.2",
         "@ffmpeg.wasm/main": "^0.13.1",
-        "ai": "^7.0.31",
+        "ai": "^7.0.32",
         "cf-worker-adapter": "^1.4.0",
         "node-cron": "^4.6.0",
         "zod": "^4.4.3"
     },
     "devDependencies": {
         "@antfu/eslint-config": "^9.1.0",
-        "@cloudflare/workers-types": "^5.20260717.1",
+        "@cloudflare/workers-types": "^5.20260721.1",
         "@types/node": "^26.1.1",
         "@types/node-cron": "^3.0.11",
         "@types/react": "^19.2.17",
@@ -82,7 +82,7 @@
         "wrangler": "^4.112.0"
     },
     "overrides": {
-        "@ai-sdk/gateway": "4.0.23",
+        "@ai-sdk/gateway": "4.0.24",
         "@ai-sdk/provider": "4.0.3",
         "@ai-sdk/provider-utils": "5.0.11"
     }
