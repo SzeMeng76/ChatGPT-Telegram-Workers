@@ -53,7 +53,7 @@
         "@ai-sdk/xai": "^4.0.25",
         "@ffmpeg.wasm/core-st": "^0.13.2",
         "@ffmpeg.wasm/main": "^0.13.1",
-        "ai": "^7.0.47",
+        "ai": "^7.0.48",
         "cf-worker-adapter": "^1.4.0",
         "node-cron": "^4.6.0",
         "zod": "^4.4.3"
@@ -82,7 +82,7 @@
         "wrangler": "^4.118.0"
     },
     "overrides": {
-        "@ai-sdk/gateway": "4.0.36",
+        "@ai-sdk/gateway": "4.0.37",
         "@ai-sdk/provider": "4.0.4",
         "@ai-sdk/provider-utils": "5.0.18"
     }
