@@ -124,6 +124,35 @@ export async function AIMiddleware({ config, activeTools, onStream, toolChoice, 
             // warp messages
             const isResponseApi = currentModel.provider.endsWith('.responses');
             warpMessages(params, tools, activeTools, isResponseApi, rawSystemPrompt);
+
+            // OpenAI Responses API: Use allowedTools to preserve prompt cache
+            // Instead of removing tools from the list, we keep all tools but restrict which ones can be called
+            if (isResponseApi && currentModel.provider === 'openai.responses' && params.tools && Object.keys(params.tools).length > 0) {
+                const allToolNames = Object.keys(params.tools);
+                const hasActiveToolsRestriction = activeTools.length > 0 && activeTools.length < allToolNames.length;
+
+                if (hasActiveToolsRestriction) {
+                    log.info(`[allowedTools] Restricting ${allToolNames.length} tools to ${activeTools.length} active tools: ${activeTools.join(', ')}`);
+
+                    params.providerOptions = {
+                        ...params.providerOptions,
+                        openai: {
+                            ...(params.providerOptions as any)?.openai,
+                            allowedTools: {
+                                toolNames: activeTools,
+                                mode: 'auto',
+                            },
+                        },
+                    };
+                } else if (activeTools.length === 0) {
+                    // No active tools - still clear the tools list for this case
+                    log.info(`[allowedTools] No active tools, clearing tools list`);
+                    params.tools = undefined;
+                } else {
+                    log.info(`[allowedTools] All ${allToolNames.length} tools are active, no restriction needed`);
+                }
+            }
+
             return params;
         },
 
@@ -341,6 +370,8 @@ function warpMessages(params: LanguageModelV4CallOptions, allTools: Record<strin
         return modifiedMessages;
     };
 
+    // Note: Tool restriction is now handled by allowedTools in transformParams
+    // for OpenAI Responses API to preserve prompt cache
     if (tools && activeTools.length === 0) {
         tools.length = 0;
     }
