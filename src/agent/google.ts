@@ -45,6 +45,31 @@ export class Google extends GoogleBase implements ChatAgent {
     };
 }
 
+/**
+ * Get minimum thinking level for Gemini 3 models based on version
+ * Gemini Flash 3.7+ requires 'low' as minimum, earlier versions support 'minimal'
+ */
+function getMinimumThinkingLevelForGemini3Model(modelId: string): 'minimal' | 'low' {
+    const modelName = modelId.split('/').at(-1)?.toLowerCase();
+
+    if (modelName === 'gemini-flash-latest') {
+        return 'low';
+    }
+
+    // Match gemini-X.Y-flash (but not flash-lite)
+    // Regex: ^gemini-(\d+)\.(\d+)-flash(?:$|-(?!lite(?:-|$)))
+    const versionMatch = /^gemini-(\d+)\.(\d+)-flash(?:$|-(?!lite(?:-|$)))/.exec(modelName ?? '');
+
+    if (versionMatch == null) {
+        return 'minimal';
+    }
+
+    const majorVersion = Number(versionMatch[1]);
+    const minorVersion = Number(versionMatch[2]);
+
+    return majorVersion > 3 || (majorVersion === 3 && minorVersion >= 7) ? 'low' : 'minimal';
+}
+
 export class GoogleImage extends GoogleBase implements ImageAgent {
     readonly modelKey = 'GOOGLE_IMAGE_MODEL';
 
@@ -59,7 +84,8 @@ export class GoogleImage extends GoogleBase implements ImageAgent {
 
         const { referenceImages } = extraParams || {};
         const apiKey = this.apikey(context);
-        const url = `${context.GOOGLE_API_BASE}/models/${this.model(context)}:generateContent?key=${apiKey}`;
+        const modelId = this.model(context);
+        const url = `${context.GOOGLE_API_BASE}/models/${modelId}:generateContent?key=${apiKey}`;
 
         // Build generation config with Gemini 3 image model support
         const generationConfig: any = {
@@ -77,9 +103,19 @@ export class GoogleImage extends GoogleBase implements ImageAgent {
             }
         }
 
-        // Thinking level for gemini-3.1-flash-image: "minimal" (default) or "high"
+        // Thinking level for Gemini 3 image models
+        // Flash 3.7+ requires minimum 'low', earlier versions support 'minimal'
         if (context.GOOGLE_IMAGE_THINKING_LEVEL) {
-            generationConfig.thinkingConfig = { thinkingLevel: context.GOOGLE_IMAGE_THINKING_LEVEL };
+            const minimumLevel = getMinimumThinkingLevelForGemini3Model(modelId);
+            const requestedLevel = context.GOOGLE_IMAGE_THINKING_LEVEL;
+
+            // Validate and adjust thinking level for Flash 3.7+ models
+            if (minimumLevel === 'low' && requestedLevel === 'minimal') {
+                // Flash 3.7+ doesn't support 'minimal', auto-upgrade to 'low'
+                generationConfig.thinkingConfig = { thinkingLevel: 'low' };
+            } else {
+                generationConfig.thinkingConfig = { thinkingLevel: requestedLevel };
+            }
         }
 
         const body = {

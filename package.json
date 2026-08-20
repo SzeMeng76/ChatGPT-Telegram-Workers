@@ -40,27 +40,27 @@
         "clean": "rm -rf dist"
     },
     "dependencies": {
-        "@ai-sdk/anthropic": "^4.0.39",
-        "@ai-sdk/azure": "^4.0.44",
-        "@ai-sdk/cohere": "^4.0.27",
-        "@ai-sdk/google": "^4.0.45",
-        "@ai-sdk/google-vertex": "^5.0.56",
-        "@ai-sdk/mcp": "^2.0.33",
-        "@ai-sdk/mistral": "^4.0.29",
-        "@ai-sdk/openai": "^4.0.43",
-        "@ai-sdk/openai-compatible": "^3.0.31",
-        "@ai-sdk/black-forest-labs": "^2.0.28",
-        "@ai-sdk/xai": "^4.0.40",
+        "@ai-sdk/anthropic": "^4.0.40",
+        "@ai-sdk/azure": "^4.0.45",
+        "@ai-sdk/cohere": "^4.0.28",
+        "@ai-sdk/google": "^4.0.47",
+        "@ai-sdk/google-vertex": "^5.0.58",
+        "@ai-sdk/mcp": "^2.0.34",
+        "@ai-sdk/mistral": "^4.0.30",
+        "@ai-sdk/openai": "^4.0.44",
+        "@ai-sdk/openai-compatible": "^3.0.32",
+        "@ai-sdk/black-forest-labs": "^2.0.29",
+        "@ai-sdk/xai": "^4.0.41",
         "@ffmpeg.wasm/core-st": "^0.13.2",
         "@ffmpeg.wasm/main": "^0.13.1",
-        "ai": "^7.0.68",
+        "ai": "^7.0.70",
         "cf-worker-adapter": "^1.4.0",
         "node-cron": "^4.6.0",
         "zod": "^4.4.3"
     },
     "devDependencies": {
         "@antfu/eslint-config": "^9.3.0",
-        "@cloudflare/workers-types": "^5.20260819.1",
+        "@cloudflare/workers-types": "^5.20260820.1",
         "@types/node": "^26.2.0",
         "@types/node-cron": "^3.0.11",
         "@types/react": "^19.2.18",
@@ -75,15 +75,15 @@
         "toml": "^5.0.0",
         "tsx": "^4.23.12",
         "typescript": "^7.0.2",
-        "vite": "^8.2.1",
+        "vite": "^8.2.2",
         "vite-plugin-checker": "^0.14.5",
         "vite-plugin-dts": "^5.0.3",
         "vitest": "^4.1.11",
         "wrangler": "^4.124.0"
     },
     "overrides": {
-        "@ai-sdk/gateway": "4.0.54",
+        "@ai-sdk/gateway": "4.0.56",
         "@ai-sdk/provider": "4.0.7",
-        "@ai-sdk/provider-utils": "5.0.27"
+        "@ai-sdk/provider-utils": "5.0.28"
     }
 }
