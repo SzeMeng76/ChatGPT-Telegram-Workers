@@ -11,7 +11,7 @@
 | Agent | Generation | Editing | Mask | Edit Mode | New Features | Recommended Use Cases |
 |-------|-----------|---------|------|-----------|-------------|---------------------|
 | **Google** | ✅ | ✅ | ❌ | Implicit | 4K resolution, Google Search | Quick editing, real-time data visualization |
-| **Vertex** | ✅ | ✅ | ✅ | 6 explicit modes | - | Professional editing, precise control |
+| **Vertex** | ✅ | ✅ | ❌ | Implicit | Gemini multimodal | High-quality image generation and editing |
 | **OpenAI** | ✅ | ✅ | ✅ | Implicit | - | Balanced performance, DALL-E 3 generation |
 | **xAI** | ✅ | ✅ | ❌ | Implicit | Video generation, I2V, video editing | Image editing, video creation |
 | **BFL (FLUX)** | ✅ | ✅ | ✅ | Implicit | Multi-reference (up to 10 images), inpainting | High-quality generation, style transfer, multi-ref editing |
@@ -159,92 +159,59 @@ Example prompts:
 
 ---
 
-## 2. Vertex AI (Most Powerful)
+## 2. Vertex AI (Using Gemini Image Models)
 
 ### Configuration
 ```env
 VERTEX_PROJECT_ID=your-project-id
-VERTEX_IMAGE_MODEL=imagen-3.0-capability-001  # For editing only
+VERTEX_IMAGE_MODEL=gemini-2.5-flash-image  # Recommended default model
 VERTEX_CREDENTIALS={"client_email":"...","private_key":"..."}
 ```
 
-### Smart Model Selection
+### Important Update (2026-08-21)
 
-The code **automatically selects** the correct model:
-- Has reference images → Forces `imagen-3.0-capability-001` (only model supporting editing)
-- Pure generation → Uses configured model (can be `imagen-4.0-fast-generate-001`)
+**Google has shut down the Imagen API**, all `imagen-*` models have been removed. Now using Gemini multimodal models for image generation and editing.
 
-### Model Comparison
+### Supported Models
 
-| Model | Editing | Generation | Recommended Use |
-|-------|---------|-----------|----------------|
-| **imagen-3.0-capability-001** | ✅ | ✅ | **Must use for editing** |
-| imagen-4.0-fast-generate-001 | ❌ | ✅ | Fast generation (no editing support) |
+| Model | Generation | Editing | Recommended Use |
+|-------|------------|---------|----------------|
+| **gemini-2.5-flash-image** | ✅ | ✅ | **Recommended default** (fast, high quality) |
+| gemini-3-pro-image-preview | ✅ | ✅ | Preview version, stronger image generation |
+| gemini-3.1-flash-image-preview | ✅ | ✅ | Preview version, Flash series |
 
-### 6 Editing Modes
+### Editing Functionality Changes
 
-#### Smart Default Mode Selection
-- **With mask image**: Defaults to `EDIT_MODE_INPAINT_INSERTION` (precise inpainting)
-- **Without mask image**: Defaults to `EDIT_MODE_CONTROLLED_EDITING` (general controlled editing)
+**New Gemini Image Models:**
+- ✅ Support image editing (by providing reference images)
+- ❌ **No longer support mask functionality**
+- ✅ Support aspect ratios: `1:1`, `2:3`, `3:2`, `3:4`, `4:3`, `4:5`, `5:4`, `9:16`, `16:9`, `21:9`
+- ✅ Generation and editing use the same `generateContent` API
 
-#### 1. EDIT_MODE_CONTROLLED_EDITING (Telegram Default)
-General controlled editing, no mask needed
+### Image Editing Examples
+
+**Basic Editing (no mask needed):**
 ```json
 {
   "agent": "vertex",
-  "prompts": ["change the background to blue"],
-  "referenceImages": ["base64..."],
-  "editMode": "EDIT_MODE_CONTROLLED_EDITING"
+  "prompts": ["Add a small wizard hat to this cat"],
+  "referenceImages": ["base64..."]
 }
 ```
 
-#### 2. EDIT_MODE_INPAINT_INSERTION (Default with mask)
-Insert new objects or content (requires mask)
+**Multi-reference Image Editing:**
 ```json
 {
   "agent": "vertex",
-  "prompts": ["add a red apple on the table"],
-  "referenceImages": ["base64..."],
-  "editMode": "EDIT_MODE_INPAINT_INSERTION",
-  "mask": "base64_mask"
+  "prompts": ["Apply the style of the first image to the second image"],
+  "referenceImages": ["base64_style_ref", "base64_content"]
 }
 ```
 
-#### 3. EDIT_MODE_INPAINT_REMOVAL
-Remove objects
-```json
-{
-  "editMode": "EDIT_MODE_INPAINT_REMOVAL",
-  "prompts": ["remove all people from the image"]
-}
-```
-
-#### 4. EDIT_MODE_OUTPAINT
-Extend image boundaries
-```json
-{
-  "editMode": "EDIT_MODE_OUTPAINT",
-  "prompts": ["extend to the right, add more forest"]
-}
-```
-
-#### 5. EDIT_MODE_PRODUCT_IMAGE
-Product image optimization
-```json
-{
-  "editMode": "EDIT_MODE_PRODUCT_IMAGE",
-  "prompts": ["place the product on a white background"]
-}
-```
-
-#### 6. EDIT_MODE_BGSWAP
-Background replacement
-```json
-{
-  "editMode": "EDIT_MODE_BGSWAP",
-  "prompts": ["change the background to a beach sunset"]
-}
-```
+**Important Notes:**
+- Gemini image models complete edits through intelligent understanding of prompts and reference images
+- No longer need or support mask, editMode, and other Imagen-specific parameters
+- Editing quality depends on clear text descriptions and appropriate reference images
 
 ### Advanced Parameters
 

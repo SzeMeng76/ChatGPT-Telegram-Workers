@@ -1,6 +1,5 @@
 {
   "lockfileVersion": 1,
-  "configVersion": 0,
   "workspaces": {
     "": {
       "name": "chatgpt-telegram-workers",
@@ -9,16 +8,16 @@
         "@ai-sdk/azure": "^4.0.46",
         "@ai-sdk/black-forest-labs": "^2.0.29",
         "@ai-sdk/cohere": "^4.0.28",
-        "@ai-sdk/google": "^4.0.48",
-        "@ai-sdk/google-vertex": "^5.0.59",
+        "@ai-sdk/google": "^4.0.49",
+        "@ai-sdk/google-vertex": "^5.0.60",
         "@ai-sdk/mcp": "^2.0.34",
         "@ai-sdk/mistral": "^4.0.31",
         "@ai-sdk/openai": "^4.0.45",
-        "@ai-sdk/openai-compatible": "^3.0.33",
+        "@ai-sdk/openai-compatible": "^3.0.34",
         "@ai-sdk/xai": "^4.0.42",
         "@ffmpeg.wasm/core-st": "^0.13.2",
         "@ffmpeg.wasm/main": "^0.13.1",
-        "ai": "^7.0.71",
+        "ai": "^7.0.73",
         "cf-worker-adapter": "^1.4.0",
         "node-cron": "^4.6.0",
         "zod": "^4.4.3",
@@ -49,7 +48,7 @@
     },
   },
   "overrides": {
-    "@ai-sdk/gateway": "4.0.57",
+    "@ai-sdk/gateway": "4.0.59",
     "@ai-sdk/provider": "4.0.7",
     "@ai-sdk/provider-utils": "5.0.28",
   },
@@ -64,11 +63,11 @@
 
     "@ai-sdk/deepseek": ["@ai-sdk/deepseek@3.0.29", "", { "dependencies": { "@ai-sdk/provider": "4.0.7", "@ai-sdk/provider-utils": "5.0.28" }, "peerDependencies": { "zod": "^3.25.76 || ^4.1.8" } }, "sha512-MgcBrpQ+zfDUfzNBbMtylzCE7xBlqZtshtBtYFhQbMxpcMSPvkQsI3RBR3bNG1LWqWU4tsIe4Qzc/enriYdY2A=="],
 
-    "@ai-sdk/gateway": ["@ai-sdk/gateway@4.0.57", "", { "dependencies": { "@ai-sdk/provider": "4.0.7", "@ai-sdk/provider-utils": "5.0.28", "@vercel/oidc": "3.2.0" }, "peerDependencies": { "zod": "^3.25.76 || ^4.1.8" } }, "sha512-RmDBcAZW4RKQYOuZzU4x1sxIodP1a9JzRdMpoRr1f+5RPkFjHgafP5t4h3Fyp7s1NC7XPQ3FrAH3MJxjJAwJ7A=="],
+    "@ai-sdk/gateway": ["@ai-sdk/gateway@4.0.59", "", { "dependencies": { "@ai-sdk/provider": "4.0.7", "@ai-sdk/provider-utils": "5.0.28", "@vercel/oidc": "3.2.0" }, "peerDependencies": { "zod": "^3.25.76 || ^4.1.8" } }, "sha512-9MPyBBXU5snhuvqMa3OSOYtHP+wlyepJ+E0E+9lVNoxLGmi4sZqGeLbIxSYZeTf7qQ2xPshtfo5qDJHaOmAHvw=="],
 
-    "@ai-sdk/google": ["@ai-sdk/google@4.0.48", "", { "dependencies": { "@ai-sdk/provider": "4.0.7", "@ai-sdk/provider-utils": "5.0.28" }, "peerDependencies": { "zod": "^3.25.76 || ^4.1.8" } }, "sha512-7QYyXCUgl29DQD2ogBlPap92X6vxdP+NEQum2VfLUv8TKx1YJyNSRrdlUgYRAcUNMehGDLF6xdm7+lddNHBFHw=="],
+    "@ai-sdk/google": ["@ai-sdk/google@4.0.49", "", { "dependencies": { "@ai-sdk/provider": "4.0.7", "@ai-sdk/provider-utils": "5.0.28" }, "peerDependencies": { "zod": "^3.25.76 || ^4.1.8" } }, "sha512-ZJMehjQNVyvLytV5cUQcTMNEG79NS+p8d2AHu+bH/Mg2M2IQ8Pueh/xQga2v85TX8BGT55m9Q01taY1fZjS4ag=="],
 
-    "@ai-sdk/google-vertex": ["@ai-sdk/google-vertex@5.0.59", "", { "dependencies": { "@ai-sdk/anthropic": "4.0.40", "@ai-sdk/google": "4.0.48", "@ai-sdk/openai-compatible": "3.0.33", "@ai-sdk/provider": "4.0.7", "@ai-sdk/provider-utils": "5.0.28", "google-auth-library": "^10.6.2" }, "peerDependencies": { "zod": "^3.25.76 || ^4.1.8" } }, "sha512-aZNYyKdChfoBHwDP7NtevP4WOt//IVojnNuVzl7hcrsd2/9MuRrMAco/M4OFBYMVuW7ETUtuWmHThoqumUu1Pg=="],
+    "@ai-sdk/google-vertex": ["@ai-sdk/google-vertex@5.0.60", "", { "dependencies": { "@ai-sdk/anthropic": "4.0.40", "@ai-sdk/google": "4.0.49", "@ai-sdk/openai-compatible": "3.0.34", "@ai-sdk/provider": "4.0.7", "@ai-sdk/provider-utils": "5.0.28", "google-auth-library": "^10.6.2" }, "peerDependencies": { "zod": "^3.25.76 || ^4.1.8" } }, "sha512-yfZPvZuNqeqRDvZgshW/n2nckkuEHVSDuZj2q40YZOJpCIl6dix2zymJZepZBxlccoxlS8MIicbkj83tkgpDEw=="],
 
     "@ai-sdk/mcp": ["@ai-sdk/mcp@2.0.34", "", { "dependencies": { "@ai-sdk/provider": "4.0.7", "@ai-sdk/provider-utils": "5.0.28", "pkce-challenge": "^5.0.1" }, "peerDependencies": { "zod": "^3.25.76 || ^4.1.8" } }, "sha512-JejeZFNplIAQpxI7F6FmE8y68kzcryJ+shmJl3hoj9DO/+ds7G/tIfGJvDEwzKhCZTZlWq5ra+MPrThx02YsGA=="],
 
@@ -76,7 +75,7 @@
 
     "@ai-sdk/openai": ["@ai-sdk/openai@4.0.45", "", { "dependencies": { "@ai-sdk/provider": "4.0.7", "@ai-sdk/provider-utils": "5.0.28" }, "peerDependencies": { "zod": "^3.25.76 || ^4.1.8" } }, "sha512-F/zHXTfCaHO0Q5egf8HRdc645Mp/ofLE9NSjl5RwaXfqrqLfiLROE9xScgKf4iziElsjuQYbesPEcW37mmZy3w=="],
 
-    "@ai-sdk/openai-compatible": ["@ai-sdk/openai-compatible@3.0.33", "", { "dependencies": { "@ai-sdk/provider": "4.0.7", "@ai-sdk/provider-utils": "5.0.28" }, "peerDependencies": { "zod": "^3.25.76 || ^4.1.8" } }, "sha512-ipWv2UzTQOCE9h42pUP9r70wx12+zDhNlEHlYbATtyV9L/b1QRnlP2lBW0OBAtM7a6JB/A1g42AnVmlCmsa0Fw=="],
+    "@ai-sdk/openai-compatible": ["@ai-sdk/openai-compatible@3.0.34", "", { "dependencies": { "@ai-sdk/provider": "4.0.7", "@ai-sdk/provider-utils": "5.0.28" }, "peerDependencies": { "zod": "^3.25.76 || ^4.1.8" } }, "sha512-KTyUuDXaHgKochdT0omCIQapXJi1nyNFnHZkGwssLergL/d0mOriJ8s5fCv7ba+IB1vpDC0LVU6BrXuHAlvctQ=="],
 
     "@ai-sdk/provider": ["@ai-sdk/provider@4.0.7", "", { "dependencies": { "json-schema": "^0.4.0" } }, "sha512-6or44XprPzKbr8zkmzosowSE0pxkvJcoojBL+mCZvPUt3kvXp3XSNqeVun9golb1acEfSo6yaEBRT18h2VU+1Q=="],
 
@@ -626,7 +625,7 @@
 
     "aggregate-error": ["aggregate-error@3.1.0", "", { "dependencies": { "clean-stack": "^2.0.0", "indent-string": "^4.0.0" } }, "sha512-4I7Td01quW/RpocfNayFdFVk1qSuoh0E7JrbRJ16nH01HhKFQ88INq9Sd+nd72zqRySlr9BmDA8xlEJ6vJMrYA=="],
 
-    "ai": ["ai@7.0.71", "", { "dependencies": { "@ai-sdk/gateway": "4.0.57", "@ai-sdk/provider": "4.0.7", "@ai-sdk/provider-utils": "5.0.28" }, "peerDependencies": { "zod": "^3.25.76 || ^4.1.8" } }, "sha512-e3PhIepVn9zErrsOjvM2ed3rvB2bTLzJYKPIqDSJles9sKx45ZCUSDSWavhh+WGQ9BQo2RMsjtf+venEmGFHlg=="],
+    "ai": ["ai@7.0.73", "", { "dependencies": { "@ai-sdk/gateway": "4.0.59", "@ai-sdk/provider": "4.0.7", "@ai-sdk/provider-utils": "5.0.28" }, "peerDependencies": { "zod": "^3.25.76 || ^4.1.8" } }, "sha512-rm2Rk68seeyhfgXl1JA/oaHcQHL018AfgydkJWx7Bgz0wGDHyvl30SnRIU2V7ZVR60A5K0SOLyP78EZmEJ2tOw=="],
 
     "ajv": ["ajv@6.14.0", "", { "dependencies": { "fast-deep-equal": "^3.1.1", "fast-json-stable-stringify": "^2.0.0", "json-schema-traverse": "^0.4.1", "uri-js": "^4.2.2" } }, "sha512-IWrosm/yrn43eiKqkfkHis7QioDleaXQHdDVPKg0FSwwd/DuvyX79TZnFOnYpB7dcsFAMmtFztZuXPDvSePkFw=="],
 

@@ -43,17 +43,17 @@
         "@ai-sdk/anthropic": "^4.0.40",
         "@ai-sdk/azure": "^4.0.46",
         "@ai-sdk/cohere": "^4.0.28",
-        "@ai-sdk/google": "^4.0.48",
-        "@ai-sdk/google-vertex": "^5.0.59",
+        "@ai-sdk/google": "^4.0.49",
+        "@ai-sdk/google-vertex": "^5.0.60",
         "@ai-sdk/mcp": "^2.0.34",
         "@ai-sdk/mistral": "^4.0.31",
         "@ai-sdk/openai": "^4.0.45",
-        "@ai-sdk/openai-compatible": "^3.0.33",
+        "@ai-sdk/openai-compatible": "^3.0.34",
         "@ai-sdk/black-forest-labs": "^2.0.29",
         "@ai-sdk/xai": "^4.0.42",
         "@ffmpeg.wasm/core-st": "^0.13.2",
         "@ffmpeg.wasm/main": "^0.13.1",
-        "ai": "^7.0.71",
+        "ai": "^7.0.73",
         "cf-worker-adapter": "^1.4.0",
         "node-cron": "^4.6.0",
         "zod": "^4.4.3"
@@ -82,7 +82,7 @@
         "wrangler": "^4.125.0"
     },
     "overrides": {
-        "@ai-sdk/gateway": "4.0.57",
+        "@ai-sdk/gateway": "4.0.59",
         "@ai-sdk/provider": "4.0.7",
         "@ai-sdk/provider-utils": "5.0.28"
     }

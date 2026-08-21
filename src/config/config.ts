@@ -719,7 +719,7 @@ export class VertexConfig {
      */
     SEARCH_GROUNDING = false;
     // Vertex Image Model
-    VERTEX_IMAGE_MODEL = 'imagen-3.0-fast-generate-001';
+    VERTEX_IMAGE_MODEL = 'gemini-2.5-flash-image';
     VERTEX_MODELS = [];
 
     // https://{service-endpoint}/v1/{parent}/models

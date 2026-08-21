@@ -55,53 +55,36 @@ export class VertexImage extends VertexBase implements ImageAgent {
             radio: aspectRatio = '16:9',
             referenceImages,
             mask,
-            // 新增的高级编辑参数
-            editMode,
-            maskMode,
-            maskDilation,
             negativePrompt,
-            baseSteps,
         } = extraParams || {};
 
-        // 智能选择模型：
-        // - 有 referenceImages 或 mask = 编辑模式 -> 必须用 imagen-3.0-capability-001
-        // - 纯生成 -> 使用配置的模型（可以是 imagen-4.0-fast-generate-001）
-        const isEditMode = (referenceImages && referenceImages.length > 0) || mask;
-        const modelId = isEditMode
-            ? 'imagen-3.0-capability-001'  // 编辑：强制使用支持编辑的模型
-            : this.model(context);          // 生成：使用配置的模型
+        // Gemini 图片模型不支持 mask
+        if (mask) {
+            throw new Error('Gemini image models do not support mask-based image editing.');
+        }
+
+        // Gemini 图片模型不支持 n > 1
+        if (n > 1) {
+            throw new Error('Gemini image models do not support generating multiple images per call. Use n=1 or omit the n parameter.');
+        }
+
+        // 使用配置的模型（应该是 gemini-*-image 系列）
+        const modelId = this.model(context);
 
         // Build prompt: support both text-only and image editing
+        // Gemini 图片编辑通过在 prompt 中提供 images 实现
         const generatePrompt = referenceImages && referenceImages.length > 0
-            ? { text: prompt, images: referenceImages, ...(mask && { mask }) }
+            ? { text: prompt, images: referenceImages }
             : prompt;
 
         // Build provider options
         const providerOptions: any = {
             vertex: {
-                aspectRatio,
-                // personGeneration: 'allow_adult',
-                safetyFilterLevel: 'none',
+                imageConfig: {
+                    aspectRatio,
+                },
             },
         };
-
-        // 如果是编辑模式（有 referenceImages），添加编辑选项
-        if (referenceImages && referenceImages.length > 0) {
-            // 智能选择默认编辑模式：
-            // - 有 mask：使用 INPAINT_INSERTION（需要 mask 的精确编辑）
-            // - 无 mask：使用 EDIT_MODE_CONTROLLED_EDITING（不需要 mask 的通用编辑）
-            const defaultEditMode = mask ? 'EDIT_MODE_INPAINT_INSERTION' : 'EDIT_MODE_CONTROLLED_EDITING';
-
-            providerOptions.vertex.edit = {
-                mode: editMode || defaultEditMode,
-                // 只有在提供了 mask 时才设置 maskMode
-                ...(mask && { maskMode: maskMode || 'MASK_MODE_USER_PROVIDED' }),
-                // 可选的 mask dilation（推荐 0.01）
-                ...(maskDilation !== undefined && { maskDilation }),
-                // 可选的 baseSteps（35-75，越高质量越好）
-                ...(baseSteps !== undefined && { baseSteps }),
-            };
-        }
 
         // 添加 negative prompt（如果提供）
         if (negativePrompt) {
@@ -117,7 +100,7 @@ export class VertexImage extends VertexBase implements ImageAgent {
                 },
             }).image(modelId as GoogleVertexImageModelId) as unknown as ImageModelV3,
             prompt: generatePrompt,
-            n,
+            aspectRatio,
             providerOptions,
             maxRetries: 0,
         });
