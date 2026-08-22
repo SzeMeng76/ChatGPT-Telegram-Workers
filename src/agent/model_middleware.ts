@@ -526,6 +526,42 @@ export async function warpLLMParams({ messages, model, cache }: { messages: Mode
         }
     }
 
+    // OpenAI-like Provider Video Support Check
+    // @ai-sdk/openai-compatible now supports video_url content parts, but most OpenAI-compatible
+    // models don't actually support video. Only forward video to models we know support it.
+    if (model.provider === 'oailike') {
+        // Known video-capable OpenAI-compatible models (extend this list as needed)
+        const videoCapableModels = [
+            'qwen3-vl',           // Alibaba Qwen3-VL series
+            'qwen-vl',            // Alibaba Qwen-VL series
+            'qwen2-vl',           // Alibaba Qwen2-VL series
+            'yi-vision',          // 01.AI Yi-Vision series
+        ];
+
+        const modelSupportsVideo = videoCapableModels.some(prefix =>
+            model.modelId.toLowerCase().includes(prefix)
+        );
+
+        if (!modelSupportsVideo && Array.isArray(userMessage.content)) {
+            const hasVideoContent = userMessage.content.some((part: any) =>
+                part.type === 'file' && part.mediaType && part.mediaType.startsWith('video/')
+            );
+
+            if (hasVideoContent) {
+                log.warn(`[warpLLMParams] Model ${model.modelId} does not support video. Converting video parts to text description.`);
+                userMessage.content = userMessage.content.map((part: any) => {
+                    if (part.type === 'file' && part.mediaType?.startsWith('video/')) {
+                        return {
+                            type: 'text',
+                            text: '[User sent a video file. Note: This model cannot view video content - only static images are supported. Please ask the user to describe the video or send a representative frame as an image.]'
+                        };
+                    }
+                    return part;
+                });
+            }
+        }
+    }
+
     // xAI Server-Side Tools Support (Responses API only)
     // xAI provider tools are only supported by the Responses API, not Chat API
     // Chat API should use searchParameters instead
