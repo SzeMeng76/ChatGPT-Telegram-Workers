@@ -700,6 +700,10 @@ export class OpenAILikeConfig {
     USE_OAILIKE_RELAY_TOOLS: string[] = [];
     // OAILIKE Provider Options
     OAILIKE_PROVIDER_OPTIONS = {};
+    // OAILIKE Video Capable Models (model prefixes that support video_url content)
+    // Most OpenAI-compatible models don't support video - only add models you've verified
+    // Examples: qwen3-vl, qwen-vl, qwen2-vl, yi-vision
+    OAILIKE_VIDEO_CAPABLE_MODELS: string[] = [];
 }
 
 export class VertexConfig {

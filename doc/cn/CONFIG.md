@@ -342,6 +342,24 @@ AI: 根据你们的对话，今天天气不错，我推荐以下活动：
 | `OAILIKE_MODELS` | 可用模型列表 | `[]` |
 | `OAILIKE_MODELS_API` | 模型列表API | `/models` |
 | `OAILIKE_PROVIDER_OPTIONS` | 提供商选项 | `{}` |
+| `OAILIKE_VIDEO_CAPABLE_MODELS` | 支持视频的模型前缀列表 | `[]` |
+
+**视频输入支持**：
+
+从 `@ai-sdk/openai-compatible@3.0.35` 开始，SDK 支持将视频内容转换为 `video_url` 发送给兼容的模型。但**大多数 OpenAI-compatible 模型实际上不支持视频输入**：
+
+- ❌ **OpenAI (gpt-4o/gpt-5 系列)**：官方 API 不支持 `video_url`
+- ❌ **xAI Grok**：只支持图片（jpg/png），不支持视频输入
+- ✅ **Alibaba Qwen 系列**：`qwen-vl`、`qwen2-vl`、`qwen3-vl`、`qwen2.5-omni` 通过 DashScope 支持视频
+
+如果你的 OAILIKE 后端实际支持视频输入的模型（例如 Qwen3-VL），请配置 `OAILIKE_VIDEO_CAPABLE_MODELS` 白名单：
+
+```bash
+# 配置支持视频的模型前缀（不区分大小写）
+OAILIKE_VIDEO_CAPABLE_MODELS='["qwen3-vl", "qwen-vl", "qwen2-vl", "qwen2.5-omni"]'
+```
+
+**未在白名单中的模型**：当用户发送视频时，会自动转换为友好的文字提示，避免 API 报错。
 
 **OpenAI-like 中继工具**：
 ```bash

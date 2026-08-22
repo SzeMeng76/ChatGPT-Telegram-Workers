@@ -527,19 +527,17 @@ export async function warpLLMParams({ messages, model, cache }: { messages: Mode
     }
 
     // OpenAI-like Provider Video Support Check
-    // @ai-sdk/openai-compatible now supports video_url content parts, but most OpenAI-compatible
-    // models don't actually support video. Only forward video to models we know support it.
+    // @ai-sdk/openai-compatible 3.0.35+ supports video_url content parts, but most OpenAI-compatible
+    // models don't actually support video input. According to official docs:
+    // - OpenAI (gpt-4o/gpt-5): NOT supported - no video_url in Chat Completions or Responses API
+    // - xAI Grok: NOT supported - only images (jpg/png), no video input in chat completions
+    // - Alibaba Qwen series (qwen-vl/qwen2-vl/qwen3-vl/qwen2.5-omni): SUPPORTED via DashScope
+    // Only forward video to models explicitly configured in OAILIKE_VIDEO_CAPABLE_MODELS.
     if (model.provider === 'oailike') {
-        // Known video-capable OpenAI-compatible models (extend this list as needed)
-        const videoCapableModels = [
-            'qwen3-vl',           // Alibaba Qwen3-VL series
-            'qwen-vl',            // Alibaba Qwen-VL series
-            'qwen2-vl',           // Alibaba Qwen2-VL series
-            'yi-vision',          // 01.AI Yi-Vision series
-        ];
-
-        const modelSupportsVideo = videoCapableModels.some(prefix =>
-            model.modelId.toLowerCase().includes(prefix)
+        // Check if current model is in the video-capable whitelist
+        const videoCapableModels = context.OAILIKE_VIDEO_CAPABLE_MODELS || [];
+        const modelSupportsVideo = videoCapableModels.some((prefix: string) =>
+            model.modelId.toLowerCase().includes(prefix.toLowerCase())
         );
 
         if (!modelSupportsVideo && Array.isArray(userMessage.content)) {
@@ -548,7 +546,7 @@ export async function warpLLMParams({ messages, model, cache }: { messages: Mode
             );
 
             if (hasVideoContent) {
-                log.warn(`[warpLLMParams] Model ${model.modelId} does not support video. Converting video parts to text description.`);
+                log.warn(`[warpLLMParams] Model ${model.modelId} not in OAILIKE_VIDEO_CAPABLE_MODELS. Converting video to text description.`);
                 userMessage.content = userMessage.content.map((part: any) => {
                     if (part.type === 'file' && part.mediaType?.startsWith('video/')) {
                         return {

@@ -342,6 +342,24 @@ AI: Based on your conversation about the nice weather, I recommend these activit
 | `OAILIKE_MODELS` | Available models list | `[]` |
 | `OAILIKE_MODELS_API` | Models list API | `/models` |
 | `OAILIKE_PROVIDER_OPTIONS` | Provider options | `{}` |
+| `OAILIKE_VIDEO_CAPABLE_MODELS` | Model prefixes that support video input | `[]` |
+
+**Video Input Support**:
+
+Starting from `@ai-sdk/openai-compatible@3.0.35`, the SDK supports converting video content to `video_url` for compatible models. However, **most OpenAI-compatible models do NOT support video input**:
+
+- ❌ **OpenAI (gpt-4o/gpt-5 series)**: Official API does not support `video_url`
+- ❌ **xAI Grok**: Only supports images (jpg/png), no video input
+- ✅ **Alibaba Qwen series**: `qwen-vl`, `qwen2-vl`, `qwen3-vl`, `qwen2.5-omni` support video via DashScope
+
+If your OAILIKE backend actually supports video input models (e.g., Qwen3-VL), configure the `OAILIKE_VIDEO_CAPABLE_MODELS` whitelist:
+
+```bash
+# Configure model prefixes that support video (case-insensitive)
+OAILIKE_VIDEO_CAPABLE_MODELS='["qwen3-vl", "qwen-vl", "qwen2-vl", "qwen2.5-omni"]'
+```
+
+**Models not in the whitelist**: When users send videos, they will be automatically converted to friendly text descriptions to avoid API errors.
 
 **OpenAI-like Relay Tools**:
 ```bash
