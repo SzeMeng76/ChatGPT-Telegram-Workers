@@ -202,6 +202,8 @@ Key configuration options:
 - **Audio & Voice**:
   - `FISH_TTS_VOICE`: Fish Audio TTS voice reference ID
   - `GOOGLE_TTS_EXTRA_PARAMS`: Multi-speaker voice configuration
+  - `AI_ASR_PROVIDER`: ASR (speech-to-text) provider: openai, oailike, google
+  - `GOOGLE_STT_MODEL` / `GOOGLE_STT_EXTRA_PARAMS`: Google Gemini transcription model and transcription_config (language_codes, custom_vocabulary, mode, etc.)
   - `AUDIO_TEXT_FORMAT`: Audio transcription format (spoiler/bold/italic/code)
 - **Model Parameters**:
   - `CHAT_TEMPERATURE`: Model temperature (0-2)

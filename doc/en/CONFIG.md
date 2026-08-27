@@ -281,6 +281,8 @@ AI: Based on your conversation about the nice weather, I recommend these activit
 | `GOOGLE_API_KEY` | API key | `null` |
 | `GOOGLE_API_BASE` | Base URL | `https://generativelanguage.googleapis.com/v1beta/models/` |
 | `GOOGLE_CHAT_MODEL` | Model name | `gemini-pro` |
+| `GOOGLE_STT_MODEL` | Speech-to-text model | `gemini-3.5-transcribe` |
+| `GOOGLE_STT_EXTRA_PARAMS` | Extra `transcription_config` fields | `{}` |
 
 ### Google Vertex AI
 
@@ -791,6 +793,20 @@ GOOGLE_TTS_EXTRA_PARAMS='{
 
 > **Note**: Multi-speaker config is mutually exclusive with `GOOGLE_TTS_VOICE`
 
+### Google ASR (Speech-to-Text)
+
+Set `AI_ASR_PROVIDER=google` to transcribe voice messages with Gemini's unary transcription model (`gemini-3.5-transcribe`) via the [Interactions API](https://ai.google.dev/gemini-api/docs/transcribe). Use `GOOGLE_STT_EXTRA_PARAMS` to pass raw `transcription_config` fields, e.g.:
+
+```bash
+GOOGLE_STT_EXTRA_PARAMS='{
+  "language_codes": ["en-US"],
+  "custom_vocabulary": ["Kubernetes", "Gemini"],
+  "mode": { "type": "smart" }
+}'
+```
+
+> **Note**: The streaming `gemini-3.5-transcribe-live` variant is not supported — this integration only sends complete audio blobs and expects a full transcript back.
+
 ## 👤 User Configuration
 
 Users can modify these settings via Telegram commands. Use `/setenv KEY=VALUE` to set individual values or `/setenvs {"KEY1": "VALUE1", "KEY2": "VALUE2"}` for batch updates.
@@ -823,7 +839,7 @@ Users can modify these settings via Telegram commands. Use `/setenv KEY=VALUE` t
 |----------|-------------|---------|---------|
 | `AI_IMAGE_PROVIDER` | Image generator | `openai` | `openai`, `azure`, `workers`, etc. |
 | `AI_TTS_PROVIDER` | Text-to-speech | `openai` | `openai`, `google`, `fish` |
-| `AI_ASR_PROVIDER` | Speech recognition | `openai` | `openai`, `openailike` |
+| `AI_ASR_PROVIDER` | Speech recognition | `openai` | `openai`, `openailike`, `google` |
 | `TEXT_HANDLE_TYPE` | Text processing | `text` | `text`, `tts`, `chat` |
 | `TEXT_OUTPUT` | Text output format | `text` | `text`, `audio` |
 | `AUDIO_HANDLE_TYPE` | Audio processing | `stt` | `stt`, `audio`, `chat` |

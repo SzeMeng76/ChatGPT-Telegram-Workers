@@ -202,6 +202,8 @@ src/
 - **音频与语音**:
   - `FISH_TTS_VOICE`: Fish Audio TTS语音参考ID
   - `GOOGLE_TTS_EXTRA_PARAMS`: 多说话人语音配置
+  - `AI_ASR_PROVIDER`: ASR（语音转文字）提供商: openai, oailike, google
+  - `GOOGLE_STT_MODEL` / `GOOGLE_STT_EXTRA_PARAMS`: Google Gemini转录模型及transcription_config配置（language_codes、custom_vocabulary、mode等）
   - `AUDIO_TEXT_FORMAT`: 音频转录格式（spoiler/bold/italic/code）
 - **模型参数**:
   - `CHAT_TEMPERATURE`: 模型温度（0-2）

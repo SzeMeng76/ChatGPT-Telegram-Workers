@@ -278,7 +278,7 @@ export class AgentShareConfig {
     AI_CHAT_PROVIDER = 'openai';
     // AI图片提供商: openai, azure, workers
     AI_IMAGE_PROVIDER = 'openai';
-    // AI ASR 提供商: openai, oailike
+    // AI ASR 提供商: openai, oailike, google
     AI_ASR_PROVIDER = 'openai';
     // AI TTS 提供商: openai, oailike
     AI_TTS_PROVIDER = 'openai';
@@ -485,6 +485,10 @@ export class GeminiConfig {
     // Set to empty string to disable auto-switching
     GOOGLE_MAPS_MODEL = 'gemini-3-flash-preview';
     GOOGLE_TTS_MODEL = 'gemini-2.5-flash-preview-tts';
+    // Google Gemini STT Model, see: https://ai.google.dev/gemini-api/docs/transcribe
+    GOOGLE_STT_MODEL = 'gemini-3.5-transcribe';
+    // Google STT transcription_config, e.g. { language_codes: ['en-US'], custom_vocabulary: ['Kubernetes'], mode: { type: 'smart' } }
+    GOOGLE_STT_EXTRA_PARAMS: Record<string, any> = {};
 
     // Gemini 3.1 Flash Image Configuration (gemini-3.1-flash-image-preview)
     // Image aspect ratio: "1:1", "2:3", "3:2", "3:4", "4:3", "4:5", "5:4", "9:16", "16:9", "21:9", "1:8", "8:1", "1:4", "4:1"

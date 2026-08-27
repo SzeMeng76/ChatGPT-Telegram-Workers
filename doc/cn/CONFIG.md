@@ -281,6 +281,8 @@ AI: 根据你们的对话，今天天气不错，我推荐以下活动：
 | `GOOGLE_API_KEY` | API密钥 | `null` |
 | `GOOGLE_API_BASE` | 基础URL | `https://generativelanguage.googleapis.com/v1beta/models/` |
 | `GOOGLE_CHAT_MODEL` | 模型名称 | `gemini-pro` |
+| `GOOGLE_STT_MODEL` | 语音转文字模型 | `gemini-3.5-transcribe` |
+| `GOOGLE_STT_EXTRA_PARAMS` | 额外的 `transcription_config` 字段 | `{}` |
 
 ### Google Vertex AI
 
@@ -791,6 +793,20 @@ GOOGLE_TTS_EXTRA_PARAMS='{
 
 > **注意**: 多说话人配置与 `GOOGLE_TTS_VOICE` 互斥
 
+### Google ASR（语音转文字）
+
+设置 `AI_ASR_PROVIDER=google` 即可使用 Gemini 的一次性转录模型（`gemini-3.5-transcribe`）转录语音消息，走的是 [Interactions API](https://ai.google.dev/gemini-api/docs/transcribe)。可用 `GOOGLE_STT_EXTRA_PARAMS` 传入原始 `transcription_config` 字段，例如：
+
+```bash
+GOOGLE_STT_EXTRA_PARAMS='{
+  "language_codes": ["en-US"],
+  "custom_vocabulary": ["Kubernetes", "Gemini"],
+  "mode": { "type": "smart" }
+}'
+```
+
+> **注意**: 流式的 `gemini-3.5-transcribe-live` 暂不支持——本集成只会发送完整的音频再等待完整转录文本返回。
+
 ## 👤 用户配置
 
 用户可以通过Telegram命令修改这些设置。使用`/setenv KEY=VALUE`设置单个值，或使用`/setenvs {"KEY1": "VALUE1", "KEY2": "VALUE2"}`批量更新。
@@ -823,7 +839,7 @@ GOOGLE_TTS_EXTRA_PARAMS='{
 |------|------|--------|------|
 | `AI_IMAGE_PROVIDER` | 图像生成器 | `openai` | `openai`, `azure`, `workers`等 |
 | `AI_TTS_PROVIDER` | 文字转语音 | `openai` | `openai`, `google`, `fish` |
-| `AI_ASR_PROVIDER` | 语音识别 | `openai` | `openai`, `openailike` |
+| `AI_ASR_PROVIDER` | 语音识别 | `openai` | `openai`, `openailike`, `google` |
 | `TEXT_HANDLE_TYPE` | 文本处理 | `text` | `text`, `tts`, `chat` |
 | `TEXT_OUTPUT` | 文本输出格式 | `text` | `text`, `audio` |
 | `AUDIO_HANDLE_TYPE` | 音频处理 | `stt` | `stt`, `audio`, `chat` |

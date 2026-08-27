@@ -6,7 +6,7 @@ import { Anthropic } from './anthropic';
 import { AzureChatAI, AzureImageAI } from './azure';
 import { Cohere } from './cohere';
 import { FishTTS } from './fish';
-import { Google, GoogleImage, GoogleTTS } from './google';
+import { Google, GoogleASR, GoogleImage, GoogleTTS } from './google';
 import { BlackForestLabsImage } from './blackforestlabs';
 import { KlingAI } from './kling';
 import { Mistral } from './mistralai';
@@ -69,6 +69,7 @@ export function loadImageGen(context: AgentUserConfig): ImageAgent {
 export const ASR_AGENTS: ASRAgent[] = [
     new OpenAIASR(),
     new OpenAILikeASR(),
+    new GoogleASR(),
 ];
 
 export function loadASRLLM(context: AgentUserConfig) {

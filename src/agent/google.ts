@@ -1,7 +1,7 @@
 import type { FilePart, ImagePart, UserContent, UserModelMessage } from 'ai';
 import type { AgentUserConfig } from '../config/env';
-import type { ChatAgent, ChatStreamTextHandler, GeneratedImage, ImageAgent, ImageResult, LLMChatParams, LLMChatRequestParams, ResponseMessage } from './types';
-import { getLogSingleton, withLogger } from '../log';
+import type { ASRAgent, ChatAgent, ChatStreamTextHandler, GeneratedImage, ImageAgent, ImageResult, LLMChatParams, LLMChatRequestParams, ResponseMessage } from './types';
+import { getLogSingleton, log, withLogger } from '../log';
 import { base64StringToBlob } from '../utils/image';
 import { convertAudio } from '../utils/others/audio';
 import { applyVerdict, classifyApiError, markKeySuccess, selectKey } from './key-manager';
@@ -296,6 +296,59 @@ export class GoogleTTS extends GoogleBase {
             throw new Error(`${resp.status} ${resp.statusText}\n\n${errText}`);
         }
     };
+}
+
+export class GoogleASR extends GoogleBase implements ASRAgent {
+    readonly modelKey = 'GOOGLE_STT_MODEL';
+
+    model = (ctx: AgentUserConfig): string => {
+        return ctx.GOOGLE_STT_MODEL;
+    };
+
+    // Unary transcription via the Interactions API: https://ai.google.dev/gemini-api/docs/transcribe
+    request = withLogger(async (audio: Blob, context: AgentUserConfig): Promise<string> => {
+        const apiKey = this.apikey(context);
+        const url = `${context.GOOGLE_API_BASE}/interactions?key=${apiKey}`;
+        const data = Buffer.from(await audio.arrayBuffer()).toString('base64');
+        const body: any = {
+            model: this.model(context),
+            input: [{
+                type: 'audio',
+                data,
+                mime_type: audio.type || 'audio/ogg',
+            }],
+        };
+        if (context.GOOGLE_STT_EXTRA_PARAMS && Object.keys(context.GOOGLE_STT_EXTRA_PARAMS).length > 0) {
+            body.generation_config = { transcription_config: context.GOOGLE_STT_EXTRA_PARAMS };
+        }
+        const resp = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+        });
+        if (!resp.ok) {
+            const errText = await resp.text();
+            applyVerdict('google', apiKey, classifyApiError({
+                statusCode: resp.status,
+                responseBody: errText,
+                provider: 'google',
+            }));
+            throw new Error(`${resp.status} ${resp.statusText}\n\n${errText}`);
+        }
+        const result = await resp.json();
+        markKeySuccess('google', apiKey);
+        const text = (result.steps || [])
+            .flatMap((step: any) => step.content || [])
+            .filter((content: any) => content.type === 'text' && content.text != null)
+            .map((content: any) => content.text)
+            .join('');
+        if (!text) {
+            log.error(JSON.stringify(result));
+            throw new Error(`Data is not complete:\n${JSON.stringify(result)}`);
+        }
+        log.info(`Transcription: ${text}`);
+        return text;
+    });
 }
 
 export function handleUrl(messages: UserModelMessage): UserModelMessage {
