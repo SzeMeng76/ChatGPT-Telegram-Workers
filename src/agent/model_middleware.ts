@@ -82,10 +82,11 @@ export async function AIMiddleware({ config, activeTools, onStream, toolChoice, 
             record = getLogSingleton({ config });
             // record model log
             recordModelLog({ config, model: currentModel, record });
-            // google已支持youtube url以及内部文件url，但未支持其他外部url
-            if (currentModel.provider.startsWith('google') && model.modelId.startsWith('gemini-2')) {
+            // gemini-2.0 不支持外部 https url，SDK(@ai-sdk/google>=4.0.57)已按模型区分处理其他 gemini 系列，
+            // 这里仅需收窄 2.0 的能力，其余(files/youtube/gemini-2.5+外部url)保留 SDK 默认的 supportedUrls
+            if (currentModel.provider.startsWith('google') && model.modelId.startsWith('gemini-2.0')) {
                 currentModel.supportedUrls = {
-                    '*': [/^https:\/\/generativelanguage.googleapis.com\/v1beta\/files\/.*$/, /^https?:\/\/(youtu\.be|www\.youtube\.com)\/.+/],
+                    '*': [/^https:\/\/generativelanguage\.googleapis\.com\/v1beta\/files\/.*$/, /^https?:\/\/(youtu\.be|www\.youtube\.com)\/.+/],
                 };
             }
 
