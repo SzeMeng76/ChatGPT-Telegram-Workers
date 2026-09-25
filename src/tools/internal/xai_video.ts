@@ -6,7 +6,7 @@ import { experimental_generateVideo as generateVideo } from 'ai';
 export default {
     schema: {
         name: 'xai_video',
-        description: 'xAI Grok Imagine Video generation tool. Supports text-to-video, image-to-video, and video editing. Generates videos up to 5 seconds in 720p or 480p resolution.',
+        description: 'xAI Grok Imagine Video generation tool. Supports text-to-video, image-to-video, first-last-frame interpolation, keyframes, and video editing. Generates videos up to 5 seconds in 720p or 480p resolution (1080p for reference-to-video is capped to 720p).',
         parameters: {
             type: 'object',
             required: ['prompt'],
@@ -23,7 +23,11 @@ export default {
                 },
                 imageUrl: {
                     type: 'string',
-                    description: 'Image URL for image-to-video mode. The image will be animated based on the prompt.',
+                    description: 'Image URL for image-to-video mode, or the first frame when combined with lastFrameImageUrl.',
+                },
+                lastFrameImageUrl: {
+                    type: 'string',
+                    description: 'Image URL to pin as the last frame of the video (first-last-frame interpolation). Combine with imageUrl for the first frame.',
                 },
                 videoUrl: {
                     type: 'string',
@@ -47,6 +51,30 @@ export default {
                     enum: ['480p', '720p'],
                     default: '720p',
                 },
+                generateAudio: {
+                    type: 'boolean',
+                    description: 'Whether to generate audio alongside the video (not supported for video editing/extension).',
+                },
+                keyframes: {
+                    type: 'array',
+                    description: 'Up to 4 mid-video image anchors (text-to-video / image-to-video only). Each timestamp must fall strictly inside the video duration.',
+                    items: {
+                        type: 'object',
+                        required: ['imageUrl', 'timestampSeconds'],
+                        properties: {
+                            imageUrl: { type: 'string', description: 'Image URL for this keyframe.' },
+                            timestampSeconds: { type: 'number', description: 'Timestamp in seconds where this keyframe should appear.' },
+                        },
+                    },
+                },
+                storageFilename: {
+                    type: 'string',
+                    description: 'If set, stores the generated video in the xAI Files API under this filename instead of returning it inline.',
+                },
+                storageExpiresAfterSeconds: {
+                    type: 'number',
+                    description: 'How long the stored file should be retained, in seconds (up to 30 days). Only used when storageFilename is set.',
+                },
             },
         },
     },
@@ -58,18 +86,28 @@ async function generateXaiVideo({
     prompt,
     mode = 'text-to-video',
     imageUrl,
+    lastFrameImageUrl,
     videoUrl,
     aspectRatio = '16:9' as `${number}:${number}`,
     duration = 5,
     resolution = '720p',
+    generateAudio,
+    keyframes,
+    storageFilename,
+    storageExpiresAfterSeconds,
 }: {
     prompt: string;
     mode?: string;
     imageUrl?: string;
+    lastFrameImageUrl?: string;
     videoUrl?: string;
     aspectRatio?: `${number}:${number}`;
     duration?: number;
     resolution?: string;
+    generateAudio?: boolean;
+    keyframes?: Array<{ imageUrl: string; timestampSeconds: number }>;
+    storageFilename?: string;
+    storageExpiresAfterSeconds?: number;
 }, _env: Record<string, any>, config: AgentUserConfig) {
     const apiKey = selectKey('xai', config.XAI_API_KEY) || '';
 
@@ -106,6 +144,19 @@ async function generateXaiVideo({
         baseURL: config.XAI_API_BASE,
     });
 
+    const videoModel = xaiClient.video(config.XAI_VIDEO_MODEL || 'grok-imagine-video-1.5');
+
+    const frameImages = lastFrameImageUrl && mode !== 'video-edit'
+        ? [{ image: lastFrameImageUrl, frameType: 'last_frame' as const }]
+        : undefined;
+
+    const storageOptions = storageFilename
+        ? {
+                filename: storageFilename,
+                ...(storageExpiresAfterSeconds != null ? { expiresAfter: storageExpiresAfterSeconds } : {}),
+            }
+        : undefined;
+
     console.log('=== xAI Grok Imagine Video Request ===');
     console.log('Mode:', mode);
     console.log('Prompt:', prompt);
@@ -117,7 +168,7 @@ async function generateXaiVideo({
         if (mode === 'video-edit') {
             // Video editing mode
             videoResult = await generateVideo({
-                model: xaiClient.video('grok-imagine-video'),
+                model: videoModel,
                 prompt,
                 providerOptions: {
                     xai: {
@@ -130,33 +181,41 @@ async function generateXaiVideo({
         } else if (mode === 'image-to-video') {
             // Image-to-video mode
             videoResult = await generateVideo({
-                model: xaiClient.video('grok-imagine-video'),
+                model: videoModel,
                 prompt: {
                     image: imageUrl!,
                     text: prompt,
                 },
                 duration,
                 aspectRatio,
+                frameImages,
+                generateAudio,
                 providerOptions: {
                     xai: {
                         resolution,
                         pollTimeoutMs: 600000,
                         pollIntervalMs: 5000,
+                        ...(keyframes != null ? { keyframes } : {}),
+                        ...(storageOptions != null ? { storageOptions } : {}),
                     },
                 },
             });
         } else {
             // Text-to-video mode
             videoResult = await generateVideo({
-                model: xaiClient.video('grok-imagine-video'),
+                model: videoModel,
                 prompt,
                 duration,
                 aspectRatio,
+                frameImages,
+                generateAudio,
                 providerOptions: {
                     xai: {
                         resolution,
                         pollTimeoutMs: 600000,
                         pollIntervalMs: 5000,
+                        ...(keyframes != null ? { keyframes } : {}),
+                        ...(storageOptions != null ? { storageOptions } : {}),
                     },
                 },
             });
