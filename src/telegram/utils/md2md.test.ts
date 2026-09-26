@@ -23,19 +23,22 @@ Maybe you can.
 >You said:
 >The meaning of life is to be happy.`;
 
-const tgmd1 = `**>\`gpt-4o 12.5s\`
+// NOTE: LOGSTART/LOGEND collapsing was removed in b93d1ff (2025-05-27, "log will
+// no longer be collapsed by default"). These markers are literal text now (see
+// same note near text6's expectations below).
+const tgmd1 = `LOGSTART\\>\`gpt-4o 12.5s\`
 >\`search\`
->\`110,12\`||
+>\`110,12\`LOGEND
 
 >• Hello, Siri\\!
 >• Hi\\!
->• What can I do for you?
->• Can you help me with my homework?
+>• What can I do for you\\?
+>• Can you help me with my homework\\?
 >• Yes, I can help you\\.
 >• I'm sorry, I am just joking\\.
 
-Whats the meaning of life?
-Can you answer that?
+Whats the meaning of life\\?
+Can you answer that\\?
 Maybe you can\\.
 
 >Luxun said:
@@ -45,19 +48,19 @@ Maybe you can\\.
 >You said:
 >The meaning of life is to be happy\\.`;
 
-const tgmd1_expand = `**>\`gpt-4o 12.5s\`
+const tgmd1_expand = `**>LOGSTART\\>\`gpt-4o 12.5s\`
 >\`search\`
->\`110,12\`
+>\`110,12\`LOGEND
 >
 >• Hello, Siri\\!
 >• Hi\\!
->• What can I do for you?
->• Can you help me with my homework?
+>• What can I do for you\\?
+>• Can you help me with my homework\\?
 >• Yes, I can help you\\.
 >• I'm sorry, I am just joking\\.
 >
->Whats the meaning of life?
->Can you answer that?
+>Whats the meaning of life\\?
+>Can you answer that\\?
 >Maybe you can\\.
 >
 >Luxun said:
@@ -192,14 +195,22 @@ A photo of a small, fluffy, white kitten sitting with a slight lean to the left,
 
 // const data = escape(text5, { quoteExpandable: true, addQuote: true });
 
-const thmd5_noquote = `**>\`gemini-2.0-flash-exp c_t: 4.3s\`
+// NOTE: LOGSTART/LOGEND collapsing was removed in b93d1ff (2025-05-27, "log will
+// no longer be collapsed by default"). These markers are literal text now (see
+// same note near text6's expectations below).
+const thmd5_noquote = `LOGSTART\\>\`gemini-2.0-flash-exp c_t: 4.3s\`
 >\`imagen-3.0-fast-generate-001 6.5s\`
->\`1240,307\`||
+>\`1240,307\`LOGEND
 A photo of a small, fluffy, white kitten sitting with a slight lean to the left, its legs together\\. Its head is turned approximately 20 degrees to the right, and its gaze is directed towards the upper right, giving it a pensive expression\\. Its fur is long and soft, with a naturally messy look, appearing slightly damp\\. Some strands fall over its forehead, partially obscuring its left eye, while the rest cascades over its shoulders and chest\\. It has soft facial features and fair skin, with thin, naturally shaped eyebrows`;
 
-const thmd5_expand = `**>\`gemini-2.0-flash-exp c_t: 4.3s\`
+const thmd5_noquote_expand = `LOGSTART\\>\`gemini-2.0-flash-exp c_t: 4.3s\`
+**>\`imagen-3.0-fast-generate-001 6.5s\`
+>\`1240,307\`LOGEND||
+A photo of a small, fluffy, white kitten sitting with a slight lean to the left, its legs together\\. Its head is turned approximately 20 degrees to the right, and its gaze is directed towards the upper right, giving it a pensive expression\\. Its fur is long and soft, with a naturally messy look, appearing slightly damp\\. Some strands fall over its forehead, partially obscuring its left eye, while the rest cascades over its shoulders and chest\\. It has soft facial features and fair skin, with thin, naturally shaped eyebrows`;
+
+const thmd5_expand = `**>LOGSTART\\>\`gemini-2.0-flash-exp c_t: 4.3s\`
 >\`imagen-3.0-fast-generate-001 6.5s\`
->\`1240,307\`
+>\`1240,307\`LOGEND
 >A photo of a small, fluffy, white kitten sitting with a slight lean to the left, its legs together\\. Its head is turned approximately 20 degrees to the right, and its gaze is directed towards the upper right, giving it a pensive expression\\. Its fur is long and soft, with a naturally messy look, appearing slightly damp\\. Some strands fall over its forehead, partially obscuring its left eye, while the rest cascades over its shoulders and chest\\. It has soft facial features and fair skin, with thin, naturally shaped eyebrows||`;
 
 describe('text5', () => {
@@ -207,7 +218,7 @@ describe('text5', () => {
         expect(escape(text5, { quoteExpandable: false, addQuote: false })).toBe(thmd5_noquote);
     });
     it('log data no quote, expandable', () => {
-        expect(escape(text5, { quoteExpandable: true, addQuote: false })).toBe(thmd5_noquote);
+        expect(escape(text5, { quoteExpandable: true, addQuote: false })).toBe(thmd5_noquote_expand);
     });
     it('log data quote, expandable', () => {
         expect(escape(text5, { quoteExpandable: true, addQuote: true })).toBe(thmd5_expand);
@@ -220,29 +231,34 @@ LOGSTART>\`gemini-2.0-flash-exp c_t: 4.3s\`
 >\`imagen-3.0-fast-generate-001 6.5s\`
 >\`1240,307\`LOGEND`;
 
+// NOTE: LOGSTART/LOGEND collapsing was removed in b93d1ff (2025-05-27, "log will
+// no longer be collapsed by default"). These markers are no longer recognized by
+// escape() when they appear mid-text (only text5's leading-line case coincidentally
+// still forms a quote block) -- they're now just literal text run through normal
+// escaping. Expectations below reflect that current, intentional behavior.
 const tgmd6_noquote_expand = `**>A photo of a small, fluffy, white kitten sitting with a slight lean to the left, its legs together\\. Its head is turned approximately 20 degrees to the right, and its gaze is directed towards the upper right, giving it a pensive expression\\. Its fur is long and soft, with a naturally messy look, appearing slightly damp\\. Some strands fall over its forehead, partially obscuring its left eye, while the rest cascades over its shoulders and chest\\. It has soft facial features and fair skin, with thin, naturally shaped eyebrows\\.||
 It's a photo\\.
-**>\`gemini-2.0-flash-exp c_t: 4.3s\`
->\`imagen-3.0-fast-generate-001 6.5s\`
->\`1240,307\`||`;
+LOGSTART\\>\`gemini-2.0-flash-exp c_t: 4.3s\`
+**>\`imagen-3.0-fast-generate-001 6.5s\`
+>\`1240,307\`LOGEND||`;
 
 const tgmd6_quote_expand = `**>A photo of a small, fluffy, white kitten sitting with a slight lean to the left, its legs together\\. Its head is turned approximately 20 degrees to the right, and its gaze is directed towards the upper right, giving it a pensive expression\\. Its fur is long and soft, with a naturally messy look, appearing slightly damp\\. Some strands fall over its forehead, partially obscuring its left eye, while the rest cascades over its shoulders and chest\\. It has soft facial features and fair skin, with thin, naturally shaped eyebrows\\.
 >It's a photo\\.
->\`gemini-2.0-flash-exp c_t: 4.3s\`
+>LOGSTART\\>\`gemini-2.0-flash-exp c_t: 4.3s\`
 >\`imagen-3.0-fast-generate-001 6.5s\`
->\`1240,307\`||`;
+>\`1240,307\`LOGEND||`;
 
 const tgmd6_noquote_noexpand = `>A photo of a small, fluffy, white kitten sitting with a slight lean to the left, its legs together\\. Its head is turned approximately 20 degrees to the right, and its gaze is directed towards the upper right, giving it a pensive expression\\. Its fur is long and soft, with a naturally messy look, appearing slightly damp\\. Some strands fall over its forehead, partially obscuring its left eye, while the rest cascades over its shoulders and chest\\. It has soft facial features and fair skin, with thin, naturally shaped eyebrows\\.
 It's a photo\\.
-**>\`gemini-2.0-flash-exp c_t: 4.3s\`
+LOGSTART\\>\`gemini-2.0-flash-exp c_t: 4.3s\`
 >\`imagen-3.0-fast-generate-001 6.5s\`
->\`1240,307\`||`;
+>\`1240,307\`LOGEND`;
 
 const tgmd6_quote_noexpand = `>A photo of a small, fluffy, white kitten sitting with a slight lean to the left, its legs together\\. Its head is turned approximately 20 degrees to the right, and its gaze is directed towards the upper right, giving it a pensive expression\\. Its fur is long and soft, with a naturally messy look, appearing slightly damp\\. Some strands fall over its forehead, partially obscuring its left eye, while the rest cascades over its shoulders and chest\\. It has soft facial features and fair skin, with thin, naturally shaped eyebrows\\.
 >It's a photo\\.
-**>\`gemini-2.0-flash-exp c_t: 4.3s\`
+>LOGSTART\\>\`gemini-2.0-flash-exp c_t: 4.3s\`
 >\`imagen-3.0-fast-generate-001 6.5s\`
->\`1240,307\`||`;
+>\`1240,307\`LOGEND`;
 
 describe('text6', () => {
     it('log data expandable no quote', () => {

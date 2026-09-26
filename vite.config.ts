@@ -55,6 +55,19 @@ switch (BUILD_MODE) {
 
 export default defineConfig({
     plugins,
+    test: {
+        exclude: [
+            '**/node_modules/**',
+            '**/dist/**',
+            // Manual debug/demo scripts named *.test.ts but not real vitest suites:
+            // no describe/it blocks, meant to be run individually and eyeballed
+            // (interpolate/template use console.assert; mcp/index makes real
+            // external calls that need env vars and a live MCP server process).
+            'src/plugins/interpolate.test.ts',
+            'src/plugins/template.test.ts',
+            'src/mcp/index.test.ts',
+        ],
+    },
     build: {
         target: 'es2022',
         rollupOptions: {

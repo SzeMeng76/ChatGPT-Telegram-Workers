@@ -40,33 +40,33 @@
         "clean": "rm -rf dist"
     },
     "dependencies": {
-        "@ai-sdk/anthropic": "^4.0.63",
-        "@ai-sdk/azure": "^4.0.79",
-        "@ai-sdk/cohere": "^4.0.48",
-        "@ai-sdk/google": "^4.0.80",
-        "@ai-sdk/google-vertex": "^5.0.93",
-        "@ai-sdk/mcp": "^2.0.58",
-        "@ai-sdk/mistral": "^4.0.50",
-        "@ai-sdk/openai": "^4.0.75",
-        "@ai-sdk/openai-compatible": "^3.0.55",
-        "@ai-sdk/black-forest-labs": "^2.0.48",
-        "@ai-sdk/xai": "^5.0.8",
+        "@ai-sdk/anthropic": "^4.0.65",
+        "@ai-sdk/azure": "^4.0.82",
+        "@ai-sdk/cohere": "^4.0.50",
+        "@ai-sdk/google": "^4.0.82",
+        "@ai-sdk/google-vertex": "^5.0.95",
+        "@ai-sdk/mcp": "^2.0.60",
+        "@ai-sdk/mistral": "^4.0.52",
+        "@ai-sdk/openai": "^4.0.78",
+        "@ai-sdk/openai-compatible": "^3.0.57",
+        "@ai-sdk/black-forest-labs": "^2.0.50",
+        "@ai-sdk/xai": "^5.0.10",
         "@ffmpeg.wasm/core-st": "^0.13.2",
         "@ffmpeg.wasm/main": "^0.13.1",
-        "ai": "^7.0.114",
+        "ai": "^7.0.116",
         "cf-worker-adapter": "^1.4.0",
         "node-cron": "^4.6.0",
         "zod": "^4.6.5"
     },
     "devDependencies": {
         "@antfu/eslint-config": "^9.5.1",
-        "@cloudflare/workers-types": "^5.20260925.1",
-        "@types/node": "^26.6.2",
+        "@cloudflare/workers-types": "^5.20260926.1",
+        "@types/node": "^26.6.3",
         "@types/node-cron": "^3.0.11",
         "@types/react": "^19.3.0",
         "@types/react-dom": "^19.3.0",
         "@types/ws": "^8.18.1",
-        "@vercel/node": "^15.0.0",
+        "@vercel/node": "^16.0.1",
         "eslint": "^10.11.0",
         "eslint-plugin-format": "^2.0.1",
         "rollup-plugin-cleanup": "^3.2.1",
@@ -79,11 +79,11 @@
         "vite-plugin-checker": "^0.14.5",
         "vite-plugin-dts": "^5.1.1",
         "vitest": "^5.0.2",
-        "wrangler": "^4.140.0"
+        "wrangler": "^4.141.0"
     },
     "overrides": {
-        "@ai-sdk/gateway": "4.0.92",
+        "@ai-sdk/gateway": "4.0.94",
         "@ai-sdk/provider": "4.0.18",
-        "@ai-sdk/provider-utils": "5.0.47"
+        "@ai-sdk/provider-utils": "5.0.49"
     }
 }

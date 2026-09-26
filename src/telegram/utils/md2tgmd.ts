@@ -136,10 +136,13 @@ export function escape(text: string, expandParams: ExpandParams = { addQuote: fa
             }
         }
     }
-    // if (codeStack.length > 0) {
-    //     const last = `${lines.slice(codeStack[0]).join('\n')}\n\`\`\``;
-    //     result.push(handleEscape(last, 'code', expandParams));
-    if (codeStack.length === 0 && textStartIndex < lines.length) {
+    if (codeStack.length > 0) {
+        // Unclosed code fence at end of text (e.g. a streamed/truncated response):
+        // treat the remainder as code and synthesize the closing fence so its
+        // content isn't silently dropped.
+        const last = `${lines.slice(codeStack[0]).join('\n')}\n\`\`\``;
+        result.push(handleEscape(last, 'code', expandParams));
+    } else if (textStartIndex < lines.length) {
         result.push(handleEscape(lines.slice(textStartIndex).join('\n'), 'text', expandParams));
     }
     return addExpandable(result.join('\n'), expandParams.quoteExpandable);
