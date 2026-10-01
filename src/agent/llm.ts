@@ -93,6 +93,7 @@ export async function createLlmModel(model: string, context: AgentUserConfig): P
                     Authorization: `Bearer ${selectKey('oailike', context.OAILIKE_API_KEY) || ''}`,
                 }),
                 includeUsage: true,
+                supportsMultiPartToolContent: context.OAILIKE_SUPPORTS_MULTIPART_TOOL_CONTENT ?? false,
                 metadataExtractor: extraMetadataExtractor(model_id),
                 fetch: mockFetch(model_id, context, agent),
             });

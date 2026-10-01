@@ -708,6 +708,10 @@ export class OpenAILikeConfig {
     // Most OpenAI-compatible models don't support video - only add models you've verified
     // Examples: qwen3-vl, qwen-vl, qwen2-vl, yi-vision
     OAILIKE_VIDEO_CAPABLE_MODELS: string[] = [];
+    // OAILIKE supports multi-part tool content (structured arrays with images/files in tool messages)
+    // Enable this for providers that extend the OpenAI Chat Completions API with structured tool-result content
+    // Defaults to false for backward compatibility with strict OpenAI-compatible endpoints
+    OAILIKE_SUPPORTS_MULTIPART_TOOL_CONTENT = false;
 }
 
 export class VertexConfig {
