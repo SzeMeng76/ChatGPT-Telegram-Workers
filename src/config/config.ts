@@ -822,6 +822,8 @@ export class BlackForestLabsConfig {
     // Black Forest Labs API base URL
     BFL_API_BASE = 'https://api.bfl.ai/v1';
     // Black Forest Labs image model
+    // FLUX 3 (generation + editing with up to 10 ref images, web grounding):
+    //   flux-3-image
     // FLUX.2 (generation + editing, up to 8 ref images):
     //   flux-2-pro, flux-2-max, flux-2-flex, flux-2-klein-4b, flux-2-klein-9b
     // FLUX Kontext (in-context editing, up to 10 ref images):

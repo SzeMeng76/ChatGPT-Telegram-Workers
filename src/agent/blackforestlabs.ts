@@ -22,6 +22,11 @@ export class BlackForestLabsImage implements ImageAgent {
             referenceImages,
             mask,
             aspectRatio,
+            // FLUX 3 specific parameters
+            resolution,
+            grounding,
+            version,
+            // FLUX 1/2 parameters
             steps,
             guidance,
             safetyTolerance,
@@ -34,21 +39,51 @@ export class BlackForestLabsImage implements ImageAgent {
             baseURL: context.BFL_API_BASE,
         });
 
+        const modelId = this.model(context);
+        const isFlux3 = modelId === 'flux-3-image';
+
+        // FLUX 3 does not support masks
+        if (isFlux3 && mask) {
+            throw new Error('FLUX 3 does not support masks. Use flux-pro-1.0-fill for inpainting instead.');
+        }
+
         const providerOptions: Record<string, any> = {};
-        if (steps !== undefined) {
-            providerOptions.steps = steps;
-        }
-        if (guidance !== undefined) {
-            providerOptions.guidance = guidance;
-        }
-        if (safetyTolerance !== undefined) {
-            providerOptions.safetyTolerance = safetyTolerance;
-        }
-        if (outputFormat !== undefined) {
-            providerOptions.outputFormat = outputFormat;
-        }
-        if (imagePromptStrength !== undefined) {
-            providerOptions.imagePromptStrength = imagePromptStrength;
+
+        if (isFlux3) {
+            // FLUX 3 specific options
+            if (resolution !== undefined) {
+                providerOptions.resolution = resolution;
+            }
+            if (grounding !== undefined) {
+                providerOptions.grounding = grounding;
+            }
+            if (version !== undefined) {
+                providerOptions.version = version;
+            }
+            // FLUX 3 safety tolerance range is 0-4
+            if (safetyTolerance !== undefined) {
+                if (safetyTolerance < 0 || safetyTolerance > 4) {
+                    throw new Error('FLUX 3 safetyTolerance must be between 0 and 4.');
+                }
+                providerOptions.safetyTolerance = safetyTolerance;
+            }
+        } else {
+            // FLUX 1/2 options
+            if (steps !== undefined) {
+                providerOptions.steps = steps;
+            }
+            if (guidance !== undefined) {
+                providerOptions.guidance = guidance;
+            }
+            if (safetyTolerance !== undefined) {
+                providerOptions.safetyTolerance = safetyTolerance;
+            }
+            if (outputFormat !== undefined) {
+                providerOptions.outputFormat = outputFormat;
+            }
+            if (imagePromptStrength !== undefined) {
+                providerOptions.imagePromptStrength = imagePromptStrength;
+            }
         }
 
         const providerOptionsParam = Object.keys(providerOptions).length > 0

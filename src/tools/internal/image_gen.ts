@@ -94,6 +94,45 @@ export default {
                     maximum: 75,
                     description: 'Number of base steps for image generation (35-75). Higher values produce better quality but take longer. Only supported by vertex agent.',
                 },
+                resolution: {
+                    type: 'string',
+                    enum: ['768sq', '1k', '1.5k', '2k', '4k'],
+                    description: 'Output resolution class for FLUX 3 image generation. Higher resolutions produce more detailed images but take longer. Default is "1k". Only supported by bfl agent with flux-3-image model.',
+                },
+                grounding: {
+                    type: 'boolean',
+                    description: 'Enable web and image search grounding for FLUX 3. When enabled, the model can use web search results to ground the generation. Default is true. Only supported by bfl agent with flux-3-image model.',
+                },
+                version: {
+                    type: 'string',
+                    enum: ['latest'],
+                    description: 'FLUX 3 endpoint version. Currently only "latest" is available. Only supported by bfl agent with flux-3-image model.',
+                },
+                steps: {
+                    type: 'integer',
+                    description: 'Number of generation steps. Higher values can improve quality but increase generation time. Only supported by bfl agent with FLUX 1/2 models (not flux-3-image).',
+                },
+                guidance: {
+                    type: 'number',
+                    description: 'Guidance scale for image generation. Controls how closely the image follows the prompt. Only supported by bfl agent with FLUX 1/2 models (not flux-3-image).',
+                },
+                safetyTolerance: {
+                    type: 'integer',
+                    minimum: 0,
+                    maximum: 6,
+                    description: 'Moderation level for inputs and outputs (0 = most strict, 6 = more permissive). For FLUX 3, the range is 0-4 with default 2. Only supported by bfl agent.',
+                },
+                outputFormat: {
+                    type: 'string',
+                    enum: ['jpeg', 'png'],
+                    description: 'Desired format of the output image. Only supported by bfl agent with FLUX 1/2 models (not flux-3-image).',
+                },
+                imagePromptStrength: {
+                    type: 'number',
+                    minimum: 0,
+                    maximum: 1,
+                    description: 'Strength of the image prompt influence on generation (0.0 to 1.0). Only supported by bfl agent with FLUX 1/2 models (not flux-3-image).',
+                },
             },
             required: ['prompts'],
         },
@@ -113,6 +152,14 @@ export default {
         maskDilation,
         negativePrompt,
         baseSteps,
+        resolution,
+        grounding,
+        version,
+        steps,
+        guidance,
+        safetyTolerance,
+        outputFormat,
+        imagePromptStrength,
     }: {
         agent: string;
         prompts: string[];
@@ -127,6 +174,14 @@ export default {
         maskDilation?: number;
         negativePrompt?: string;
         baseSteps?: number;
+        resolution?: string;
+        grounding?: boolean;
+        version?: string;
+        steps?: number;
+        guidance?: number;
+        safetyTolerance?: number;
+        outputFormat?: string;
+        imagePromptStrength?: number;
     }, _env: Record<string, any>, config: AgentUserConfig): Promise<ToolResult> => {
         if (!config) {
             return { content: [{ type: 'text', text: 'Missing config' }] };
@@ -138,7 +193,7 @@ export default {
             agent_name = config.AI_IMAGE_PROVIDER;
         }
         log.info(`tool image_gen request start: agent: ${agent_name}`);
-        log.info(`params: ${JSON.stringify({ agent: agent_name, prompts, quantity, size, radio, style, referenceImages, mask, editMode, maskMode, maskDilation, negativePrompt, baseSteps })}`);
+        log.info(`params: ${JSON.stringify({ agent: agent_name, prompts, quantity, size, radio, style, referenceImages, mask, editMode, maskMode, maskDilation, negativePrompt, baseSteps, resolution, grounding, version, steps, guidance, safetyTolerance, outputFormat, imagePromptStrength })}`);
         const agent = IMAGE_AGENTS.find(a => a.name === agent_name);
         if (!agent?.enable(config)) {
             return { content: [{ type: 'text', text: `Image agent ${agent_name} is not available`, is_error: true }] };
@@ -157,6 +212,14 @@ export default {
                     maskDilation,
                     negativePrompt,
                     baseSteps,
+                    resolution,
+                    grounding,
+                    version,
+                    steps,
+                    guidance,
+                    safetyTolerance,
+                    outputFormat,
+                    imagePromptStrength,
                 });
             } catch (e) {
                 return { message: (e as Error).message };
