@@ -40,34 +40,34 @@
         "clean": "rm -rf dist"
     },
     "dependencies": {
-        "@ai-sdk/anthropic": "^4.0.79",
-        "@ai-sdk/azure": "^4.0.100",
-        "@ai-sdk/cohere": "^4.0.60",
-        "@ai-sdk/google": "^4.0.94",
-        "@ai-sdk/google-vertex": "^5.0.110",
-        "@ai-sdk/mcp": "^2.0.74",
-        "@ai-sdk/mistral": "^4.0.63",
-        "@ai-sdk/openai": "^4.0.92",
-        "@ai-sdk/openai-compatible": "^3.0.68",
-        "@ai-sdk/black-forest-labs": "^2.0.60",
-        "@ai-sdk/xai": "^5.0.21",
+        "@ai-sdk/anthropic": "^4.0.81",
+        "@ai-sdk/azure": "^4.0.103",
+        "@ai-sdk/cohere": "^4.0.62",
+        "@ai-sdk/google": "^4.0.98",
+        "@ai-sdk/google-vertex": "^5.0.114",
+        "@ai-sdk/mcp": "^2.0.77",
+        "@ai-sdk/mistral": "^4.0.65",
+        "@ai-sdk/openai": "^4.0.95",
+        "@ai-sdk/openai-compatible": "^3.0.70",
+        "@ai-sdk/black-forest-labs": "^2.0.63",
+        "@ai-sdk/xai": "^5.0.23",
         "@ffmpeg.wasm/core-st": "^0.13.2",
         "@ffmpeg.wasm/main": "^0.13.1",
-        "ai": "^7.0.138",
+        "ai": "^7.0.142",
         "cf-worker-adapter": "^1.4.0",
         "node-cron": "^4.6.0",
         "zod": "^4.6.7"
     },
     "devDependencies": {
         "@antfu/eslint-config": "^9.5.1",
-        "@cloudflare/workers-types": "^5.20261013.1",
+        "@cloudflare/workers-types": "^5.20261016.1",
         "@types/node": "^26.6.5",
         "@types/node-cron": "^3.0.11",
         "@types/react": "^19.3.0",
         "@types/react-dom": "^19.3.0",
         "@types/ws": "^8.18.2",
-        "@vercel/node": "^23.0.1",
-        "eslint": "^10.12.0",
+        "@vercel/node": "^24.0.2",
+        "eslint": "^10.13.0",
         "eslint-plugin-format": "^2.0.1",
         "rollup-plugin-cleanup": "^3.2.1",
         "rollup-plugin-node-externals": "^8.1.2",
@@ -78,12 +78,12 @@
         "vite": "^8.3.4",
         "vite-plugin-checker": "^0.14.5",
         "vite-plugin-dts": "^5.1.2",
-        "vitest": "^5.0.4",
-        "wrangler": "^4.149.0"
+        "vitest": "^5.0.5",
+        "wrangler": "^4.151.1"
     },
     "overrides": {
-        "@ai-sdk/gateway": "4.0.111",
-        "@ai-sdk/provider": "4.0.27",
-        "@ai-sdk/provider-utils": "5.0.59"
+        "@ai-sdk/gateway": "4.0.115",
+        "@ai-sdk/provider": "4.0.28",
+        "@ai-sdk/provider-utils": "5.0.61"
     }
 }

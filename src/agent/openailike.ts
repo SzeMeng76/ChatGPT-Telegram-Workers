@@ -1,13 +1,48 @@
 import type { UserModelMessage } from 'ai';
 import type { AgentUserConfig } from '../config/env';
-import type { ASRAgent, ChatAgent, ChatStreamTextHandler, ImageAgent, ImageResult, LLMChatParams, LLMChatRequestParams, ResponseMessage } from './types';
+import type { ASRAgent, ChatAgent, ChatStreamTextHandler, GeneratedImage, ImageAgent, ImageResult, LLMChatParams, LLMChatRequestParams, ResponseMessage } from './types';
 import { log, withLogger } from '../log';
+import { base64StringToBlob } from '../utils';
+import { downloadImage } from '../utils/image/download';
 import { requestText2Image } from './image';
 import { selectKey } from './key-manager';
 import { createLlmModel } from './llm';
 import { warpLLMParams } from './model_middleware';
-import { renderImage } from './openai';
 import { requestChatCompletionsV2 } from './request';
+
+/**
+ * 解析 OpenAI 兼容的图片响应。参考 vercel/ai openai-compatible 的 getImages:
+ * - 全是 url:直接返回 URL,由 Telegram 拉取(行为不变,历史记录里仍保留图片链接)
+ * - 含 b64_json(纯 base64 或混合):按原顺序统一转成 Blob,两个字段同时存在时 base64 优先,不再下载
+ * - 两个字段都缺失:报错
+ * trustedOrigin 必须来自开发者配置(OAILIKE_API_BASE),不能从响应里取,用于放行自建/本地部署的同源图片地址。
+ */
+export async function renderOpenAILikeImage(response: Response | GeneratedImage[] | string[], prompt: string, trustedOrigin?: string): Promise<ImageResult> {
+    const resp = response as Response;
+    if (!resp.ok)
+        throw new Error(await resp.text());
+    const respJson = await resp.json();
+    if (respJson.error?.message) {
+        throw new Error(respJson.error.message);
+    }
+    const items: { b64_json?: string | null; url?: string | null }[] = respJson.data ?? [];
+
+    if (items.length > 0 && items.every(item => item.b64_json == null && item.url != null)) {
+        return { url: items.map(item => item.url as string), text: prompt };
+    }
+
+    const signal = AbortSignal.timeout(60_000);
+    const raw = await Promise.all(items.map(async ({ b64_json, url }) => {
+        if (b64_json != null) {
+            return base64StringToBlob(b64_json);
+        }
+        if (url == null) {
+            throw new Error('Expected b64_json or url in the image response');
+        }
+        return downloadImage(url, { trustedOrigin, signal });
+    }));
+    return { raw, text: prompt };
+}
 
 export class OpenAILikeBase {
     readonly name = 'oailike';
@@ -65,10 +100,10 @@ export class OpenAILikeImage extends OpenAILikeBase implements ImageAgent {
             batch_size: 4,
             ...context.OAILIKE_API_EXTRA_PARAMS,
         };
-        return requestText2Image(url, header, body, this.render);
+        return requestText2Image(url, header, body, (resp, prompt) => renderOpenAILikeImage(resp, prompt, context.OAILIKE_API_BASE));
     });
 
-    readonly render = renderImage;
+    readonly render = (response: Response | GeneratedImage[] | string[], prompt: string): Promise<ImageResult> => renderOpenAILikeImage(response, prompt);
 }
 
 export class OpenAILikeASR extends OpenAILikeBase implements ASRAgent {

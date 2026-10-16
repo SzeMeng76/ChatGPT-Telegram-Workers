@@ -40,7 +40,16 @@ export class BlackForestLabsImage implements ImageAgent {
         });
 
         const modelId = this.model(context);
-        const isFlux3 = modelId === 'flux-3-image';
+        // 与 @ai-sdk/black-forest-labs 的 modelApi 判断保持一致:
+        // 旧系列走 legacy;flux-3-image 有独立 API;其余未知 ID(含 flux-3-image-klein)默认走最新 API
+        const isLegacy = modelId === 'flux-pro'
+            || modelId === 'flux-dev'
+            || modelId.startsWith('flux-pro-')
+            || modelId.startsWith('flux-kontext-')
+            || /^flux-[12](?:[.-]|$)/.test(modelId);
+        const isFlux3Base = modelId === 'flux-3-image';
+        const isFlux3Latest = !isLegacy && !isFlux3Base;
+        const isFlux3 = isFlux3Base || isFlux3Latest;
 
         // FLUX 3 does not support masks
         if (isFlux3 && mask) {
@@ -50,22 +59,33 @@ export class BlackForestLabsImage implements ImageAgent {
         const providerOptions: Record<string, any> = {};
 
         if (isFlux3) {
-            // FLUX 3 specific options
+            // FLUX 3 系列共有选项
             if (resolution !== undefined) {
                 providerOptions.resolution = resolution;
             }
-            if (grounding !== undefined) {
-                providerOptions.grounding = grounding;
-            }
-            if (version !== undefined) {
-                providerOptions.version = version;
-            }
-            // FLUX 3 safety tolerance range is 0-4
+            // FLUX 3 safety tolerance range is 0-7 (实际上限由端点和组织决定)
             if (safetyTolerance !== undefined) {
-                if (safetyTolerance < 0 || safetyTolerance > 4) {
-                    throw new Error('FLUX 3 safetyTolerance must be between 0 and 4.');
+                if (safetyTolerance < 0 || safetyTolerance > 7) {
+                    throw new Error('FLUX 3 safetyTolerance must be between 0 and 7.');
                 }
                 providerOptions.safetyTolerance = safetyTolerance;
+            }
+            if (isFlux3Base) {
+                // 仅 flux-3-image 支持联网检索和 version
+                if (grounding !== undefined) {
+                    providerOptions.grounding = grounding;
+                }
+                if (version !== undefined) {
+                    providerOptions.version = version;
+                }
+            } else {
+                // 仅 Klein(最新 API)支持 steps(1-16)和 outputFormat
+                if (steps !== undefined) {
+                    providerOptions.steps = steps;
+                }
+                if (outputFormat !== undefined) {
+                    providerOptions.outputFormat = outputFormat;
+                }
             }
         } else {
             // FLUX 1/2 options

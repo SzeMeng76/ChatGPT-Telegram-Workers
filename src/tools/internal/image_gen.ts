@@ -97,7 +97,7 @@ export default {
                 resolution: {
                     type: 'string',
                     enum: ['768sq', '1k', '1.5k', '2k', '4k'],
-                    description: 'Output resolution class for FLUX 3 image generation. Higher resolutions produce more detailed images but take longer. Default is "1k". Only supported by bfl agent with flux-3-image model.',
+                    description: 'Output resolution class for FLUX 3 image generation. Higher resolutions produce more detailed images but take longer. Default is "1k". Only supported by bfl agent with FLUX 3 models (flux-3-image, flux-3-image-klein).',
                 },
                 grounding: {
                     type: 'boolean',
@@ -110,7 +110,7 @@ export default {
                 },
                 steps: {
                     type: 'integer',
-                    description: 'Number of generation steps. Higher values can improve quality but increase generation time. Only supported by bfl agent with FLUX 1/2 models (not flux-3-image).',
+                    description: 'Number of generation steps. Higher values can improve quality but increase generation time. Supported by bfl agent with FLUX 1/2 models and flux-3-image-klein (1-16, default 16), not flux-3-image.',
                 },
                 guidance: {
                     type: 'number',
@@ -120,12 +120,12 @@ export default {
                     type: 'integer',
                     minimum: 0,
                     maximum: 6,
-                    description: 'Moderation level for inputs and outputs (0 = most strict, 6 = more permissive). For FLUX 3, the range is 0-4 with default 2. Only supported by bfl agent.',
+                    description: 'Moderation level for inputs and outputs (0 = most strict, 6 = more permissive). For FLUX 3 models, the range is 0-7 with default 2 (the approved maximum depends on the endpoint and organization). Only supported by bfl agent.',
                 },
                 outputFormat: {
                     type: 'string',
                     enum: ['jpeg', 'png'],
-                    description: 'Desired format of the output image. Only supported by bfl agent with FLUX 1/2 models (not flux-3-image).',
+                    description: 'Desired format of the output image. Supported by bfl agent with FLUX 1/2 models and flux-3-image-klein, not flux-3-image.',
                 },
                 imagePromptStrength: {
                     type: 'number',
