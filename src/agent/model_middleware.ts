@@ -274,6 +274,16 @@ export async function AIMiddleware({ config, activeTools, onStream, toolChoice, 
             hasRecordFirstChunkTime = false;
             step++;
         },
+
+        // 该步骤已开始但未产出结果：provider 调用抛出/拒绝，或流在无输出时结束
+        onStepError: async ({ callId, provider, modelId, stepNumber, error }: { callId: string; provider: string; modelId: string; stepNumber: number; error: unknown }) => {
+            const reason = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+            log.warn(`[onStepError] step ${stepNumber} failed, callId: ${callId}, model: ${provider}/${modelId}, error: ${reason}`);
+            log.debug('[onStepError] raw error:', error);
+            if (record) {
+                record.end_time = Date.now();
+            }
+        },
     };
 }
 

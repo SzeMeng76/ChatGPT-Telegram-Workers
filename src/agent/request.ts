@@ -197,7 +197,7 @@ export async function requestChatCompletionsV2({ model, messages, tools, activeT
         content: cache?.join() ?? '',
         occured_error: false,
     };
-    const { prepareStepPre, onStepFinish, onChunk, ...middleware } = await AIMiddleware({
+    const { prepareStepPre, onStepFinish, onStepError, onChunk, ...middleware } = await AIMiddleware({
         config: context,
         activeTools,
         onStream,
@@ -206,7 +206,7 @@ export async function requestChatCompletionsV2({ model, messages, tools, activeT
         messageInfo,
     });
 
-    const handeredParams = await combineParams({ context, middleware, model, messages, activeTools, tools, prepareStepPre, onStepFinish, onChunk });
+    const handeredParams = await combineParams({ context, middleware, model, messages, activeTools, tools, prepareStepPre, onStepFinish, onStepError, onChunk });
 
     let responseMessages: ResponseMessage[] = [];
     let contentFull = '';
@@ -407,7 +407,7 @@ function thinkingExtractor(messageInfo: MessageInfo) {
     };
 }
 
-async function combineParams({ context, middleware, model, messages, activeTools, tools, prepareStepPre, onStepFinish, onChunk }: { context: AgentUserConfig; middleware: any; model: LLMModel; messages: ModelMessage[]; activeTools: string[]; tools: any; prepareStepPre: (middleware: (...args: any[]) => any) => any; onStepFinish: (data: StepResult<any, any>) => void; onChunk: (data: { chunk: TextStreamPart<any> }) => void }) {
+async function combineParams({ context, middleware, model, messages, activeTools, tools, prepareStepPre, onStepFinish, onStepError, onChunk }: { context: AgentUserConfig; middleware: any; model: LLMModel; messages: ModelMessage[]; activeTools: string[]; tools: any; prepareStepPre: (middleware: (...args: any[]) => any) => any; onStepFinish: (data: StepResult<any, any>) => void; onStepError: (data: { callId: string; provider: string; modelId: string; stepNumber: number; error: unknown }) => void; onChunk: (data: { chunk: TextStreamPart<any> }) => void }) {
     // Extract system message from messages array
     const systemMessageIndex = messages.findIndex(m => m.role === 'system');
     let systemMessage: string | undefined;
@@ -581,6 +581,7 @@ IMPORTANT REMINDERS:
         prepareStep: prepareStepPre(middleware),
         stopWhen: stepCountIs(context.MAX_STEPS),
         onStepFinish,
+        onStepError,
         onChunk,
         ...(ENV.CHAT_TOTAL_DURATION_LIMIT > 0 && { abortSignal: AbortSignal.timeout(ENV.CHAT_TOTAL_DURATION_LIMIT * 1e3) }),
     };
