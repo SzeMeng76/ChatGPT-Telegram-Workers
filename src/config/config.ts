@@ -500,6 +500,16 @@ export class GeminiConfig {
     // Thinking level for gemini-3.1-flash-image: "minimal" (default) or "high"
     GOOGLE_IMAGE_THINKING_LEVEL: string | null = 'minimal';
 
+    // Thinking level applied to Gemini 3+/4 chat models via providerOptions.thinkingConfig.
+    // Supported: 'minimal' | 'low' | 'medium' | 'high' | 'xhigh'.
+    // Leave null to let the model use its own default (recommended).
+    //
+    // WARNING: thinking tokens are billed at the output price.
+    //   - 'xhigh' only works on gemini-4-hydrogen; every other model rounds it down to 'high'.
+    //   - Gemini 2.5 models use thinkingBudget instead and ignore this setting entirely.
+    //   - Higher levels raise cost and time-to-first-token substantially.
+    GOOGLE_THINKING_LEVEL: string | null = null;
+
     // available voices: https://ai.google.dev/gemini-api/docs/speech-generation#voices
     GOOGLE_TTS_VOICE = 'Zephyr';
     GOOGLE_TTS_PROMPT = '';

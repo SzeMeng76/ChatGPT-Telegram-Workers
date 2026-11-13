@@ -464,10 +464,36 @@ IMPORTANT REMINDERS:
 - Maintain consistency with the specified behavior throughout the conversation`;
     }
 
+    // Inject GOOGLE_THINKING_LEVEL only where it is actually valid:
+    // - Gemini 3+ models use `thinkingConfig.thinkingLevel`
+    // - Gemini 2.5 models use `thinkingBudget` and would reject this field with a 400
+    let googleOptions: Record<string, any> = context.GOOGLE_PROVIDER_OPTIONS;
+    if (context.GOOGLE_THINKING_LEVEL) {
+        const googleModelId = String(model.modelId ?? '');
+        // Strip provider prefixes and any `models/` segment.
+        const bareModelId = googleModelId.split('/').at(-1)?.toLowerCase() ?? '';
+        const isGemini3Plus = /^gemini-(?:[3-9]|\d{2,})/.test(bareModelId);
+
+        if (isGemini3Plus) {
+            const existingThinkingConfig = (googleOptions as any)?.thinkingConfig;
+            if (existingThinkingConfig?.thinkingLevel == null) {
+                googleOptions = {
+                    ...googleOptions,
+                    thinkingConfig: {
+                        ...existingThinkingConfig,
+                        thinkingLevel: context.GOOGLE_THINKING_LEVEL,
+                    },
+                };
+            }
+        } else {
+            log.info(`[requestChatCompletionsV2] GOOGLE_THINKING_LEVEL ignored for ${bareModelId} (requires Gemini 3+; use GOOGLE_API_EXTRA_PARAMS thinkingBudget for 2.5 models).`);
+        }
+    }
+
     const providerOptions = {
         openai: openaiOptions,
         anthropic: anthropicOptions,
-        google: context.GOOGLE_PROVIDER_OPTIONS,
+        google: googleOptions,
         xai: xaiOptions,
         'oailike.chat': context.OAILIKE_PROVIDER_OPTIONS,
     };
