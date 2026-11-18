@@ -157,6 +157,7 @@ To preserve conversation history, user configs, and group message cache, configu
 | `TELEGRAM_BOT_NAME` | Bot names (comma-separated) | `''` | Must match token order |
 | `DEFAULT_PARSE_MODE` | Message parsing mode | `Markdown` | `Markdown`, `MarkdownV2`, `HTML` |
 | `USE_RICH_MESSAGE` | Send messages via Telegram Bot API 10.1+ Rich Message (server-side Markdown parsing, no manual escaping needed); only takes effect when `DEFAULT_PARSE_MODE=MarkdownV2`. Supports quote folding and expandable blockquotes | `true` | `true`, `false` |
+| `RICH_MESSAGE_SKIP_ENTITY_DETECTION` | Skip Telegram's server-side entity auto-detection in Rich Messages (`#hashtags`, `$cashtags`, `@mentions`, emails, bare URLs, etc.). When enabled, bare URLs not written as `[text](url)` are no longer auto-linked | `false` | `true`, `false` |
 | `I_AM_A_GENEROUS_PERSON` | Allow everyone to use | `false` | Set `true` to allow all users |
 
 ### Access Control

@@ -157,6 +157,7 @@
 | `TELEGRAM_BOT_NAME` | 机器人名称(逗号分隔) | `''` | 必须与令牌顺序匹配 |
 | `DEFAULT_PARSE_MODE` | 消息解析模式 | `Markdown` | `Markdown`, `MarkdownV2`, `HTML` |
 | `USE_RICH_MESSAGE` | 使用 Telegram Bot API 10.1+ 的 Rich Message 发送消息（服务端解析 Markdown，无需手动转义），仅在 `DEFAULT_PARSE_MODE=MarkdownV2` 时生效，支持引用折叠与可展开引用块 | `true` | `true`, `false` |
+| `RICH_MESSAGE_SKIP_ENTITY_DETECTION` | Rich Message 跳过服务端自动实体识别（`#标签`、`$代码`、`@用户名`、邮箱、裸网址等）。开启后未写成 `[文字](链接)` 的裸网址不再自动变为可点击链接 | `false` | `true`, `false` |
 | `I_AM_A_GENEROUS_PERSON` | 允许所有人使用 | `false` | 设为`true`允许所有用户 |
 
 ### 访问控制

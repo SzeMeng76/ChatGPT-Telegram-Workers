@@ -451,6 +451,9 @@ function convertExpandableBlockquoteToDetails(text: string): string {
         }
 
         // First line = summary, rest = details content
+        // NOTE: <blockquote expandable> cannot be used here: Telegram does not parse Markdown
+        // inside block HTML tags other than <details>, <tg-collage> and <tg-slideshow>,
+        // so bold/code fences/tables inside it would render as literal text.
         const firstLine = lines[0];
         const restLines = lines.slice(1);
 

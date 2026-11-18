@@ -23,6 +23,9 @@ export class EnvironmentConfig {
     DEFAULT_PARSE_MODE = 'MarkdownV2';
     // 使用 Telegram Bot API 10.1+ 的 Rich Message（服务端解析 Markdown，无需手动转义），默认开启
     USE_RICH_MESSAGE = true;
+    // Rich Message 跳过服务端自动实体识别（#标签、$代码、@用户名、邮箱、裸网址等），默认关闭
+    // 开启后未写成 [文字](链接) 的裸网址将不再自动变为可点击链接
+    RICH_MESSAGE_SKIP_ENTITY_DETECTION = false;
     // 最小stream模式消息间隔，小于等于0则不限制 单位：ms
     TELEGRAM_MIN_STREAM_INTERVAL = 0;
     // 图片尺寸偏移 0为第一位，-1为最后一位, 越靠后的图片越大。PS: 图片过大可能导致token消耗过多，或者workers超时或内存不足

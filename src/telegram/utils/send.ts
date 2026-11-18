@@ -91,6 +91,9 @@ export class MessageSender {
         try {
             if (context.richMessage) {
                 const richMessage: Telegram.InputRichMessage = { markdown: message };
+                if (ENV.RICH_MESSAGE_SKIP_ENTITY_DETECTION) {
+                    richMessage.skip_entity_detection = true;
+                }
                 if (context?.message_id) {
                     const params: Telegram.EditMessageTextParams = {
                         chat_id: context.chat_id,
