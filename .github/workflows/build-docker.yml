@@ -32,6 +32,13 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
 
+      # Node 24+ is required: rollup-plugin-node-externals v9 uses RegExp.escape,
+      # which older runtimes don't provide (TypeError: undefined is not a function)
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+
       - name: Set up Bun
         uses: oven-sh/setup-bun@v2
 
