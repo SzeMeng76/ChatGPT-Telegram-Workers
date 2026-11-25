@@ -18,6 +18,19 @@ import { CallbackQueryContext } from './context';
 class HandlerCallbackQuery implements CallbackQueryHandler<CallbackQueryContext> {
     handle = async (query: Telegram.CallbackQuery, context: CallbackQueryContext): Promise<Response | null> => {
         const api = createTelegramBotAPI(context.SHARE_CONTEXT.botToken);
+
+        // Handle inline_message_id case (new in Bot API 10.5)
+        if (!query.message && query.inline_message_id) {
+            log.warn('[CALLBACK QUERY] Callback from inline message is not supported yet');
+            return this.sendAlert(api, context.query_id, `⚠️ Inline message callbacks not supported yet`, true);
+        }
+
+        // Check if message exists and is accessible
+        if (!query.message || 'is_inaccessible' in query.message) {
+            log.error('[CALLBACK QUERY] Message is not accessible or missing');
+            return this.sendAlert(api, context.query_id, `⚠️ Message not accessible`, true);
+        }
+
         const message = query.message as Telegram.Message;
         const keyboard = message.reply_markup?.inline_keyboard ?? [];
         const authorized = isAuthorized(query.from?.id ?? 0, keyboard);
@@ -27,7 +40,7 @@ class HandlerCallbackQuery implements CallbackQueryHandler<CallbackQueryContext>
             return this.sendAlert(api, context.query_id, `⚠️ This is not your operation`, true);
         }
         // 不支持的回调查询类型
-        if (!query.data || !(query.message as Telegram.Message)?.reply_markup) {
+        if (!query.data || !message.reply_markup) {
             return new Response('Not supported callback query type', { status: 200 });
         }
         // 标题/页码
@@ -234,6 +247,24 @@ class HandlerCallbackQuery implements CallbackQueryHandler<CallbackQueryContext>
 export async function handleCallbackQuery(token: string, callbackQuery: Telegram.CallbackQuery) {
     try {
         log.info('handleCallbackQuery');
+
+        // Handle inline_message_id case (new in Bot API 10.5)
+        if (!callbackQuery.message && callbackQuery.inline_message_id) {
+            log.warn('[CALLBACK QUERY] Callback from inline message is not supported yet');
+            const api = createTelegramBotAPI(token);
+            return api.answerCallbackQuery({
+                callback_query_id: callbackQuery.id,
+                text: `⚠️ Inline message callbacks not supported yet`,
+                show_alert: true,
+            });
+        }
+
+        // Check if message exists and is accessible
+        if (!callbackQuery.message || 'is_inaccessible' in callbackQuery.message) {
+            log.error('[CALLBACK QUERY] Message is not accessible or missing');
+            throw new Error('Message is not accessible');
+        }
+
         const message = callbackQuery.message as Telegram.Message;
         if (!message?.reply_markup || !callbackQuery.data) {
             throw new Error('Not supported callback query type');
